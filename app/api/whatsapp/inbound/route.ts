@@ -61,20 +61,32 @@ export async function POST(request: NextRequest) {
 
       for (const msg of messages) {
         const message = msg as Record<string, unknown>
-        if (message.type !== 'text') continue
+
+        // Extract body from text or interactive (quick-reply button tap) messages.
+        // Button taps arrive as type 'interactive' with the reply title as the body.
+        let body: string | undefined
+        if (message.type === 'text') {
+          body = (message.text as Record<string, string>)?.body
+        } else if (message.type === 'interactive') {
+          const interactive = message.interactive as Record<string, unknown> | undefined
+          body = (interactive?.button_reply as Record<string, string> | undefined)?.title
+        }
 
         const fromNumber = message.from as string
-        const body = (message.text as Record<string, string>)?.body
         if (!fromNumber || !body) continue
 
-        // Map the sender number to a person. The unique index on
-        // (tour_id, whatsapp_number) makes this an exact lookup.
-        const { data: person } = await admin
+        // Map the sender number to a person across the TM's tours.
+        // A number can appear on at most one row per tour (unique index), but
+        // could theoretically appear on two tours. Pick the most recently
+        // created tour so the person gets the active tour context.
+        const { data: people } = await admin
           .from('people')
-          .select('id, tour_id')
+          .select('id, tour_id, tours!inner(created_at)')
           .eq('whatsapp_number', fromNumber)
-          .single()
+          .order('tours.created_at', { ascending: false })
+          .limit(1)
 
+        const person = people?.[0]
         if (!person) continue  // Unknown number - no tour context, drop silently.
 
         // Enqueue the router job. The handler does nothing else.

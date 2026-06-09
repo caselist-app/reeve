@@ -28,8 +28,8 @@ const KNOWN_VENUES: Record<string, KnownVenueEntry> = {
 }
 
 // Standard transit buffers used when no specific data is available.
-const AIRPORT_TRANSIT_MIN = 45
-const RAIL_TRANSIT_MIN = 15
+export const AIRPORT_TRANSIT_MIN = 45
+export const RAIL_TRANSIT_MIN = 15
 
 function lookupKnownVenue(venueName: string): KnownVenueEntry | null {
   const key = venueName.toLowerCase().trim()
@@ -55,6 +55,58 @@ function standardFallback(): KnownVenueEntry {
   }
 }
 
+// Returns the departure hub identifier for a person traveling to a given show.
+// Resolution order:
+// 1. The hub of the immediately preceding show in the same tour (person is
+//    already on the road).
+// 2. The person's home_city, geocoded to its nearest airport via Maps (V1 seam:
+//    returns the city string directly until Maps is wired).
+// 3. null - the planner will prompt the TM to set a departure city manually.
+export async function getFromHub(
+  person_id: string,
+  show_id: string
+): Promise<string | null> {
+  const admin = createAdminClient()
+
+  // Fetch the current show to get its tour and date.
+  const { data: currentShow } = await admin
+    .from('shows')
+    .select('tour_id, date')
+    .eq('id', show_id)
+    .single()
+
+  if (!currentShow) return null
+
+  // Find the immediately preceding show in the same tour.
+  const { data: priorShow } = await admin
+    .from('shows')
+    .select('transport_hub_iata, transport_hub_rail, hub_resolved_at')
+    .eq('tour_id', currentShow.tour_id)
+    .lt('date', currentShow.date)
+    .order('date', { ascending: false })
+    .limit(1)
+    .single()
+
+  if (priorShow?.hub_resolved_at) {
+    // Prefer the airport hub; fall back to the rail station name.
+    if (priorShow.transport_hub_iata) return priorShow.transport_hub_iata
+    if (priorShow.transport_hub_rail) return priorShow.transport_hub_rail
+  }
+
+  // No prior show - use the person's home city as the departure point.
+  const { data: person } = await admin
+    .from('people')
+    .select('home_city')
+    .eq('id', person_id)
+    .single()
+
+  if (!person?.home_city) return null
+
+  // V1 seam: return home_city as-is until Maps geocoding is wired.
+  // When Maps is implemented, geocode home_city to its nearest airport IATA.
+  return person.home_city
+}
+
 export async function resolveHub(show_id: string): Promise<HubResolution> {
   const admin = createAdminClient()
 
@@ -76,7 +128,7 @@ export async function resolveHub(show_id: string): Promise<HubResolution> {
   }
 
   // Resolution: known-venue -> Maps -> fallback.
-  let resolved: KnownVenueEntry | null =
+  const resolved: KnownVenueEntry | null =
     lookupKnownVenue(show.venue_name ?? '') ??
     (await resolveViaGoogleMaps(show.address ?? '')) ??
     standardFallback()

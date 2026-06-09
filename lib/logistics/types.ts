@@ -23,6 +23,7 @@ export type HotelOption = {
   tier: 'artist' | 'crew'
   parking_ok: boolean
   early_check_in_ok: boolean
+  stars: number | null
   book_url: string
   raw: unknown
 }
@@ -40,7 +41,12 @@ export type PlanTravelInput = {
 
 export type PlanHotelsInput = {
   show_id: string
-  party: Array<{ person_id: string; tier: 'artist' | 'crew' }>
-  arrive_at: string
-  depart_at: string
+  party: {
+    crew_count: number
+    artist_count: number
+    parking_required: boolean
+  }
+  arrive_at: string | null
+  depart_at: string | null
+  product_type: 'overnight' | 'day_rooms'
 }

@@ -418,6 +418,7 @@ export type Database = {
           rate_currency: string | null
           room_block_size: number | null
           room_types_json: Json
+          status: string
           tour_id: string
           updated_at: string
           wifi_network: string | null
@@ -443,6 +444,7 @@ export type Database = {
           rate_currency?: string | null
           room_block_size?: number | null
           room_types_json?: Json
+          status?: string
           tour_id: string
           updated_at?: string
           wifi_network?: string | null
@@ -468,6 +470,7 @@ export type Database = {
           rate_currency?: string | null
           room_block_size?: number | null
           room_types_json?: Json
+          status?: string
           tour_id?: string
           updated_at?: string
           wifi_network?: string | null
@@ -708,6 +711,8 @@ export type Database = {
           transport_hub_rail: string | null
           union_stage: boolean | null
           updated_at: string
+          venue_lat: number | null
+          venue_lng: number | null
           venue_name: string
           venue_type: string | null
         }
@@ -736,6 +741,8 @@ export type Database = {
           transport_hub_rail?: string | null
           union_stage?: boolean | null
           updated_at?: string
+          venue_lat?: number | null
+          venue_lng?: number | null
           venue_name: string
           venue_type?: string | null
         }
@@ -764,6 +771,8 @@ export type Database = {
           transport_hub_rail?: string | null
           union_stage?: boolean | null
           updated_at?: string
+          venue_lat?: number | null
+          venue_lng?: number | null
           venue_name?: string
           venue_type?: string | null
         }

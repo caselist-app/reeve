@@ -11,7 +11,7 @@ export type DuffelSearchParams = {
 // Returns normalised TravelOption[] - never a raw Duffel offer.
 // TODO: implement Duffel Offers API call using DUFFEL_API_TOKEN.
 export async function searchDuffel(
-  params: DuffelSearchParams
+  _params: DuffelSearchParams
 ): Promise<TravelOption[]> {
   if (!process.env.DUFFEL_API_TOKEN) return []
   // Stub - live implementation replaces this block.

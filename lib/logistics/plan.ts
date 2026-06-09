@@ -3,7 +3,8 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireUser } from '@/lib/auth/helpers'
 import { redis } from '@/lib/redis'
-import { resolveHub } from '@/lib/logistics/hub-resolver'
+import { getFromHub, AIRPORT_TRANSIT_MIN } from '@/lib/logistics/hub-resolver'
+import { rankOptions } from '@/lib/logistics/rank'
 import { searchDuffel } from '@/lib/logistics/adapters/duffel'
 import { searchTrainline } from '@/lib/logistics/adapters/trainline'
 import { searchSncf } from '@/lib/logistics/adapters/sncf'
@@ -12,60 +13,10 @@ import { searchDarwin } from '@/lib/logistics/adapters/darwin'
 import type { TravelOption, PlanTravelInput } from '@/lib/logistics/types'
 
 // Cache TTL for provider results. Availability is volatile so keep short.
-const CACHE_TTL_SECONDS = 180
+const CACHE_TTL_SECONDS = 300
 
 function addMinutes(iso: string, minutes: number): string {
   return new Date(new Date(iso).getTime() + minutes * 60_000).toISOString()
-}
-
-function computeDoorToSite(option: Omit<TravelOption, 'door_to_site_at' | 'feasible'>): string {
-  return addMinutes(option.arrive_at, option.transit_min + option.ground_min)
-}
-
-// Ranking rule: feasible options first, then by door_to_site_at ascending.
-// Infeasible options are always included and flagged - never dropped.
-// Never rank by price (V1).
-function rankOptions(options: TravelOption[]): TravelOption[] {
-  return [...options].sort((a, b) => {
-    if (a.feasible !== b.feasible) return a.feasible ? -1 : 1
-    return new Date(a.door_to_site_at).getTime() - new Date(b.door_to_site_at).getTime()
-  })
-}
-
-async function resolveFromHub(
-  person_id: string,
-  show_id: string,
-  admin: ReturnType<typeof createAdminClient>
-): Promise<string | null> {
-  // Find the show before this one on the tour to determine where the person
-  // is travelling from. If this is the first show, fall back to home_city.
-  const { data: show } = await admin
-    .from('shows')
-    .select('tour_id, date')
-    .eq('id', show_id)
-    .single()
-
-  if (!show) return null
-
-  const { data: prevShow } = await admin
-    .from('shows')
-    .select('transport_hub_iata, transport_hub_rail, venue_name')
-    .eq('tour_id', show.tour_id)
-    .lt('date', show.date)
-    .order('date', { ascending: false })
-    .limit(1)
-    .single()
-
-  if (prevShow?.transport_hub_iata) return prevShow.transport_hub_iata
-  if (prevShow?.transport_hub_rail) return prevShow.transport_hub_rail
-
-  const { data: person } = await admin
-    .from('people')
-    .select('home_city')
-    .eq('id', person_id)
-    .single()
-
-  return person?.home_city ?? null
 }
 
 export async function planTravel(
@@ -75,67 +26,77 @@ export async function planTravel(
 
   const admin = createAdminClient()
 
+  // Read the show and its cached hub resolution. Never call resolveHub() here —
+  // hub resolution runs in a background job. If hub_resolved_at is null the
+  // venue has not been resolved yet; surface a clear error to the TM.
   const { data: show } = await admin
     .from('shows')
-    .select('id, tour_id, date, load_in_at')
+    .select('tour_id, date, load_in_at, hub_resolved_at, transport_hub_iata, transport_hub_rail, hub_ground_minutes')
     .eq('id', input.show_id)
     .single()
 
-  if (!show) throw new Error('Show not found')
+  if (!show) throw new Error('Show not found.')
 
-  // Resolve hubs.
-  const [fromHub, toHubData] = await Promise.all([
-    resolveFromHub(input.person_id, input.show_id, admin),
-    resolveHub(input.show_id),
-  ])
+  if (!show.hub_resolved_at) {
+    throw new Error('Venue hub not yet resolved. Try again in a moment.')
+  }
 
-  if (!fromHub) throw new Error('Cannot determine origin hub for this person')
+  const toHub = show.transport_hub_iata ?? show.transport_hub_rail
+  if (!toHub) throw new Error('Venue hub resolved but no hub code found.')
 
-  const toHub = toHubData.iata ?? toHubData.rail
-  if (!toHub) throw new Error('Cannot determine destination hub for this show')
+  const groundMin = show.hub_ground_minutes ?? AIRPORT_TRANSIT_MIN
+
+  // Departure hub: prior show hub, or person home city (V1 seam for geocoding).
+  const fromHub = await getFromHub(input.person_id, input.show_id)
+  if (!fromHub) {
+    throw new Error(
+      'Set a home city for this person or ensure the prior show has a resolved hub.'
+    )
+  }
 
   const showDate = show.date
 
-  // Check Redis cache before calling providers.
+  // Check Redis cache before hitting providers. Redis is a performance layer —
+  // if unavailable, fall through and call providers directly.
   const cacheKey = `plan:${fromHub}:${toHub}:${showDate}`
-  const cached = await redis.get<TravelOption[]>(cacheKey)
-  if (cached) return cached
+  try {
+    const cached = await redis.get<TravelOption[]>(cacheKey)
+    if (cached) return cached
+  } catch {
+    // Redis unavailable — proceed without cache.
+  }
 
-  // Required site arrival: load-in minus the hub buffers.
+  // required_site_arrival: load-in minus ground transfer and airport buffer.
+  // Conservative by design; the TM may knowingly accept a tighter option.
   const requiredSiteArrival = show.load_in_at
-    ? addMinutes(show.load_in_at, -(toHubData.ground_minutes + 45))
+    ? addMinutes(show.load_in_at, -(groundMin + AIRPORT_TRANSIT_MIN))
     : null
 
-  // Fan out to providers in parallel. Each returns normalised TravelOption[].
-  const adapterParams = {
-    from_iata: fromHub,
-    to_iata: toHub,
-    date: showDate,
-    passengers: 1,
+  const railParams = {
     from_station: fromHub,
     to_station: toHub,
     depart_after: `${showDate}T00:00:00Z`,
+    passengers: 1,
   }
 
-  const [flights, euRail, frRail, esRail, ukRail] = await Promise.allSettled([
+  // Fan out to all providers in parallel. A failed adapter is discarded —
+  // it never crashes the plan for the other providers.
+  const results = await Promise.allSettled([
     searchDuffel({ from_iata: fromHub, to_iata: toHub, date: showDate, passengers: 1 }),
-    searchTrainline({ from_station: fromHub, to_station: toHub, depart_after: `${showDate}T00:00:00Z`, passengers: 1 }),
-    searchSncf({ from_station: fromHub, to_station: toHub, depart_after: `${showDate}T00:00:00Z`, passengers: 1 }),
-    searchRenfe({ from_station: fromHub, to_station: toHub, depart_after: `${showDate}T00:00:00Z`, passengers: 1 }),
-    searchDarwin({ from_station: fromHub, to_station: toHub, depart_after: `${showDate}T00:00:00Z`, passengers: 1 }),
+    searchTrainline(railParams),
+    searchSncf(railParams),
+    searchRenfe(railParams),
+    searchDarwin(railParams),
   ])
 
-  const allOptions: TravelOption[] = [
-    ...(flights.status === 'fulfilled' ? flights.value : []),
-    ...(euRail.status === 'fulfilled' ? euRail.value : []),
-    ...(frRail.status === 'fulfilled' ? frRail.value : []),
-    ...(esRail.status === 'fulfilled' ? esRail.value : []),
-    ...(ukRail.status === 'fulfilled' ? ukRail.value : []),
-  ]
+  const raw: TravelOption[] = results.flatMap((r) =>
+    r.status === 'fulfilled' ? r.value : []
+  )
 
-  // Compute door_to_site_at and feasibility for each option.
-  const withFeasibility: TravelOption[] = allOptions.map((opt) => {
-    const door_to_site_at = computeDoorToSite(opt)
+  // Compute door_to_site_at and feasibility centrally after collecting results.
+  // Adapters do not know required_site_arrival at call time.
+  const withFeasibility: TravelOption[] = raw.map((opt) => {
+    const door_to_site_at = addMinutes(opt.arrive_at, opt.transit_min + opt.ground_min)
     const feasible = requiredSiteArrival
       ? new Date(door_to_site_at) <= new Date(requiredSiteArrival)
       : true
@@ -144,9 +105,13 @@ export async function planTravel(
 
   const ranked = rankOptions(withFeasibility)
 
-  // Cache the ranked results briefly.
+  // Only cache when we have results to avoid poisoning the cache on a bad run.
   if (ranked.length > 0) {
-    await redis.set(cacheKey, ranked, { ex: CACHE_TTL_SECONDS })
+    try {
+      await redis.set(cacheKey, ranked, { ex: CACHE_TTL_SECONDS })
+    } catch {
+      // Redis unavailable — skip caching.
+    }
   }
 
   return ranked

@@ -10,7 +10,7 @@ export type RailSearchParams = {
 // Trainline Partner / Omio B2B adapter: EU rail.
 // TODO: implement using TRAINLINE_PARTNER_TOKEN.
 export async function searchTrainline(
-  params: RailSearchParams
+  _params: RailSearchParams
 ): Promise<TravelOption[]> {
   if (!process.env.TRAINLINE_PARTNER_TOKEN) return []
   return []

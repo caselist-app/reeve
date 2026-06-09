@@ -8,7 +8,27 @@ import { searchHotelbeds } from '@/lib/logistics/adapters/hotelbeds'
 import { searchExpedia } from '@/lib/logistics/adapters/expedia'
 import type { HotelOption, PlanHotelsInput } from '@/lib/logistics/types'
 
-const CACHE_TTL_SECONDS = 180
+// Cache TTL for hotel results. Availability is less volatile than flights.
+const CACHE_TTL_SECONDS = 900
+
+// Search radius around the venue in kilometres.
+const SEARCH_RADIUS_KM = 10
+
+// Maximum results per tier shown to the TM.
+const MAX_RESULTS_PER_TIER = 5
+
+// Google Maps geocode seam — V1: returns null until Maps API is wired.
+// When implemented: call Geocoding API with the venue address and cache
+// venue_lat / venue_lng on the show row (re-geocode only on address change).
+async function geocodeVenue(
+  showId: string,
+  address: string | null
+): Promise<{ lat: number; lng: number } | null> {
+  if (!process.env.GOOGLE_MAPS_API_KEY || !address) return null
+  // TODO: call Maps Geocoding API, write venue_lat/venue_lng to show row.
+  void showId
+  return null
+}
 
 export async function planHotels(
   input: PlanHotelsInput
@@ -17,58 +37,112 @@ export async function planHotels(
 
   const admin = createAdminClient()
 
+  // Read show including any cached geocode. Never re-geocode on every call.
   const { data: show } = await admin
     .from('shows')
-    .select('id, venue_name, address')
+    .select('id, venue_name, address, venue_lat, venue_lng, date')
     .eq('id', input.show_id)
     .single()
 
-  if (!show) throw new Error('Show not found')
+  if (!show) throw new Error('Show not found.')
 
-  // Parse check-in and check-out from the party's inbound segment arrive_at
-  // and depart_at. These are passed in by the caller.
-  const checkIn = input.arrive_at.split('T')[0]
-  const checkOut = input.depart_at.split('T')[0]
+  // Resolve geocode: cached on show row first, then Maps seam, then fail gracefully.
+  let lat = show.venue_lat
+  let lng = show.venue_lng
 
-  // Check Redis cache.
-  const cacheKey = `hotels:${input.show_id}:${checkIn}:${checkOut}`
-  const cached = await redis.get<{ artist: HotelOption[]; crew: HotelOption[] }>(cacheKey)
-  if (cached) return cached
-
-  // Parking is a hard filter for bus/truck tours - derive from show parking field.
-  // Early check-in needed if any inbound segment arrives before standard check-in.
-  // Both passed through from the caller.
-  const searchParams = {
-    lat: 0,   // TODO: geocode venue address via Google Maps
-    lng: 0,
-    check_in: checkIn,
-    check_out: checkOut,
-    guests: input.party.length,
-    requires_parking: false,   // caller sets based on tour transport profile
-    requires_early_check_in: false,
+  if (lat == null || lng == null) {
+    const geocoded = await geocodeVenue(show.id, show.address)
+    if (geocoded) {
+      lat = geocoded.lat
+      lng = geocoded.lng
+      // Cache on the show row.
+      await admin
+        .from('shows')
+        .update({ venue_lat: lat, venue_lng: lng })
+        .eq('id', show.id)
+    }
   }
 
-  // Fan out to hotel providers in parallel.
-  const [rh, hb, ex] = await Promise.allSettled([
-    searchRatehawk(searchParams),
-    searchHotelbeds(searchParams),
-    searchExpedia(searchParams),
-  ])
+  if (lat == null || lng == null) {
+    throw new Error(
+      'Venue location not yet resolved. Add an address to the show to enable hotel search.'
+    )
+  }
 
-  const all: HotelOption[] = [
-    ...(rh.status === 'fulfilled' ? rh.value : []),
-    ...(hb.status === 'fulfilled' ? hb.value : []),
-    ...(ex.status === 'fulfilled' ? ex.value : []),
+  // Derive check-in / check-out dates from arrive_at / depart_at.
+  // Fall back to the show date if not provided.
+  const checkInDate = input.arrive_at
+    ? input.arrive_at.split('T')[0]
+    : show.date
+  const checkOutDate = input.depart_at
+    ? input.depart_at.split('T')[0]
+    : checkInDate
+
+  // Redis cache keyed by show, dates, and party counts.
+  const cacheKey = `hotels:${input.show_id}:${checkInDate}:${input.party.crew_count}:${input.party.artist_count}`
+  try {
+    const cached = await redis.get<{ artist: HotelOption[]; crew: HotelOption[] }>(cacheKey)
+    if (cached) return cached
+  } catch {
+    // Redis unavailable — proceed without cache.
+  }
+
+  const baseParams = {
+    lat,
+    lng,
+    radius_km: SEARCH_RADIUS_KM,
+    check_in_date: checkInDate,
+    check_out_date: checkOutDate,
+    arrive_at: input.arrive_at,
+    depart_at: input.depart_at,
+    parking_required: input.party.parking_required,
+  }
+
+  // Fan out artist and crew searches in parallel across all providers.
+  // A failed adapter is discarded — never crashes the plan.
+  const [rhArtist, rhCrew, hbArtist, hbCrew, exArtist, exCrew] =
+    await Promise.allSettled([
+      searchRatehawk({ ...baseParams, rooms: input.party.artist_count, tier: 'artist' }),
+      searchRatehawk({ ...baseParams, rooms: input.party.crew_count, tier: 'crew' }),
+      searchHotelbeds({ ...baseParams, rooms: input.party.artist_count, tier: 'artist' }),
+      searchHotelbeds({ ...baseParams, rooms: input.party.crew_count, tier: 'crew' }),
+      searchExpedia({ ...baseParams, rooms: input.party.artist_count, tier: 'artist' }),
+      searchExpedia({ ...baseParams, rooms: input.party.crew_count, tier: 'crew' }),
+    ])
+
+  const artistRaw: HotelOption[] = [
+    ...(rhArtist.status === 'fulfilled' ? rhArtist.value : []),
+    ...(hbArtist.status === 'fulfilled' ? hbArtist.value : []),
+    ...(exArtist.status === 'fulfilled' ? exArtist.value : []),
   ]
 
-  // Split into artist and crew shortlists. Hard-filter parking and early check-in.
-  const artist = all.filter((h) => h.tier === 'artist')
-  const crew = all.filter((h) => h.tier === 'crew')
+  const crewRaw: HotelOption[] = [
+    ...(rhCrew.status === 'fulfilled' ? rhCrew.value : []),
+    ...(hbCrew.status === 'fulfilled' ? hbCrew.value : []),
+    ...(exCrew.status === 'fulfilled' ? exCrew.value : []),
+  ]
 
-  const result = { artist, crew }
+  // Parking is a HARD filter for bus/truck tours — a property without a truck
+  // bay is not an option, not a down-ranked one. Strip it entirely.
+  function applyFilters(options: HotelOption[]): HotelOption[] {
+    let filtered = options
+    if (input.party.parking_required) {
+      filtered = filtered.filter((h) => h.parking_ok)
+    }
+    return filtered.slice(0, MAX_RESULTS_PER_TIER)
+  }
 
-  if (all.length > 0) {
-    await redis.set(cacheKey, result, { ex: CACHE_TTL_SECONDS })
+  const result = {
+    artist: applyFilters(artistRaw),
+    crew: applyFilters(crewRaw),
+  }
+
+  if (artistRaw.length > 0 || crewRaw.length > 0) {
+    try {
+      await redis.set(cacheKey, result, { ex: CACHE_TTL_SECONDS })
+    } catch {
+      // Redis unavailable — skip caching.
+    }
   }
 
   return result

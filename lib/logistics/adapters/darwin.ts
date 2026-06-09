@@ -5,7 +5,7 @@ import type { RailSearchParams } from '@/lib/logistics/adapters/trainline'
 // Darwin provides live departure boards and journey planning for Great Britain.
 // TODO: implement using National Rail Darwin API (no token required for free tier).
 export async function searchDarwin(
-  params: RailSearchParams
+  _params: RailSearchParams
 ): Promise<TravelOption[]> {
   return []
 }
