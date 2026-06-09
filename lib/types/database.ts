@@ -797,6 +797,7 @@ export type Database = {
           start_date: string | null
           status: string
           territory: string | null
+          timezone: string | null
           updated_at: string
         }
         Insert: {
@@ -811,6 +812,7 @@ export type Database = {
           start_date?: string | null
           status?: string
           territory?: string | null
+          timezone?: string | null
           updated_at?: string
         }
         Update: {
@@ -825,6 +827,7 @@ export type Database = {
           start_date?: string | null
           status?: string
           territory?: string | null
+          timezone?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -993,6 +996,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      create_show_with_dependents: {
+        Args: { p_show_data: Json; p_tour_id: string }
+        Returns: string
+      }
       owns_tour: { Args: { p_tour_id: string }; Returns: boolean }
     }
     Enums: {

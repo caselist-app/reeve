@@ -21,6 +21,7 @@ function parseTourFormData(formData: FormData) {
     territory: formData.get('territory') || undefined,
     base_currency: formData.get('base_currency') || 'GBP',
     artist_slug: formData.get('artist_slug') || undefined,
+    timezone: formData.get('timezone') || undefined,
   })
 }
 

@@ -2,6 +2,7 @@
 
 import { useActionState, useState, useId, useRef, useTransition } from 'react'
 import { updateTourAction, archiveTourAction } from '@/lib/actions/tours'
+import { TOUR_TIMEZONES } from '@/lib/validators/tour'
 import type { Tables } from '@/lib/types/database'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -50,6 +51,7 @@ export function TourSettingsForm({ tour }: Props) {
   const [slug, setSlug] = useState(tour.artist_slug ?? '')
   const [slugTouched, setSlugTouched] = useState(false)
   const [currency, setCurrency] = useState(tour.base_currency)
+  const [timezone, setTimezone] = useState(tour.timezone ?? '')
 
   const [archivePending, startArchive] = useTransition()
   const [archiveError, setArchiveError] = useState<string | null>(null)
@@ -158,6 +160,23 @@ export function TourSettingsForm({ tour }: Props) {
               }}
             />
           </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>
+            Tour timezone
+            <span className="ml-1 text-xs text-muted-foreground">used for day sheet times</span>
+          </Label>
+          <Select name="timezone" value={timezone} onValueChange={setTimezone}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select timezone" />
+            </SelectTrigger>
+            <SelectContent>
+              {TOUR_TIMEZONES.map((tz) => (
+                <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex items-center gap-4">

@@ -2,6 +2,7 @@
 
 import { useActionState, useState, useId } from 'react'
 import { createTourAction } from '@/lib/actions/tours'
+import { TOUR_TIMEZONES } from '@/lib/validators/tour'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -29,6 +30,7 @@ export default function NewTourPage() {
   const [slug, setSlug] = useState('')
   const [slugTouched, setSlugTouched] = useState(false)
   const [currency, setCurrency] = useState('GBP')
+  const [timezone, setTimezone] = useState('')
 
   return (
     <div className="mx-auto max-w-lg px-4 py-12">
@@ -107,6 +109,23 @@ export default function NewTourPage() {
               placeholder="the-midnight"
             />
           </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label>
+            Tour timezone
+            <span className="ml-1 text-xs text-muted-foreground">used for day sheet times</span>
+          </Label>
+          <Select name="timezone" value={timezone} onValueChange={setTimezone}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select timezone" />
+            </SelectTrigger>
+            <SelectContent>
+              {TOUR_TIMEZONES.map((tz) => (
+                <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {state.error && (
