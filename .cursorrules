@@ -1,0 +1,142 @@
+You are working on Reeve, the operating system for the people who run tours: Tour Managers and Production Managers. Every competitor is a filing cabinet (data in, documents out). Reeve is different: the TM inputs data, then Reeve enriches it, watches it for conflicts and expiries, and pushes the right information to the right person at the right time over email and WhatsApp. The TM is the only account holder. Crew, band, venues and promoters never log in. They receive messages. The product is data-first, not AI-first. AI is a thin layer on top of clean, trusted, structured data and never acts autonomously.
+
+Core loop: Input, Enrich, Alert, Act.
+
+## The five non-negotiables (these override convenience every time)
+1. Database changes are migration-plus-types, ALWAYS. Every schema change is a timestamped SQL migration in supabase/migrations/, applied via the Supabase CLI, with types regenerated into lib/types/database.ts. All three committed together. Never any other way. (Full rule below.)
+2. RLS is ALWAYS on. Every user-facing table has Row Level Security and every policy scopes by tour ownership. Never disable RLS. Never use the service role key in client code.
+3. pnpm only. Never npm, never yarn. Never add a dependency not already in package.json without explicit instruction.
+4. No em-dashes anywhere. Not in code, comments, copy, commit messages, or docs. They are an AI tell. Use commas, periods, colons, or parentheses.
+5. Nothing is sent or booked without the TM. Reeve never books travel or hotels autonomously and never messages crew without TM action. The only exception is answering a crew member's direct inbound WhatsApp question, which the TM opts into per tour.
+
+## Stack (NEVER deviate)
+- Next.js 16 with App Router and TypeScript (strict mode)
+- Tailwind CSS v4
+- shadcn/ui components (Radix primitives) in components/ui/
+- Lucide React for icons
+- Supabase: Postgres, Auth, Storage, Realtime, RLS (via @supabase/ssr)
+- Stripe for billing (flat per-TM subscription)
+- Resend for transactional and outbound email
+- Trigger.dev (@trigger.dev/sdk) for all scheduled and background jobs
+- Upstash Redis + @upstash/ratelimit for rate limiting, caching, send idempotency
+- Anthropic SDK (@anthropic-ai/sdk) for all AI inference, Anthropic models only
+- Zod for runtime validation
+- Hosted on Vercel
+- pnpm for package management
+
+Do NOT add any other AI provider. All inference runs on Anthropic models only.
+
+## External service APIs (wrap them, never call raw from UI)
+Travel and hotel providers sit behind an internal normalisation layer so they can be swapped per territory without touching UI. The planner depends on Reeve's normalised shapes, never a vendor payload.
+- Duffel: flights (search only in V1, booking is off-platform)
+- Trainline Partner / Omio B2B: EU rail
+- SNCF Connect: French rail
+- RENFE: Spanish rail
+- National Rail Darwin (free): UK rail
+- Google Maps: geocoding, venue hub resolution, drive times
+- RateHawk / Hotelbeds / Expedia Rapid: hotels (search and filter only in V1)
+- FlightAware AeroAPI: live flight tracking (seam in V1, alerts in V2)
+- Meta WhatsApp Cloud API: operational comms (primary)
+- Twilio: WhatsApp and SMS fallback
+
+## Database workflow (the rule that matters most) -- NEVER break this
+A change to the database is ONE atomic action with three parts. Never do one without the others. Never merge a partial.
+1. Write the migration: supabase migration new <name> creates supabase/migrations/<timestamp>_<name>.sql. Put the DDL there. Never run ad-hoc SQL against the database. Never edit schema by hand in the Supabase dashboard. The migration file is the only legitimate source of a schema change.
+2. Apply the migration: supabase db push (linked remote) or supabase migration up (local). Schema only reaches a database through an applied migration.
+3. Regenerate types: run pnpm types:gen to rewrite lib/types/database.ts. NEVER hand-edit that file. NEVER invent table or column names anywhere: import them from the generated types so the compiler catches drift.
+Commit all three together (migration, code using it, regenerated types) in one commit. A schema change without its migration OR without regenerated types is incomplete and must not be merged.
+
+## Database conventions
+- Tables: snake_case, plural (tours, people, shows, transport_segments, hotel_stays)
+- Columns: snake_case (created_at, tour_id, load_in_at)
+- Every table: id uuid primary key default gen_random_uuid(), created_at, updated_at. Every tour-scoped table: tour_id.
+- account is the only auth principal. tour.account_id is the owner. Every tour-scoped policy filters by the caller owning the tour. No cross-tour reads, ever.
+- Use supertype-plus-discriminator shapes. Do NOT invent parallel tables:
+  - person has person_type (artist | crew | management | support). Role-specific fields go in extensions like crew_detail (per_diem_rate, daily_wage_rate). Do NOT duplicate dietary or allergies onto riders, read them from person.
+  - transport_segment is ONE table with mode (bus | truck | flight | rail | ground | hire). People attach via transport_assignment (many-to-many) which holds per-person detail (seat, PNR, boarding pass). The planner writes status = 'planned'. The TM promotes to 'booked' after booking off-platform and pasting the reference. Do NOT auto-set booked.
+  - hotel_stay plus room_assignment (per-person, room_tier of artist | crew).
+  - show has show_advance (per-department status), day_sheet, promoter, settlement, pass_sheet, guest list and vendors hanging off it.
+- document_share is the read-receipt ledger (sent, opened, acknowledged) and drives advance status automatically. Append-mostly: do not delete share rows.
+- daily_wage_rate and per_diem_rate are operational (settlement and per diem), in scope early. Hotel nightly rates and truck hire rates are financial-planning fields, lower priority.
+
+## Logistics planner -- hard rules
+- The V1 planner returns LIVE API options and does NOT book. It ranks real door-to-door options (flights, rail, ground combined into one normalised shape). The TM books on the carrier site and records the reference back into Reeve. Do NOT build in-app booking or payment in V1.
+- Rank by feasibility FIRST (arrives in time for load_in_at minus buffer), then duration, then mode preference. NEVER rank by price in V1. Show infeasible options flagged, never hidden.
+- Venue hub resolution: a show resolves to its nearest transport hub plus ground time, cached on the show row (transport_hub_iata, transport_hub_rail, hub_ground_minutes). Order: known-venue lookup, then Google Maps geocode-plus-nearest-hub fallback, then standard buffers (about 45 min airport transit, Maps drive time for ground). Festivals have no transport to site and MUST work (Hellfest resolves to Clisson, nearest airport Nantes, about 40 min drive).
+- Normalised option shape: { mode, depart_at, arrive_at, carrier, leg_ref, transit_min, ground_min, door_to_site_at, feasible, book_url, raw }. UI renders this, never a vendor payload.
+- Cache provider results in Upstash Redis with a short TTL keyed by from_hub:to_hub:date (availability is volatile).
+
+## Comms -- hard rules
+- Push, not pull. Crew never open an app.
+- Email (Resend) is the formal paper-trail channel: riders, advancing docs, settlements. Sent from a per-tour artist-branded subdomain (advancing@[artistslug].reeve.me). Riders are existing PDFs delivered with tracked links (sent, opened, acknowledged), not forms. Acknowledged writes back to document_share and nudges show_advance toward done.
+- WhatsApp (Meta Cloud API, Twilio and SMS fallback) is the operational channel: day sheets, travel, boarding passes, changes, Q&A. WhatsApp is core to V1, not a fast-follow. Meta business verification is the long-lead dependency, started day one; Twilio covers the gap.
+- Slash commands are ZERO-AI template renders: /itinerary, /travel, /hotel, /crew render directly from data with no model call. Implement as WhatsApp quick-reply buttons. The inbound number maps to a person, so replies are personalised without the crew member identifying themselves.
+- Only free text that is NOT a recognised command goes to Claude.
+- All scheduled and event comms run on Trigger.dev and are idempotent through Upstash Redis. A double-send to crew is the fastest way to lose TM trust.
+- NEVER send synchronously from a webhook handler. Enqueue and return fast.
+
+## AI layer -- hard rules
+- Claude fires in exactly three cases: free-text WhatsApp questions from crew, email-forward extraction (TM-initiated), logistics query synthesis.
+- When it fires it receives the full context of a SINGLE tour, assembled server-side and passed explicitly. Claude has no standing database access and never sees data outside the tour it is handed.
+- Claude NEVER books and NEVER sends without TM approval.
+- Cost model: slash commands cost nothing (templates), simple free text uses Haiku, synthesis and extraction use Sonnet, repeated system prompts use prompt caching. Target under 5 dollars per active tour per month.
+- Store system prompts as STATIC constants in lib/ai/. Do NOT build them dynamically at runtime (dynamic prompts break caching).
+- Use Anthropic tool use to enforce output schemas. Do not parse free-text JSON.
+
+## General hard rules
+- Server Components by default. Use 'use client' only for state, effects, or browser APIs.
+- Server actions for mutations. Write API routes only for webhooks, cron, Stripe callbacks, and inbound provider hooks.
+- Always use Supabase RLS. The service role key is server-side admin only (webhooks, cron, Trigger.dev jobs), never client code.
+- All forms and all external payloads validate with Zod schemas in lib/validators/.
+- Async APIs (cookies, params, searchParams) must be awaited in Next.js 16.
+- Imports use the @/ alias. No relative imports across top-level folders.
+- Root middleware is middleware.ts and exports middleware. Use getUser(), never getSession().
+- Validate every external URL before redirecting. Only allow relative paths starting with / and not //.
+
+## Code style
+- TypeScript strict mode. No any. Use unknown and narrow.
+- Named exports for components. Default exports only for Next.js page/layout/route files.
+- Functional components and hooks only. No class components.
+- Tailwind utility classes only. No .css files unless unavoidable. Merge classes with cn() from @/lib/utils.
+- Use shadcn components from components/ui/. Lucide icons via import { IconName } from 'lucide-react'.
+- Comments explain WHY when non-obvious, never WHAT.
+
+## File organisation
+- app/ for Next.js routes (desktop primary; mobile routes are trimmed companions, not a responsive shrink)
+- components/ui/ for shadcn components, components/ for feature components (people/, shows/, logistics/, comms/)
+- lib/ for shared utilities, clients, types
+- lib/supabase/ for client wrappers (server, admin, middleware)
+- lib/types/database.ts for generated Supabase types (never hand-edited)
+- lib/validators/ for Zod schemas
+- lib/logistics/ for planner (hub resolution, provider adapters, option normalisation)
+- lib/comms/ for email and WhatsApp/SMS senders and templates
+- lib/ai/ for Anthropic clients, static prompts, tour-context assembly
+- lib/auth/helpers.ts for requireUser, getCurrentUser, safeRelativePath
+- trigger/jobs/ for all Trigger.dev jobs
+- supabase/migrations/ for every schema change, committed
+- public/ for static assets
+
+## Brand voice
+- Short sentences. Plain English. No corporate language. No marketing fluff in product copy.
+- Never use em-dashes in code, comments, or copy. Use commas, periods, colons, or parentheses.
+- Use industry terms the way a TM does: tour, show, advance, day sheet, load-in, crew, party.
+- Copy should sound like a professional wrote it, not a SaaS founder.
+
+## What NOT to do
+- Do not change the database without a migration, an apply, AND regenerated types. All three or none.
+- Do not hand-edit lib/types/database.ts or invent table or column names.
+- Do not disable RLS, and do not use the service role key from client code.
+- Do not build in-app booking or payment for travel or hotels in V1. Planner ranks, TM books off-platform, reference recorded back.
+- Do not rank logistics options by price in V1. Feasibility first. Infeasible options flagged, never hidden.
+- Do not auto-promote a transport_segment to booked. The TM does that.
+- Do not send anything to crew without TM action (except answering a direct inbound question the TM opted into).
+- Do not run AI or send messages synchronously inside a webhook handler. Enqueue on Trigger.dev and return fast.
+- Do not build system prompts dynamically at runtime. Static constants only.
+- Do not duplicate dietary or allergies onto riders. Read from person.
+- Do not use getSession() anywhere. Always getUser().
+- Do not add an AI provider other than Anthropic.
+- Do not add a dependency not in package.json without instruction.
+- Do not switch to npm or yarn. pnpm only.
+- Do not write .css files. Tailwind utilities only.
+- Do not use Pages Router patterns. App Router only.
+- Do not use em-dashes in copy, code, or comments. Ever.
