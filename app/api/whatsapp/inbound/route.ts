@@ -1,0 +1,93 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createHmac } from 'crypto'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { tasks } from '@trigger.dev/sdk/v3'
+
+// GET: Meta webhook verification handshake.
+// Meta sends this when you first register the webhook URL.
+export async function GET(request: NextRequest) {
+  const params = request.nextUrl.searchParams
+  const mode = params.get('hub.mode')
+  const token = params.get('hub.verify_token')
+  const challenge = params.get('hub.challenge')
+
+  if (mode === 'subscribe' && token === process.env.WHATSAPP_VERIFY_TOKEN) {
+    return new NextResponse(challenge, { status: 200 })
+  }
+
+  return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+}
+
+// POST: inbound messages from WhatsApp users.
+// Rule: verify signature, map number to person, enqueue, return 200.
+// Nothing else happens in this handler.
+export async function POST(request: NextRequest) {
+  const rawBody = await request.text()
+
+  // Verify Meta signature using the App Secret.
+  // WHATSAPP_APP_SECRET is the Meta App's app secret (not the verify token).
+  const appSecret = process.env.WHATSAPP_APP_SECRET
+  if (appSecret) {
+    const signature = request.headers.get('x-hub-signature-256')
+    const expected = `sha256=${createHmac('sha256', appSecret).update(rawBody).digest('hex')}`
+    if (signature !== expected) {
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
+    }
+  }
+
+  let payload: unknown
+  try {
+    payload = JSON.parse(rawBody)
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
+  }
+
+  // Extract messages from the Meta webhook envelope.
+  const entry = (payload as Record<string, unknown>).entry
+  if (!Array.isArray(entry)) {
+    return NextResponse.json({ status: 'ok' })
+  }
+
+  const admin = createAdminClient()
+
+  for (const e of entry) {
+    const changes = (e as Record<string, unknown>).changes
+    if (!Array.isArray(changes)) continue
+
+    for (const change of changes) {
+      const value = (change as Record<string, unknown>).value as Record<string, unknown>
+      const messages = value?.messages
+      if (!Array.isArray(messages)) continue
+
+      for (const msg of messages) {
+        const message = msg as Record<string, unknown>
+        if (message.type !== 'text') continue
+
+        const fromNumber = message.from as string
+        const body = (message.text as Record<string, string>)?.body
+        if (!fromNumber || !body) continue
+
+        // Map the sender number to a person. The unique index on
+        // (tour_id, whatsapp_number) makes this an exact lookup.
+        const { data: person } = await admin
+          .from('people')
+          .select('id, tour_id')
+          .eq('whatsapp_number', fromNumber)
+          .single()
+
+        if (!person) continue  // Unknown number - no tour context, drop silently.
+
+        // Enqueue the router job. The handler does nothing else.
+        await tasks.trigger('whatsapp-router', {
+          tour_id: person.tour_id,
+          person_id: person.id,
+          from_number: fromNumber,
+          body,
+        })
+      }
+    }
+  }
+
+  // Always return 200 fast. Meta retries on anything else.
+  return NextResponse.json({ status: 'ok' })
+}
