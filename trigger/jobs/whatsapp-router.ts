@@ -1,6 +1,6 @@
 import { task } from '@trigger.dev/sdk/v3'
 import { routeInbound } from '@/lib/comms/router'
-import { sendWhatsApp } from '@/lib/comms/whatsapp'
+import { sendWhatsApp, sendInteractiveWhatsApp } from '@/lib/comms/whatsapp'
 import { answerCrewQuestion } from '@/lib/ai/answer'
 
 export type WhatsAppRouterPayload = {
@@ -24,7 +24,18 @@ export const whatsappRouterJob = task({
     })
 
     if (result.action === 'template') {
-      await sendWhatsApp({ to: payload.from_number, body: result.reply })
+      // Attach quick-reply buttons so the crew member can tap common commands
+      // without typing. Button taps arrive as interactive messages and are
+      // routed identically to typed slash commands.
+      await sendInteractiveWhatsApp({
+        to: payload.from_number,
+        body: result.reply,
+        buttons: [
+          { id: 'itinerary', title: '/itinerary' },
+          { id: 'travel', title: '/travel' },
+          { id: 'hotel', title: '/hotel' },
+        ],
+      })
       return { action: 'template', sent: true }
     }
 

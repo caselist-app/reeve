@@ -6,6 +6,19 @@ export type SendWhatsAppParams = {
   media_url?: string   // For boarding passes and attachments
 }
 
+// Quick-reply buttons attached to interactive messages.
+// WhatsApp supports up to 3 buttons per message.
+export type QuickReplyButton = {
+  id: string    // Returned as button_reply.id on tap
+  title: string // Displayed on the button, max 20 chars
+}
+
+export type SendInteractiveParams = {
+  to: string
+  body: string
+  buttons: [QuickReplyButton, ...QuickReplyButton[]] // 1-3 buttons
+}
+
 // Send via Meta WhatsApp Cloud API with Twilio SMS fallback.
 // Never call this synchronously from a webhook handler.
 // Always called from a Trigger.dev job after idempotency check.
@@ -17,6 +30,61 @@ export async function sendWhatsApp(params: SendWhatsAppParams): Promise<void> {
     // and any Meta outages. Log the Meta failure before falling back.
     console.error('Meta WhatsApp send failed, falling back to Twilio SMS:', err)
     await sendSms({ to: params.to, body: params.body })
+  }
+}
+
+// Send an interactive message with quick-reply buttons.
+// Falls back to plain text (no buttons) via Twilio SMS if Meta fails,
+// since SMS does not support interactive types.
+export async function sendInteractiveWhatsApp(params: SendInteractiveParams): Promise<void> {
+  try {
+    await sendInteractiveViaMetaCloudApi(params)
+  } catch (err) {
+    console.error('Meta interactive send failed, falling back to Twilio SMS (no buttons):', err)
+    await sendSms({ to: params.to, body: params.body })
+  }
+}
+
+async function sendInteractiveViaMetaCloudApi(params: SendInteractiveParams): Promise<void> {
+  const token = process.env.WHATSAPP_CLOUD_API_TOKEN
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
+
+  if (!token || !phoneNumberId) {
+    throw new Error('Meta WhatsApp env vars not configured')
+  }
+
+  const payload = {
+    messaging_product: 'whatsapp',
+    to: params.to,
+    type: 'interactive',
+    interactive: {
+      type: 'button',
+      body: { text: params.body },
+      action: {
+        // WhatsApp enforces a max of 3 buttons.
+        buttons: params.buttons.slice(0, 3).map((btn) => ({
+          type: 'reply',
+          reply: { id: btn.id, title: btn.title },
+        })),
+      },
+    },
+  }
+
+  const res = await fetch(
+    `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    }
+  )
+
+  if (!res.ok) {
+    const detail = await res.text()
+    throw new Error(`Meta API error ${res.status}: ${detail}`)
   }
 }
 
