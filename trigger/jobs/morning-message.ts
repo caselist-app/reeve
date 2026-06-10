@@ -10,6 +10,7 @@ export type MorningMessagePayload = {
   person_id: string
   show_id: string
   show_date: string   // YYYY-MM-DD, used as the dedup dimension
+  timezone: string    // IANA timezone for the tour
 }
 
 // Sent on show days to each person via their preferred_channel.
@@ -42,7 +43,7 @@ export const morningMessageJob = task({
       return { skipped: true, reason: 'no_contact_number' }
     }
 
-    const data = await buildMorningMessageData(payload.person_id, payload.show_id)
+    const data = await buildMorningMessageData(payload.person_id, payload.show_id, payload.timezone)
     if (!data) return { skipped: true, reason: 'data_unavailable' }
 
     const message = renderMorningMessage(data)

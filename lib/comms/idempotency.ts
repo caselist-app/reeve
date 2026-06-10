@@ -24,10 +24,17 @@ export function buildSendKey(
 // Returns true if this is the first time we have seen this key (safe to send).
 // Returns false if the key already exists (already sent, skip).
 // Uses Redis SET NX so the check and the set are atomic.
+// If Redis is unavailable, defaults to true (proceed) and logs a warning.
+// Degraded Redis is preferable to silently dropping sends.
 export async function checkAndSet(
   key: string,
   ttlSeconds: number
 ): Promise<boolean> {
-  const result = await redis.set(key, '1', { nx: true, ex: ttlSeconds })
-  return result === 'OK'
+  try {
+    const result = await redis.set(key, '1', { nx: true, ex: ttlSeconds })
+    return result === 'OK'
+  } catch (err) {
+    console.warn('[idempotency] Redis unavailable, defaulting to proceed:', err)
+    return true
+  }
 }
