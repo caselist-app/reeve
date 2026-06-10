@@ -24,16 +24,28 @@ export async function renderItinerary(
 ): Promise<string> {
   const admin = createAdminClient()
 
-  // Find the next upcoming show.
-  const today = new Date().toISOString().split('T')[0]
-  const { data: show } = await admin
+  // Find the active or next upcoming show.
+  //
+  // A show that runs past midnight is still the "active" show until curfew_at
+  // passes. Example: show date 14 Jun, curfew_at 03:00 on 15 Jun. A crew
+  // member messaging at 01:00 on 15 Jun should still see 14 Jun's show.
+  //
+  // Query: pick the first show where curfew_at is in the future (show still
+  // running), or where curfew_at is null and the show date is today or later
+  // (no curfew recorded, fall back to calendar day). Order by date so the
+  // nearest show wins.
+  const now = new Date().toISOString()
+  const today = now.split('T')[0]
+
+  const { data: shows } = await admin
     .from('shows')
-    .select('id, venue_name, date, address, load_in_at')
+    .select('id, venue_name, date, address, load_in_at, curfew_at')
     .eq('tour_id', tour_id)
-    .gte('date', today)
+    .or(`curfew_at.gt.${now},and(curfew_at.is.null,date.gte.${today})`)
     .order('date', { ascending: true })
     .limit(1)
-    .single()
+
+  const show = shows?.[0]
 
   if (!show) return 'No upcoming shows on this tour.'
 
