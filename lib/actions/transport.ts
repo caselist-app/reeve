@@ -2,7 +2,10 @@
 
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { boardingPassJob } from '@/trigger/jobs/boarding-pass'
 import type { TravelOption } from '@/lib/logistics/types'
+import { bustTourContextCache } from '@/lib/ai/context'
 
 export type TransportActionState = { error: string | null; segmentId?: string }
 
@@ -65,5 +68,53 @@ export async function recordTransportOption(
     return { error: assignError.message }
   }
 
+  void bustTourContextCache(tourId)
+
   return { error: null, segmentId: segment.id }
+}
+
+// Called after the TM uploads a boarding pass against a transport_assignment.
+// Schedules the boarding pass send job 3 hours before the segment departs.
+// If departure is fewer than 3 hours away, triggers immediately.
+export async function scheduleBoardingPassSend(assignmentId: string): Promise<void> {
+  await requireUser()
+
+  const admin = createAdminClient()
+
+  const { data: assignment } = await admin
+    .from('transport_assignments')
+    .select('id, tour_id, person_id, segment_id, transport_segments(depart_at)')
+    .eq('id', assignmentId)
+    .single()
+
+  if (!assignment) {
+    console.error('[scheduleBoardingPassSend] Assignment not found:', assignmentId)
+    return
+  }
+
+  const seg = assignment.transport_segments as { depart_at: string | null } | null
+  const departAt = seg?.depart_at ? new Date(seg.depart_at) : null
+
+  const payload = {
+    tour_id: assignment.tour_id,
+    person_id: assignment.person_id,
+    assignment_id: assignment.id,
+    segment_id: assignment.segment_id,
+  }
+
+  if (!departAt) {
+    // No departure time: trigger immediately so the TM knows the job is live.
+    await boardingPassJob.trigger(payload)
+    return
+  }
+
+  const sendAt = new Date(departAt.getTime() - 3 * 60 * 60 * 1000)
+  const now = new Date()
+
+  if (sendAt <= now) {
+    // Fewer than 3 hours to departure: send now.
+    await boardingPassJob.trigger(payload)
+  } else {
+    await boardingPassJob.trigger(payload, { delay: sendAt })
+  }
 }

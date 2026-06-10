@@ -4,6 +4,7 @@ import { ChevronLeft } from 'lucide-react'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { PlannerWorkspace } from '@/components/planner/planner-workspace'
+import { BoardingPassUploader, type TransportAssignmentRow } from '@/components/planner/boarding-pass-uploader'
 
 export default async function PlannerPage({
   params,
@@ -23,7 +24,7 @@ export default async function PlannerPage({
 
   if (!tour) redirect('/')
 
-  const [{ data: show }, { data: people }] = await Promise.all([
+  const [{ data: show }, { data: people }, { data: assignmentRows }] = await Promise.all([
     supabase
       .from('shows')
       .select(
@@ -37,9 +38,48 @@ export default async function PlannerPage({
       .select('id, name, role, home_city')
       .eq('tour_id', id)
       .order('name'),
+    // All transport assignments for this tour so the TM can upload boarding passes.
+    // Segments do not carry show_id; we show all tour segments and let the TM match by context.
+    supabase
+      .from('transport_assignments')
+      .select(`
+        id,
+        boarding_pass_document_id,
+        people ( name ),
+        transport_segments (
+          mode, carrier_operator, vehicle_or_flight_no,
+          origin, destination, depart_at
+        )
+      `)
+      .eq('tour_id', id)
+      .order('id'),
   ])
 
   if (!show) redirect(`/tours/${id}/shows`)
+
+  // Shape assignment rows into a flat structure for the boarding pass uploader.
+  const assignments: TransportAssignmentRow[] = (assignmentRows ?? []).map((a) => {
+    const person = a.people as { name: string } | null
+    const seg = a.transport_segments as {
+      mode: string
+      carrier_operator: string | null
+      vehicle_or_flight_no: string | null
+      origin: string | null
+      destination: string | null
+      depart_at: string | null
+    } | null
+    return {
+      id: a.id,
+      person_name: person?.name ?? 'Unknown',
+      mode: seg?.mode ?? '',
+      carrier_operator: seg?.carrier_operator ?? null,
+      vehicle_or_flight_no: seg?.vehicle_or_flight_no ?? null,
+      origin: seg?.origin ?? null,
+      destination: seg?.destination ?? null,
+      depart_at: seg?.depart_at ?? null,
+      has_boarding_pass: !!a.boarding_pass_document_id,
+    }
+  })
 
   const formattedDate = new Date(`${show.date}T00:00:00`).toLocaleDateString('en-GB', {
     weekday: 'long',
@@ -70,12 +110,22 @@ export default async function PlannerPage({
           Add people to this tour before planning travel.
         </p>
       ) : (
-        <PlannerWorkspace
-          show={show}
-          people={people}
-          tourId={id}
-          timezone={tour.timezone}
-        />
+        <div className="space-y-10">
+          <PlannerWorkspace
+            show={show}
+            people={people}
+            tourId={id}
+            timezone={tour.timezone}
+          />
+
+          {assignments.length > 0 && (
+            <BoardingPassUploader
+              tourId={id}
+              assignments={assignments}
+              timezone={tour.timezone}
+            />
+          )}
+        </div>
       )}
     </div>
   )
