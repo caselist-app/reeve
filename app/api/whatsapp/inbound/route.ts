@@ -56,6 +56,35 @@ export async function POST(request: NextRequest) {
 
     for (const change of changes) {
       const value = (change as Record<string, unknown>).value as Record<string, unknown>
+
+      // Handle delivery/read receipts from Meta.
+      // Meta sends statuses alongside (or instead of) messages in the same envelope.
+      // Each status entry has: id (wamid), status ('sent'|'delivered'|'read'), timestamp.
+      const statuses = value?.statuses
+      if (Array.isArray(statuses)) {
+        for (const s of statuses) {
+          const status = s as Record<string, unknown>
+          const wamid = status.id as string | undefined
+          const statusType = status.status as string | undefined
+
+          if (!wamid || (statusType !== 'delivered' && statusType !== 'read')) continue
+
+          const now = new Date().toISOString()
+          const update =
+            statusType === 'delivered'
+              ? { delivered_at: now }
+              : { read_at: now }
+
+          // Update the broadcast_log row that matches this wamid.
+          // Admin client bypasses RLS - this handler runs as the system, not a user.
+          await admin
+            .from('broadcast_log')
+            .update(update)
+            .eq('wamid', wamid)
+            .is(statusType === 'delivered' ? 'delivered_at' : 'read_at', null)
+        }
+      }
+
       const messages = value?.messages
       if (!Array.isArray(messages)) continue
 

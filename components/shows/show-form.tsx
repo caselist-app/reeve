@@ -17,6 +17,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { NotifyPanel } from '@/components/broadcast/notify-panel'
+import type { ChangeDescriptor } from '@/lib/comms/affected'
+
+// Fields that warrant a crew notification when changed.
+// load_in_at: affects everyone traveling to the show that day.
+// address: affects everyone - venue has physically moved.
+// curfew_at: affects plans for the night, especially transport home.
+type NotifyField = 'load_in_at' | 'address' | 'curfew_at'
+
+type NotifyState = {
+  change: Extract<ChangeDescriptor, { type: 'show' }>
+  previousValue: string | null
+}
 
 type ShowData = z.infer<typeof showSchema>
 
@@ -45,6 +58,9 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+  // Set after a successful update if a notification-worthy field changed.
+  const [notify, setNotify] = useState<NotifyState | null>(null)
 
   const [venueType, setVenueType] = useState(initialData?.venue_type ?? '')
   const [unionStage, setUnionStage] = useState(
@@ -59,6 +75,8 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    setSaved(false)
+    setNotify(null)
     const fd = new FormData(e.currentTarget)
 
     const data: ShowData = {
@@ -90,10 +108,26 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
       }
 
       setError(null)
+
       if (onSuccess && result.showId) {
         onSuccess(result.showId)
-      } else if (result.showId) {
-        router.push(`/tours/${tourId}/shows/${result.showId}`)
+        return
+      }
+
+      if (!showId) {
+        // New show: navigate to its page.
+        if (result.showId) router.push(`/tours/${tourId}/shows/${result.showId}`)
+        return
+      }
+
+      // Existing show was updated. Check if any notification-worthy field changed.
+      setSaved(true)
+      const notifyField = detectNotifyField(data, initialData)
+      if (notifyField) {
+        setNotify({
+          change: { type: 'show', showId, field: notifyField },
+          previousValue: formatPreviousValue(notifyField, initialData),
+        })
       }
     })
   }
@@ -305,6 +339,54 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
       <Button type="submit" disabled={pending} className="w-full">
         {pending ? 'Saving...' : showId ? 'Save changes' : 'Add show'}
       </Button>
+
+      {saved && !notify && (
+        <p className="text-sm text-muted-foreground">Saved.</p>
+      )}
+
+      {saved && notify && (
+        <div className="space-y-1">
+          <p className="text-sm text-muted-foreground">Saved.</p>
+          <NotifyPanel
+            tourId={tourId}
+            change={notify.change}
+            previousValue={notify.previousValue}
+          />
+        </div>
+      )}
     </form>
   )
+}
+
+// Returns the first notification-worthy field that changed, or null.
+// Only the fields the brief specifies as crew-relevant are checked.
+function detectNotifyField(
+  next: Partial<ShowData>,
+  prev: Partial<ShowData> | undefined
+): NotifyField | null {
+  if (!prev) return null
+  if ((next.load_in_at ?? null) !== (prev.load_in_at ?? null)) return 'load_in_at'
+  if ((next.address ?? null) !== (prev.address ?? null)) return 'address'
+  if ((next.curfew_at ?? null) !== (prev.curfew_at ?? null)) return 'curfew_at'
+  return null
+}
+
+// Formats the old value of a field as a human-readable string for the
+// "was X" part of the change message. Timestamps become HH:MM.
+function formatPreviousValue(
+  field: NotifyField,
+  prev: Partial<ShowData> | undefined
+): string | null {
+  if (!prev) return null
+  if (field === 'load_in_at' || field === 'curfew_at') {
+    const iso = prev[field]
+    if (!iso) return null
+    // The form stores these as datetime-local strings (YYYY-MM-DDTHH:MM).
+    // Slice to HH:MM for a readable "was 09:00".
+    return iso.length >= 16 ? iso.slice(11, 16) : iso
+  }
+  if (field === 'address') {
+    return prev.address ?? null
+  }
+  return null
 }

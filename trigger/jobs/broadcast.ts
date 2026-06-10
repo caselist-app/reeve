@@ -7,14 +7,16 @@ import { sendSms } from '@/lib/comms/sms'
 export type BroadcastPayload = {
   tour_id: string
   change_id: string                  // unique ID for this change event - the dedup dimension
+  change_type: string                // mirrors ChangeDescriptor.type for broadcast_log
   message: string                    // the change message to send
-  affected_person_ids: string[]      // computed by the caller: only the people on the affected segment
+  affected_person_ids: string[]      // computed by the caller: only the people on the affected record
 }
 
 // Sends a change notification to exactly the affected people.
-// Not a blanket group send: the caller computes which people are affected
+// Not a blanket group send: the caller computes who is affected
 // (e.g. only the four people on the moved bus leg).
 // Dedup dimension: change_id per person. Safe to retry.
+// Logs each send to broadcast_log with wamid for delivery receipt tracking.
 export const broadcastJob = task({
   id: 'broadcast',
   run: async (payload: BroadcastPayload) => {
@@ -51,16 +53,30 @@ export const broadcastJob = task({
         ? person.sms_number!
         : (person.whatsapp_number ?? person.sms_number!)
 
+      let wamid: string | null = null
+
       try {
         if (channel === 'sms') {
           await sendSms({ to, body: payload.message })
         } else {
-          await sendWhatsApp({ to, body: payload.message })
+          const result = await sendWhatsApp({ to, body: payload.message })
+          wamid = result.wamid
         }
+
+        // Log the send. Admin client bypasses RLS since jobs run outside user auth.
+        await admin.from('broadcast_log').insert({
+          tour_id: payload.tour_id,
+          person_id,
+          change_type: payload.change_type,
+          message: payload.message,
+          wamid,
+          sent_at: new Date().toISOString(),
+        })
+
         results.push({ person_id, status: 'sent' })
       } catch (err) {
         // Log the failure but continue to the next person.
-        // Failed sends are not retried here - the job-level retry handles that.
+        // Failed sends are not retried at this level - job-level retry handles that.
         console.error(`Broadcast send failed for person ${person_id}:`, err)
         results.push({ person_id, status: 'failed' })
       }

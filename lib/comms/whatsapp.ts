@@ -19,23 +19,32 @@ export type SendInteractiveParams = {
   buttons: [QuickReplyButton, ...QuickReplyButton[]] // 1-3 buttons
 }
 
+export type SendWhatsAppResult = {
+  // Meta WhatsApp message ID. Present only when Meta Cloud API was used.
+  // Null when Twilio or SMS fallback was used.
+  // Used to match delivery/read receipt webhooks back to broadcast_log rows.
+  wamid: string | null
+}
+
 // Send via Meta WhatsApp Cloud API, Twilio WhatsApp fallback, then Twilio SMS.
 // Never call this synchronously from a webhook handler.
 // Always called from a Trigger.dev job after idempotency check.
-export async function sendWhatsApp(params: SendWhatsAppParams): Promise<void> {
+// Returns the wamid when Meta was used so callers can store it for receipt tracking.
+export async function sendWhatsApp(params: SendWhatsAppParams): Promise<SendWhatsAppResult> {
   try {
-    await sendViaMetaCloudApi(params)
-    return
+    const wamid = await sendViaMetaCloudApi(params)
+    return { wamid }
   } catch (err) {
     console.error('Meta WhatsApp send failed, trying Twilio WhatsApp:', err)
   }
   try {
     await sendViaTwilioWhatsApp({ to: params.to, body: params.body })
-    return
+    return { wamid: null }
   } catch (err) {
     console.error('Twilio WhatsApp send failed, falling back to Twilio SMS:', err)
   }
   await sendSms({ to: params.to, body: params.body })
+  return { wamid: null }
 }
 
 // Send an interactive message with quick-reply buttons.
@@ -137,7 +146,9 @@ async function sendInteractiveViaMetaCloudApi(params: SendInteractiveParams): Pr
   }
 }
 
-async function sendViaMetaCloudApi(params: SendWhatsAppParams): Promise<void> {
+// Returns the wamid (Meta message ID) on success.
+// Callers store this to match delivery/read receipts later.
+async function sendViaMetaCloudApi(params: SendWhatsAppParams): Promise<string> {
   const token = process.env.WHATSAPP_CLOUD_API_TOKEN
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
 
@@ -175,4 +186,9 @@ async function sendViaMetaCloudApi(params: SendWhatsAppParams): Promise<void> {
     const detail = await res.text()
     throw new Error(`Meta API error ${res.status}: ${detail}`)
   }
+
+  const json = (await res.json()) as { messages?: Array<{ id: string }> }
+  const wamid = json.messages?.[0]?.id
+  if (!wamid) throw new Error('Meta API response missing message id')
+  return wamid
 }

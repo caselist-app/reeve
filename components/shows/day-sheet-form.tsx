@@ -7,6 +7,7 @@ import { updateDaySheet } from '@/lib/actions/shows'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { NotifyPanel } from '@/components/broadcast/notify-panel'
 import type { Tables } from '@/lib/types/database'
 
 const SCHEDULE = [
@@ -40,6 +41,7 @@ function toTimeInput(iso: string | null | undefined, tz: string | null): string 
 }
 
 interface DaySheetFormProps {
+  tourId: string
   showId: string
   initialData: Tables<'day_sheets'> | null
   timezone: string | null
@@ -47,6 +49,7 @@ interface DaySheetFormProps {
 }
 
 export function DaySheetForm({
+  tourId,
   showId,
   initialData,
   timezone,
@@ -55,10 +58,12 @@ export function DaySheetForm({
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+  const [showNotify, setShowNotify] = useState(false)
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setSaved(false)
+    setShowNotify(false)
     const fd = new FormData(e.currentTarget)
 
     const data: Record<ScheduleKey, string | null> = {} as Record<ScheduleKey, string | null>
@@ -73,6 +78,7 @@ export function DaySheetForm({
       } else {
         setError(null)
         setSaved(true)
+        setShowNotify(true)
       }
     })
   }
@@ -113,6 +119,14 @@ export function DaySheetForm({
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
       </form>
+
+      {showNotify && (
+        <NotifyPanel
+          tourId={tourId}
+          change={{ type: 'day_sheet', showId }}
+          previousValue={null}
+        />
+      )}
     </div>
   )
 }
