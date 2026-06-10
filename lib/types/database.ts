@@ -166,6 +166,60 @@ export type Database = {
           },
         ]
       }
+      broadcast_log: {
+        Row: {
+          change_type: string
+          created_at: string
+          delivered_at: string | null
+          id: string
+          message: string
+          person_id: string
+          read_at: string | null
+          sent_at: string | null
+          tour_id: string
+          wamid: string | null
+        }
+        Insert: {
+          change_type: string
+          created_at?: string
+          delivered_at?: string | null
+          id?: string
+          message: string
+          person_id: string
+          read_at?: string | null
+          sent_at?: string | null
+          tour_id: string
+          wamid?: string | null
+        }
+        Update: {
+          change_type?: string
+          created_at?: string
+          delivered_at?: string | null
+          id?: string
+          message?: string
+          person_id?: string
+          read_at?: string | null
+          sent_at?: string | null
+          tour_id?: string
+          wamid?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broadcast_log_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "broadcast_log_tour_id_fkey"
+            columns: ["tour_id"]
+            isOneToOne: false
+            referencedRelation: "tours"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crew_detail: {
         Row: {
           created_at: string
@@ -301,8 +355,10 @@ export type Database = {
           id: string
           opened_at: string | null
           recipient_person_id: string
+          reminder_count: number
           sent_at: string | null
           share_token: string
+          show_id: string | null
           tour_id: string
         }
         Insert: {
@@ -313,8 +369,10 @@ export type Database = {
           id?: string
           opened_at?: string | null
           recipient_person_id: string
+          reminder_count?: number
           sent_at?: string | null
           share_token: string
+          show_id?: string | null
           tour_id: string
         }
         Update: {
@@ -325,8 +383,10 @@ export type Database = {
           id?: string
           opened_at?: string | null
           recipient_person_id?: string
+          reminder_count?: number
           sent_at?: string | null
           share_token?: string
+          show_id?: string | null
           tour_id?: string
         }
         Relationships: [
@@ -342,6 +402,13 @@ export type Database = {
             columns: ["recipient_person_id"]
             isOneToOne: false
             referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "document_shares_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "shows"
             referencedColumns: ["id"]
           },
           {
@@ -390,6 +457,50 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "documents_tour_id_fkey"
+            columns: ["tour_id"]
+            isOneToOne: false
+            referencedRelation: "tours"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      forwarded_emails: {
+        Row: {
+          attachments_json: Json
+          body_text: string | null
+          created_at: string
+          extraction_status: string
+          from_address: string | null
+          id: string
+          proposed_rows: Json | null
+          subject: string | null
+          tour_id: string
+        }
+        Insert: {
+          attachments_json?: Json
+          body_text?: string | null
+          created_at?: string
+          extraction_status?: string
+          from_address?: string | null
+          id?: string
+          proposed_rows?: Json | null
+          subject?: string | null
+          tour_id: string
+        }
+        Update: {
+          attachments_json?: Json
+          body_text?: string | null
+          created_at?: string
+          extraction_status?: string
+          from_address?: string | null
+          id?: string
+          proposed_rows?: Json | null
+          subject?: string | null
+          tour_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "forwarded_emails_tour_id_fkey"
             columns: ["tour_id"]
             isOneToOne: false
             referencedRelation: "tours"
