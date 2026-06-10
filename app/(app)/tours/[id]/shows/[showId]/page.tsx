@@ -7,8 +7,26 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { ShowForm } from '@/components/shows/show-form'
 import { DaySheetForm } from '@/components/shows/day-sheet-form'
 import { AdvanceTracker } from '@/components/shows/advance-tracker'
+import { AdvanceDocuments, type DepartmentShareData, type ShareRow } from '@/components/shows/advance-documents'
+import { PageLayout } from '@/components/layout/page-layout'
+import { PageHeader } from '@/components/layout/page-header'
 import type { z } from 'zod'
 import type { showSchema } from '@/lib/validators/show'
+
+// Maps advance department keys to the doc_type stored on documents.
+const DEPT_DOC_TYPE: Record<string, string> = {
+  audio:       'tech_rider',
+  hospitality: 'hospitality_rider',
+  lighting:    'lighting_rider',
+  staging:     'staging_rider',
+}
+
+const DEPT_LABELS: Record<string, string> = {
+  audio:       'Audio',
+  hospitality: 'Hospitality',
+  lighting:    'Lighting',
+  staging:     'Staging',
+}
 
 export default async function ShowDetailPage({
   params,
@@ -28,10 +46,36 @@ export default async function ShowDetailPage({
 
   if (!tour) redirect('/app')
 
-  const [{ data: show }, { data: advance }, { data: daySheet }] = await Promise.all([
+  const [
+    { data: show },
+    { data: advance },
+    { data: daySheet },
+    { data: documents },
+    { data: shares },
+    { data: people },
+  ] = await Promise.all([
     supabase.from('shows').select('*').eq('id', showId).eq('tour_id', id).single(),
     supabase.from('show_advance').select('*').eq('show_id', showId).single(),
     supabase.from('day_sheets').select('*').eq('show_id', showId).single(),
+    // Current documents for this tour, grouped by doc_type in the UI.
+    supabase
+      .from('documents')
+      .select('id, title, doc_type')
+      .eq('tour_id', id)
+      .eq('is_current', true)
+      .in('doc_type', Object.values(DEPT_DOC_TYPE)),
+    // All shares for this show, with person name and document title + type.
+    supabase
+      .from('document_shares')
+      .select('id, document_id, sent_at, opened_at, acknowledged_at, documents(title, doc_type), people(name)')
+      .eq('show_id', showId)
+      .order('created_at', { ascending: true }),
+    // People on this tour with an email address (the "Send to venue" picker).
+    supabase
+      .from('people')
+      .select('id, name, contact_email')
+      .eq('tour_id', id)
+      .not('contact_email', 'is', null),
   ])
 
   if (!show) redirect(`/tours/${id}/shows`)
@@ -64,8 +108,38 @@ export default async function ShowDetailPage({
     year: 'numeric',
   })
 
+  // Shape shares into ShareRow, carrying doc_type for O(1) department matching below.
+  const shareRows: ShareRow[] = (shares ?? []).map((s) => {
+    const doc = s.documents as { title: string; doc_type: string } | null
+    const person = s.people as { name: string } | null
+    return {
+      id: s.id,
+      document_id: s.document_id,
+      document_title: doc?.title ?? '',
+      doc_type: doc?.doc_type ?? '',
+      recipient_name: person?.name ?? 'Unknown',
+      sent_at: s.sent_at,
+      opened_at: s.opened_at,
+      acknowledged_at: s.acknowledged_at,
+    }
+  })
+
+  const departmentData: DepartmentShareData[] = Object.entries(DEPT_DOC_TYPE).map(
+    ([dept, docType]) => ({
+      department: dept as DepartmentShareData['department'],
+      label: DEPT_LABELS[dept],
+      docType,
+      documents: (documents ?? []).filter((d) => d.doc_type === docType),
+      shares: shareRows.filter((s) => s.doc_type === docType),
+    })
+  )
+
+  const contactablePeople = (people ?? [])
+    .filter((p): p is typeof p & { contact_email: string } => !!p.contact_email)
+    .map((p) => ({ id: p.id, name: p.name, contact_email: p.contact_email }))
+
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10">
+    <PageLayout maxWidth="max-w-3xl">
       <Link
         href={`/tours/${id}/shows`}
         className="mb-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
@@ -74,11 +148,11 @@ export default async function ShowDetailPage({
         Shows
       </Link>
 
-      <div className="mb-8">
-        <p className="text-sm text-muted-foreground">{tour.artist_act}</p>
-        <h1 className="text-2xl font-semibold">{show.venue_name}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{formattedDate}</p>
-      </div>
+      <PageHeader
+        eyebrow={tour.artist_act}
+        title={show.venue_name}
+        description={formattedDate}
+      />
 
       <Tabs defaultValue="venue">
         <TabsList className="mb-6">
@@ -97,6 +171,7 @@ export default async function ShowDetailPage({
 
         <TabsContent value="schedule">
           <DaySheetForm
+            tourId={id}
             showId={show.id}
             initialData={daySheet}
             timezone={tour.timezone}
@@ -106,8 +181,14 @@ export default async function ShowDetailPage({
 
         <TabsContent value="advance">
           <AdvanceTracker showId={show.id} initialAdvance={advance} />
+          <AdvanceDocuments
+            tourId={id}
+            showId={show.id}
+            departments={departmentData}
+            people={contactablePeople}
+          />
         </TabsContent>
       </Tabs>
-    </div>
+    </PageLayout>
   )
 }
