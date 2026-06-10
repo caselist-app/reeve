@@ -3,6 +3,7 @@
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import type { HotelOption } from '@/lib/logistics/types'
+import { bustTourContextCache } from '@/lib/ai/context'
 
 export type HotelActionState = { error: string | null; stayId?: string }
 
@@ -75,6 +76,8 @@ export async function recordHotelOption(
     }
   }
 
+  void bustTourContextCache(tourId)
+
   return { error: null, stayId: stay.id }
 }
 
@@ -89,6 +92,13 @@ export async function confirmHotelBooking(
 
   const supabase = await createClient()
 
+  // Fetch tour_id for cache bust before updating.
+  const { data: stay } = await supabase
+    .from('hotel_stays')
+    .select('tour_id')
+    .eq('id', stayId)
+    .single()
+
   const { error } = await supabase
     .from('hotel_stays')
     .update({
@@ -98,5 +108,8 @@ export async function confirmHotelBooking(
     .eq('id', stayId)
 
   if (error) return { error: error.message }
+
+  if (stay) void bustTourContextCache(stay.tour_id)
+
   return { error: null, stayId }
 }

@@ -1,8 +1,26 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { redis } from '@/lib/redis'
 
 // TourContext is assembled once per inference call and passed explicitly
 // in the user turn. Claude has no standing database access. It never sees
 // data from more than one tour.
+
+const CONTEXT_TTL_SECONDS = 60 * 10 // 10 minutes
+
+function contextCacheKey(tour_id: string): string {
+  return `context:${tour_id}`
+}
+
+// Call this from any server action that mutates tour data so the next
+// crew Q&A call gets fresh context rather than a stale snapshot.
+export async function bustTourContextCache(tour_id: string): Promise<void> {
+  try {
+    await redis.del(contextCacheKey(tour_id))
+  } catch (err) {
+    // Non-fatal: a stale cache entry will expire on its own within 10 minutes.
+    console.warn('[context] cache bust failed, will expire naturally:', err)
+  }
+}
 
 export type TourContext = {
   tour: {
@@ -92,6 +110,17 @@ export type TourContext = {
 }
 
 export async function assembleTourContext(tour_id: string): Promise<TourContext> {
+  // Serve from cache when possible. The context is expensive: 6 parallel
+  // Supabase queries. 10 minutes is short enough to stay fresh for crew Q&A
+  // while keeping AI costs well under the $5/tour/month target.
+  try {
+    const cached = await redis.get<TourContext>(contextCacheKey(tour_id))
+    if (cached) return cached
+  } catch (err) {
+    // Redis unavailable: fall through and assemble fresh.
+    console.warn('[context] cache read failed, assembling fresh:', err)
+  }
+
   const admin = createAdminClient()
 
   const [tourRes, showsRes, peopleRes, transportRes, hotelsRes, attentionRes] =
@@ -138,7 +167,7 @@ export async function assembleTourContext(tour_id: string): Promise<TourContext>
 
   if (!tourRes.data) throw new Error(`Tour not found: ${tour_id}`)
 
-  return {
+  const context: TourContext = {
     tour: tourRes.data,
     shows: (showsRes.data ?? []).map((s) => ({
       id: s.id,
@@ -179,4 +208,13 @@ export async function assembleTourContext(tour_id: string): Promise<TourContext>
     })),
     attention_items: attentionRes.data ?? [],
   }
+
+  // Write to cache. Non-fatal if Redis is unavailable.
+  try {
+    await redis.set(contextCacheKey(tour_id), context, { ex: CONTEXT_TTL_SECONDS })
+  } catch (err) {
+    console.warn('[context] cache write failed:', err)
+  }
+
+  return context
 }

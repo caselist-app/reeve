@@ -3,6 +3,7 @@
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { showSchema } from '@/lib/validators/show'
+import { bustTourContextCache } from '@/lib/ai/context'
 import { daySheetFormSchema } from '@/lib/validators/day-sheet'
 import { setAdvanceStatus } from '@/lib/shows/advance'
 import { resolveHubJob } from '@/trigger/jobs/resolve-hub'
@@ -69,6 +70,9 @@ export async function createShow(
   // hub_ground_minutes, and hub_resolved_at once it completes.
   await resolveHubJob.trigger({ show_id: showId })
 
+  // Bust the crew Q&A context cache: the show roster has changed.
+  void bustTourContextCache(tourId)
+
   return { error: null, showId }
 }
 
@@ -123,6 +127,15 @@ export async function updateShow(
     await resolveHubJob.trigger({ show_id: showId })
   }
 
+  // Fetch tour_id for cache bust (not in the existing select above).
+  const { data: showRow } = await supabase
+    .from('shows')
+    .select('tour_id')
+    .eq('id', showId)
+    .single()
+
+  if (showRow) void bustTourContextCache(showRow.tour_id)
+
   return { error: null, showId }
 }
 
@@ -134,7 +147,7 @@ export async function deleteShow(showId: string): Promise<ShowActionState> {
   // RLS check: returns null if caller does not own the show's tour.
   const { data: show } = await supabase
     .from('shows')
-    .select('id')
+    .select('id, tour_id')
     .eq('id', showId)
     .single()
 
@@ -148,6 +161,8 @@ export async function deleteShow(showId: string): Promise<ShowActionState> {
   if (error) {
     return { error: error.message }
   }
+
+  void bustTourContextCache(show.tour_id)
 
   return { error: null }
 }
@@ -225,6 +240,8 @@ export async function updateDaySheet(
   if (error) {
     return { error: error.message }
   }
+
+  void bustTourContextCache(show.tour_id)
 
   return { error: null }
 }

@@ -3,6 +3,7 @@
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { personSchema, crewDetailSchema } from '@/lib/validators/person'
+import { bustTourContextCache } from '@/lib/ai/context'
 import type { z } from 'zod'
 
 export type PeopleActionState = { error: string | null; personId?: string }
@@ -72,6 +73,8 @@ export async function addPerson(
       return { error: 'Could not save pay details. Please try again.' }
     }
   }
+
+  void bustTourContextCache(tourId)
 
   return { error: null, personId: person.id }
 }
@@ -181,6 +184,8 @@ export async function removePerson(personId: string): Promise<PeopleActionState>
   if (error) {
     return { error: error.message }
   }
+
+  void bustTourContextCache(person.tour_id)
 
   return { error: null }
 }
