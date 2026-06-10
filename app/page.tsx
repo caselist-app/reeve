@@ -1,7 +1,10 @@
-export default function Home() {
-  return (
-    <main className="flex min-h-screen items-center justify-center">
-      <p className="text-muted-foreground text-sm">Reeve</p>
-    </main>
-  )
+import { redirect } from 'next/navigation'
+import { requireUser } from '@/lib/auth/helpers'
+
+// App home. requireUser redirects to /login if not authenticated.
+export default async function Home() {
+  await requireUser()
+
+  // Placeholder until the tours list UI is built.
+  redirect('/tours/new')
 }

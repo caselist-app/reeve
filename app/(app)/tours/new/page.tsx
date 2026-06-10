@@ -120,7 +120,7 @@ export default function NewTourPage() {
             <SelectTrigger>
               <SelectValue placeholder="Select timezone" />
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="max-h-60 overflow-y-auto">
               {TOUR_TIMEZONES.map((tz) => (
                 <SelectItem key={tz.value} value={tz.value}>{tz.label}</SelectItem>
               ))}
