@@ -1,30 +1,88 @@
 'use server'
 
+import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
-import { signInSchema } from '@/lib/validators/auth'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { otpSchema } from '@/lib/validators/auth'
 
-export type LoginState = { error: string | null }
+export type RequestOtpState = { error: string | null; sent: boolean; email: string }
+export type VerifyOtpState = { error: string | null }
 
-export async function loginAction(
-  _prev: LoginState,
+export async function requestOtpAction(
+  _prev: RequestOtpState,
   formData: FormData
-): Promise<LoginState> {
-  const parsed = signInSchema.safeParse({
-    email: formData.get('email'),
-    password: formData.get('password'),
+): Promise<RequestOtpState> {
+  const parsed = z.string().email().safeParse(formData.get('email'))
+  if (!parsed.success) {
+    return { error: 'Enter a valid email address.', sent: false, email: '' }
+  }
+
+  const headersList = await headers()
+  const host = headersList.get('x-forwarded-host') ?? headersList.get('host') ?? 'localhost:3000'
+  const proto = headersList.get('x-forwarded-proto') ?? 'http'
+  const origin = `${proto}://${host}`
+
+  const supabase = await createClient()
+  const { error } = await supabase.auth.signInWithOtp({
+    email: parsed.data,
+    options: {
+      shouldCreateUser: true,
+      // Magic link fallback: if the user clicks the email link rather than entering
+      // the code, /auth/callback will handle the session exchange.
+      emailRedirectTo: `${origin}/auth/callback?next=/`,
+    },
   })
 
+  if (error) return { error: error.message, sent: false, email: '' }
+  return { error: null, sent: true, email: parsed.data }
+}
+
+export async function verifyOtpAction(
+  _prev: VerifyOtpState,
+  formData: FormData
+): Promise<VerifyOtpState> {
+  const parsed = otpSchema.safeParse({
+    email: formData.get('email'),
+    token: formData.get('token'),
+  })
   if (!parsed.success) {
-    return { error: parsed.error.issues[0].message }
+    const message = parsed.error.issues[0]?.message ?? 'Invalid code.'
+    return { error: message }
   }
 
   const supabase = await createClient()
-  const { error } = await supabase.auth.signInWithPassword(parsed.data)
+  const { data, error } = await supabase.auth.verifyOtp({
+    email: parsed.data.email,
+    token: parsed.data.token,
+    type: 'email',
+  })
 
-  if (error) {
-    return { error: error.message }
+  if (error || !data.user) {
+    return { error: 'Incorrect or expired code. Try again.' }
   }
 
-  redirect('/app')
+  // Create accounts row if this is a new user. Check first to make sign-in idempotent.
+  const admin = createAdminClient()
+  const { data: existing } = await admin
+    .from('accounts')
+    .select('id')
+    .eq('id', data.user.id)
+    .maybeSingle()
+
+  if (!existing) {
+    const { error: insertError } = await admin.from('accounts').insert({
+      id: data.user.id,
+      name: data.user.email?.split('@')[0] ?? 'Tour Manager',
+      email: data.user.email!,
+      subscription_status: 'trialing',
+    })
+    if (insertError) {
+      console.error('accounts insert failed:', insertError)
+      return { error: 'Account setup failed. Please try again.' }
+    }
+  }
+
+  redirect('/')
 }
