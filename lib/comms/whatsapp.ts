@@ -19,29 +19,78 @@ export type SendInteractiveParams = {
   buttons: [QuickReplyButton, ...QuickReplyButton[]] // 1-3 buttons
 }
 
-// Send via Meta WhatsApp Cloud API with Twilio SMS fallback.
+// Send via Meta WhatsApp Cloud API, Twilio WhatsApp fallback, then Twilio SMS.
 // Never call this synchronously from a webhook handler.
 // Always called from a Trigger.dev job after idempotency check.
 export async function sendWhatsApp(params: SendWhatsAppParams): Promise<void> {
   try {
     await sendViaMetaCloudApi(params)
+    return
   } catch (err) {
-    // Twilio SMS fallback: covers the period before Meta business verification
-    // and any Meta outages. Log the Meta failure before falling back.
-    console.error('Meta WhatsApp send failed, falling back to Twilio SMS:', err)
-    await sendSms({ to: params.to, body: params.body })
+    console.error('Meta WhatsApp send failed, trying Twilio WhatsApp:', err)
   }
+  try {
+    await sendViaTwilioWhatsApp({ to: params.to, body: params.body })
+    return
+  } catch (err) {
+    console.error('Twilio WhatsApp send failed, falling back to Twilio SMS:', err)
+  }
+  await sendSms({ to: params.to, body: params.body })
 }
 
 // Send an interactive message with quick-reply buttons.
-// Falls back to plain text (no buttons) via Twilio SMS if Meta fails,
-// since SMS does not support interactive types.
+// Interactive types are Meta-only. If Meta fails, fall through to Twilio
+// WhatsApp (plain text, no buttons), then Twilio SMS.
 export async function sendInteractiveWhatsApp(params: SendInteractiveParams): Promise<void> {
   try {
     await sendInteractiveViaMetaCloudApi(params)
+    return
   } catch (err) {
-    console.error('Meta interactive send failed, falling back to Twilio SMS (no buttons):', err)
-    await sendSms({ to: params.to, body: params.body })
+    console.error('Meta interactive send failed, trying Twilio WhatsApp (no buttons):', err)
+  }
+  try {
+    await sendViaTwilioWhatsApp({ to: params.to, body: params.body })
+    return
+  } catch (err) {
+    console.error('Twilio WhatsApp send failed, falling back to Twilio SMS:', err)
+  }
+  await sendSms({ to: params.to, body: params.body })
+}
+
+// Twilio WhatsApp uses the same Messaging Service SID as SMS but with
+// a whatsapp: prefix on the To number. Plain text only - no interactive types.
+async function sendViaTwilioWhatsApp(params: { to: string; body: string }): Promise<void> {
+  const accountSid = process.env.TWILIO_ACCOUNT_SID
+  const authToken = process.env.TWILIO_AUTH_TOKEN
+  const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID
+
+  if (!accountSid || !authToken || !messagingServiceSid) {
+    throw new Error('Twilio env vars not configured')
+  }
+
+  const formBody = new URLSearchParams({
+    To: `whatsapp:${params.to}`,
+    MessagingServiceSid: messagingServiceSid,
+    Body: params.body,
+  })
+
+  const credentials = Buffer.from(`${accountSid}:${authToken}`).toString('base64')
+
+  const res = await fetch(
+    `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Basic ${credentials}`,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: formBody.toString(),
+    }
+  )
+
+  if (!res.ok) {
+    const detail = await res.text()
+    throw new Error(`Twilio WhatsApp error ${res.status}: ${detail}`)
   }
 }
 
