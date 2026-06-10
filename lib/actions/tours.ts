@@ -1,9 +1,11 @@
 'use server'
 
 import { redirect } from 'next/navigation'
+import { schedules } from '@trigger.dev/sdk/v3'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { tourSchema } from '@/lib/validators/tour'
+import { provisionTourEmailDomain } from '@/lib/comms/email'
 
 export type TourActionState = { error: string | null }
 
@@ -55,6 +57,30 @@ export async function createTourAction(
     return { error: error.message }
   }
 
+  // Provision the per-tour Resend sending domain (advancing@{slug}.reeve.me).
+  // Only possible when the TM has set an artist_slug. Failure is non-blocking.
+  if (parsed.data.artist_slug) {
+    try {
+      await provisionTourEmailDomain(parsed.data.artist_slug)
+    } catch (domainErr) {
+      console.error('[createTour] Failed to provision email domain:', domainErr)
+    }
+  }
+
+  // Register a daily morning-message schedule for this tour.
+  // Fires at 07:00 UTC; the job resolves the tour's local date internally.
+  // A failed schedule registration does not block tour creation.
+  try {
+    await schedules.create({
+      task: 'morning-message',
+      cron: '0 7 * * *',
+      externalId: `morning-${data.id}`,
+      deduplicationKey: `morning-${data.id}`,
+    })
+  } catch (scheduleErr) {
+    console.error('[createTour] Failed to register morning-message schedule:', scheduleErr)
+  }
+
   redirect(`/tours/${data.id}/people`)
 }
 
@@ -102,6 +128,14 @@ export async function archiveTourAction(tourId: string): Promise<TourActionState
 
   if (error) {
     return { error: error.message }
+  }
+
+  // Deactivate the daily morning-message schedule so archived tours
+  // do not continue sending messages to crew.
+  try {
+    await schedules.deactivate(`morning-${tourId}`)
+  } catch (scheduleErr) {
+    console.error('[archiveTour] Failed to deactivate morning-message schedule:', scheduleErr)
   }
 
   redirect('/app')
