@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { ShowsView } from '@/components/shows/shows-view'
+import { PageLayout } from '@/components/layout/page-layout'
+import { PageHeader } from '@/components/layout/page-header'
 import type { Tables } from '@/lib/types/database'
 
 export default async function ShowsPage({
@@ -39,13 +41,9 @@ export default async function ShowsPage({
   }))
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-10">
-      <div className="mb-8">
-        <p className="text-sm text-muted-foreground">{tour.artist_act}</p>
-        <h1 className="text-2xl font-semibold">{tour.name}</h1>
-      </div>
-
+    <PageLayout>
+      <PageHeader eyebrow={tour.artist_act} title={tour.name} />
       <ShowsView tourId={id} shows={showsWithAdvance} timezone={tour.timezone} />
-    </div>
+    </PageLayout>
   )
 }

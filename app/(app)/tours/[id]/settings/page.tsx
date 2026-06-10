@@ -2,6 +2,8 @@ import { redirect } from 'next/navigation'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { TourSettingsForm } from '@/components/tours/settings-form'
+import { PageLayout } from '@/components/layout/page-layout'
+import { PageHeader } from '@/components/layout/page-header'
 
 export default async function TourSettingsPage({
   params,
@@ -24,9 +26,9 @@ export default async function TourSettingsPage({
   }
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-12">
-      <h1 className="mb-8 text-2xl font-semibold">Tour settings</h1>
+    <PageLayout maxWidth="max-w-lg">
+      <PageHeader eyebrow={tour.artist_act} title="Settings" />
       <TourSettingsForm tour={tour} />
-    </div>
+    </PageLayout>
   )
 }
