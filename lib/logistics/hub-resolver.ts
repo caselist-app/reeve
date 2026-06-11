@@ -1,12 +1,13 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { nearestAirport, estimateGroundMinutes } from '@/lib/logistics/airports'
 import type { HubResolution } from '@/lib/logistics/types'
 
 // Resolution order (stops at first hit):
 // 1. Known-venue lookup - handles festivals that have no nearby airport.
 //    Hellfest is the canonical test case: the venue is Clisson, which has no
 //    transport hub. A naive geocode would fail. We resolve it manually to NTE.
-// 2. Google Maps geocode + nearest hub (V1: structured as a seam, API call TBD).
-// 3. Standard buffers fallback.
+// 2. Google Maps geocode + nearest airport from bundled airport list.
+// 3. null - the planner surfaces an error asking the TM to add an address.
 
 type KnownVenueEntry = {
   iata: string | null
@@ -18,13 +19,13 @@ type KnownVenueEntry = {
 // KB grows. Festivals go here first because geocoding a festival site fails.
 const KNOWN_VENUES: Record<string, KnownVenueEntry> = {
   hellfest: { iata: 'NTE', rail: null, ground_minutes: 40 },
-  'clisson': { iata: 'NTE', rail: null, ground_minutes: 40 },
-  'glastonbury': { iata: 'BRS', rail: 'Castle Cary', ground_minutes: 35 },
+  clisson: { iata: 'NTE', rail: null, ground_minutes: 40 },
+  glastonbury: { iata: 'BRS', rail: 'Castle Cary', ground_minutes: 35 },
   'download festival': { iata: 'EMA', rail: 'Derby', ground_minutes: 20 },
   'reading festival': { iata: 'LHR', rail: 'Reading', ground_minutes: 15 },
   'leeds festival': { iata: 'LBA', rail: 'Leeds', ground_minutes: 25 },
-  'coachella': { iata: 'PSP', rail: null, ground_minutes: 25 },
-  'lollapalooza': { iata: 'ORD', rail: null, ground_minutes: 30 },
+  coachella: { iata: 'PSP', rail: null, ground_minutes: 25 },
+  lollapalooza: { iata: 'ORD', rail: null, ground_minutes: 30 },
 }
 
 // Standard transit buffers used when no specific data is available.
@@ -36,22 +37,35 @@ function lookupKnownVenue(venueName: string): KnownVenueEntry | null {
   return KNOWN_VENUES[key] ?? null
 }
 
-// Google Maps geocode + nearest hub.
-// V1 seam: structured correctly, implementation filled in once Maps API is wired.
+// Google Maps geocode + nearest airport from the bundled airport list.
+// Geocodes the venue address to lat/lng, then finds the nearest airport by
+// haversine distance. Ground time is estimated from straight-line distance.
 async function resolveViaGoogleMaps(
   address: string
 ): Promise<KnownVenueEntry | null> {
-  if (!process.env.GOOGLE_MAPS_API_KEY || !address) return null
-  // TODO: call Geocoding API, then Places Nearby for airports and rail stations,
-  // then Distance Matrix for drive times. Return null until implemented.
-  return null
-}
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY
+  if (!apiKey || !address) return null
 
-function standardFallback(): KnownVenueEntry {
+  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`
+
+  let data: { status: string; results: { geometry: { location: { lat: number; lng: number } } }[] }
+  try {
+    const res = await fetch(url)
+    data = (await res.json()) as typeof data
+  } catch {
+    return null
+  }
+
+  if (data.status !== 'OK' || !data.results[0]) return null
+
+  const { lat, lng } = data.results[0].geometry.location
+  const { airport, distKm } = nearestAirport(lat, lng)
+  const groundMin = estimateGroundMinutes(distKm)
+
   return {
-    iata: null,
+    iata: airport.iata,
     rail: null,
-    ground_minutes: AIRPORT_TRANSIT_MIN,
+    ground_minutes: groundMin,
   }
 }
 
@@ -60,7 +74,7 @@ function standardFallback(): KnownVenueEntry {
 // 1. The hub of the immediately preceding show in the same tour (person is
 //    already on the road).
 // 2. The person's home_city, geocoded to its nearest airport via Maps (V1 seam:
-//    returns the city string directly until Maps is wired).
+//    returns the city string directly until Maps geocoding is wired).
 // 3. null - the planner will prompt the TM to set a departure city manually.
 export async function getFromHub(
   person_id: string,
@@ -102,8 +116,12 @@ export async function getFromHub(
 
   if (!person?.home_city) return null
 
-  // V1 seam: return home_city as-is until Maps geocoding is wired.
-  // When Maps is implemented, geocode home_city to its nearest airport IATA.
+  // Geocode home_city to its nearest airport IATA. Falls back to returning
+  // the city string as-is if Maps is unavailable (e.g. no API key in dev),
+  // which at least surfaces the city name in the planner UI.
+  const resolved = await resolveViaGoogleMaps(person.home_city)
+  if (resolved?.iata) return resolved.iata
+
   return person.home_city
 }
 
@@ -118,8 +136,10 @@ export async function resolveHub(show_id: string): Promise<HubResolution> {
 
   if (error || !show) throw new Error(`Show not found: ${show_id}`)
 
-  // Return cached resolution if it exists.
-  if (show.hub_resolved_at) {
+  // Return cached resolution only if it produced a usable hub code.
+  // A prior run that yielded null/null (standardFallback) is NOT treated as
+  // resolved so we retry when the TM later adds an address.
+  if (show.hub_resolved_at && (show.transport_hub_iata || show.transport_hub_rail)) {
     return {
       iata: show.transport_hub_iata,
       rail: show.transport_hub_rail,
@@ -127,20 +147,30 @@ export async function resolveHub(show_id: string): Promise<HubResolution> {
     }
   }
 
-  // Resolution: known-venue -> Maps -> fallback.
+  // Resolution: known-venue -> Maps geocode -> give up (no hub available).
   const resolved: KnownVenueEntry | null =
     lookupKnownVenue(show.venue_name ?? '') ??
     (await resolveViaGoogleMaps(show.address ?? '')) ??
-    standardFallback()
+    null
 
-  // Cache on the show row. Re-resolve only if venue address changes.
+  if (!resolved) {
+    // No hub found. Do not mark as resolved so the system retries once an
+    // address is added. Surface a clear error to the TM.
+    throw new Error(
+      'Venue hub could not be resolved. Add a full address to the show and try again.'
+    )
+  }
+
+  // Cache the result on the show row. Only mark hub_resolved_at when we have
+  // a usable code so empty results are always retried.
+  const hasCode = !!(resolved.iata || resolved.rail)
   await admin
     .from('shows')
     .update({
       transport_hub_iata: resolved.iata,
       transport_hub_rail: resolved.rail,
       hub_ground_minutes: resolved.ground_minutes,
-      hub_resolved_at: new Date().toISOString(),
+      hub_resolved_at: hasCode ? new Date().toISOString() : null,
     })
     .eq('id', show_id)
 

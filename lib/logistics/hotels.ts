@@ -6,6 +6,7 @@ import { redis } from '@/lib/redis'
 import { searchRatehawk } from '@/lib/logistics/adapters/ratehawk'
 import { searchHotelbeds } from '@/lib/logistics/adapters/hotelbeds'
 import { searchExpedia } from '@/lib/logistics/adapters/expedia'
+import { searchMockHotels } from '@/lib/logistics/adapters/mock-hotels'
 import type { HotelOption, PlanHotelsInput } from '@/lib/logistics/types'
 
 // Cache TTL for hotel results. Availability is less volatile than flights.
@@ -17,17 +18,34 @@ const SEARCH_RADIUS_KM = 10
 // Maximum results per tier shown to the TM.
 const MAX_RESULTS_PER_TIER = 5
 
-// Google Maps geocode seam — V1: returns null until Maps API is wired.
-// When implemented: call Geocoding API with the venue address and cache
-// venue_lat / venue_lng on the show row (re-geocode only on address change).
+// Geocodes a venue address via the Maps Geocoding API and caches the result
+// on the show row. Re-geocodes only when called with a new address.
 async function geocodeVenue(
   showId: string,
   address: string | null
 ): Promise<{ lat: number; lng: number } | null> {
-  if (!process.env.GOOGLE_MAPS_API_KEY || !address) return null
-  // TODO: call Maps Geocoding API, write venue_lat/venue_lng to show row.
-  void showId
-  return null
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY
+  if (!apiKey || !address) return null
+
+  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`
+
+  let data: { status: string; results: { geometry: { location: { lat: number; lng: number } } }[] }
+  try {
+    const res = await fetch(url)
+    data = await res.json() as typeof data
+  } catch {
+    return null
+  }
+
+  if (data.status !== 'OK' || !data.results[0]) return null
+
+  const { lat, lng } = data.results[0].geometry.location
+
+  // Cache on the show row so subsequent calls skip the API.
+  const admin = createAdminClient()
+  await admin.from('shows').update({ venue_lat: lat, venue_lng: lng }).eq('id', showId)
+
+  return { lat, lng }
 }
 
 export async function planHotels(
@@ -121,6 +139,18 @@ export async function planHotels(
     ...(hbCrew.status === 'fulfilled' ? hbCrew.value : []),
     ...(exCrew.status === 'fulfilled' ? exCrew.value : []),
   ]
+
+  // No real provider returned results — fall back to mock data so the UI is
+  // usable for demos and testing. Mock results are clearly labelled in raw.
+  // Remove this block once a real provider is wired up.
+  if (artistRaw.length === 0 && crewRaw.length === 0) {
+    const [mockArtist, mockCrew] = await Promise.all([
+      searchMockHotels({ ...baseParams, rooms: input.party.artist_count, tier: 'artist' }),
+      searchMockHotels({ ...baseParams, rooms: input.party.crew_count, tier: 'crew' }),
+    ])
+    artistRaw.push(...mockArtist)
+    crewRaw.push(...mockCrew)
+  }
 
   // Parking is a HARD filter for bus/truck tours — a property without a truck
   // bay is not an option, not a down-ranked one. Strip it entirely.
