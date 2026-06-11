@@ -220,6 +220,104 @@ export type Database = {
           },
         ]
       }
+      contacts: {
+        Row: {
+          account_id: string
+          allergies: string | null
+          contact_email: string | null
+          contact_phone: string | null
+          created_at: string
+          default_daily_wage_rate: number | null
+          default_per_diem_currency: string | null
+          default_per_diem_rate: number | null
+          default_person_type: string
+          default_role: string | null
+          default_wage_currency: string | null
+          dietary: string | null
+          emergency_contact_name: string | null
+          emergency_contact_phone: string | null
+          home_city: string | null
+          id: string
+          name: string
+          notes: string | null
+          passport_country: string | null
+          passport_expiry: string | null
+          passport_number: string | null
+          photo_url: string | null
+          preferred_channel: string
+          sms_number: string | null
+          tshirt_size: string | null
+          updated_at: string
+          whatsapp_number: string | null
+        }
+        Insert: {
+          account_id: string
+          allergies?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          default_daily_wage_rate?: number | null
+          default_per_diem_currency?: string | null
+          default_per_diem_rate?: number | null
+          default_person_type?: string
+          default_role?: string | null
+          default_wage_currency?: string | null
+          dietary?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
+          home_city?: string | null
+          id?: string
+          name: string
+          notes?: string | null
+          passport_country?: string | null
+          passport_expiry?: string | null
+          passport_number?: string | null
+          photo_url?: string | null
+          preferred_channel?: string
+          sms_number?: string | null
+          tshirt_size?: string | null
+          updated_at?: string
+          whatsapp_number?: string | null
+        }
+        Update: {
+          account_id?: string
+          allergies?: string | null
+          contact_email?: string | null
+          contact_phone?: string | null
+          created_at?: string
+          default_daily_wage_rate?: number | null
+          default_per_diem_currency?: string | null
+          default_per_diem_rate?: number | null
+          default_person_type?: string
+          default_role?: string | null
+          default_wage_currency?: string | null
+          dietary?: string | null
+          emergency_contact_name?: string | null
+          emergency_contact_phone?: string | null
+          home_city?: string | null
+          id?: string
+          name?: string
+          notes?: string | null
+          passport_country?: string | null
+          passport_expiry?: string | null
+          passport_number?: string | null
+          photo_url?: string | null
+          preferred_channel?: string
+          sms_number?: string | null
+          tshirt_size?: string | null
+          updated_at?: string
+          whatsapp_number?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contacts_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       crew_detail: {
         Row: {
           created_at: string
@@ -610,80 +708,108 @@ export type Database = {
           },
         ]
       }
-      people: {
+      notification_log: {
         Row: {
-          allergies: string | null
-          contact_email: string | null
-          contact_phone: string | null
+          channel: string
           created_at: string
-          dietary: string | null
-          emergency_contact_name: string | null
-          emergency_contact_phone: string | null
-          home_city: string | null
+          dedup_dimension: string
+          delivered_at: string | null
+          error: string | null
           id: string
-          name: string
-          passport_country: string | null
-          passport_expiry: string | null
-          passport_number: string | null
-          person_type: string
-          photo_url: string | null
-          preferred_channel: string | null
-          role: string | null
-          sms_number: string | null
+          notification_type: string
+          person_id: string
+          provider_message_id: string | null
+          read_at: string | null
+          sent_at: string | null
+          status: string
           tour_id: string
-          tshirt_size: string | null
           updated_at: string
-          whatsapp_number: string | null
         }
         Insert: {
-          allergies?: string | null
-          contact_email?: string | null
-          contact_phone?: string | null
+          channel: string
           created_at?: string
-          dietary?: string | null
-          emergency_contact_name?: string | null
-          emergency_contact_phone?: string | null
-          home_city?: string | null
+          dedup_dimension: string
+          delivered_at?: string | null
+          error?: string | null
           id?: string
-          name: string
-          passport_country?: string | null
-          passport_expiry?: string | null
-          passport_number?: string | null
-          person_type: string
-          photo_url?: string | null
-          preferred_channel?: string | null
-          role?: string | null
-          sms_number?: string | null
+          notification_type: string
+          person_id: string
+          provider_message_id?: string | null
+          read_at?: string | null
+          sent_at?: string | null
+          status?: string
           tour_id: string
-          tshirt_size?: string | null
           updated_at?: string
-          whatsapp_number?: string | null
         }
         Update: {
-          allergies?: string | null
-          contact_email?: string | null
-          contact_phone?: string | null
+          channel?: string
           created_at?: string
-          dietary?: string | null
-          emergency_contact_name?: string | null
-          emergency_contact_phone?: string | null
-          home_city?: string | null
+          dedup_dimension?: string
+          delivered_at?: string | null
+          error?: string | null
           id?: string
-          name?: string
-          passport_country?: string | null
-          passport_expiry?: string | null
-          passport_number?: string | null
-          person_type?: string
-          photo_url?: string | null
-          preferred_channel?: string | null
-          role?: string | null
-          sms_number?: string | null
+          notification_type?: string
+          person_id?: string
+          provider_message_id?: string | null
+          read_at?: string | null
+          sent_at?: string | null
+          status?: string
           tour_id?: string
-          tshirt_size?: string | null
           updated_at?: string
-          whatsapp_number?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "notification_log_person_id_fkey"
+            columns: ["person_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notification_log_tour_id_fkey"
+            columns: ["tour_id"]
+            isOneToOne: false
+            referencedRelation: "tours"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      people: {
+        Row: {
+          contact_id: string
+          created_at: string
+          id: string
+          person_type: string
+          role: string | null
+          tour_id: string
+          updated_at: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          id?: string
+          person_type: string
+          role?: string | null
+          tour_id: string
+          updated_at?: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          id?: string
+          person_type?: string
+          role?: string | null
+          tour_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "people_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "people_tour_id_fkey"
             columns: ["tour_id"]
@@ -1244,6 +1370,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_contact_to_tour: {
+        Args: {
+          p_contact_id: string
+          p_person_type?: string
+          p_role?: string
+          p_tour_id: string
+        }
+        Returns: string
+      }
       create_show_with_dependents: {
         Args: { p_show_data: Json; p_tour_id: string }
         Returns: string
