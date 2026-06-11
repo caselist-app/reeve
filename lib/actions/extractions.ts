@@ -31,16 +31,19 @@ export async function confirmExtraction(
   const tourId = forwarded.tour_id
   const errors: string[] = []
 
-  // Insert shows.
+  // Insert shows via the RPC so tour_dates is upserted and tour_date_id is
+  // wired on the show row in the same transaction.
   for (const show of confirmed.shows) {
     if (!show.date || !show.venue_name) continue
-    const { error } = await supabase.from('shows').insert({
-      tour_id: tourId,
-      date: show.date,
-      venue_name: show.venue_name,
-      address: show.address ?? null,
-      load_in_at: show.load_in_at ?? null,
-      curfew_at: show.curfew_at ?? null,
+    const { error } = await supabase.rpc('create_show_with_dependents', {
+      p_tour_id: tourId,
+      p_show_data: {
+        date: show.date,
+        venue_name: show.venue_name,
+        address: show.address ?? null,
+        load_in_at: show.load_in_at ?? null,
+        curfew_at: show.curfew_at ?? null,
+      },
     })
     if (error) errors.push(`Show (${show.venue_name}): ${error.message}`)
   }
