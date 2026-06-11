@@ -104,7 +104,7 @@ export function NotifyPanel({
           {isReady && count !== null && (
             <span>
               <span className="font-medium">{count} {count === 1 ? 'person' : 'people'}</span>
-              {' '}affected by this change{count > 0 ? ' — Notify them' : ''}
+              {' '}affected by this change{count > 0 ? ', Notify them' : ''}
             </span>
           )}
         </span>

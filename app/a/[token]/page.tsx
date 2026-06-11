@@ -1,4 +1,4 @@
-// Public share page — no auth required.
+// Public share page, no auth required.
 // Accessed by venue contacts via the tracked link in the rider email.
 // Sets opened_at on first visit only (subsequent visits do not overwrite).
 // Shows the document and an Acknowledge button if not yet acknowledged.

@@ -72,7 +72,7 @@ function flightDuration(departAt: string, arriveAt: string): string {
 // ── Transit step row ──────────────────────────────────────────────────────────
 
 function StepRow({ step, timezone }: { step: TransitStep; timezone: string | null }) {
-  // Walking — small and muted, doesn't need flight-card prominence.
+  // Walking, small and muted, doesn't need flight-card prominence.
   if (step.mode === 'walking') {
     return (
       <div className="flex items-center gap-2 py-1.5 text-sm text-muted-foreground">
@@ -93,7 +93,7 @@ function StepRow({ step, timezone }: { step: TransitStep; timezone: string | nul
     )
   }
 
-  // Transit step — mirrors the flight card: icon · depart ── duration ── arrive · line name
+  // Transit step, mirrors the flight card: icon · depart ── duration ── arrive · line name
   const { Icon, colour } = transitIcon(step.vehicle_type)
   return (
     <div className="flex items-center gap-4 py-3">

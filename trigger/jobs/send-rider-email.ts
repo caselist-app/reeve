@@ -30,7 +30,7 @@ export const sendRiderEmailJob = task({
 
     await sendEmail({
       to: payload.to,
-      subject: `${payload.document_title} — ${payload.artist_name}`,
+      subject: `${payload.document_title}, ${payload.artist_name}`,
       html,
       artist_slug: payload.artist_slug,
       share_token: payload.share_token,

@@ -15,7 +15,7 @@ import { resolveHomeCity } from '@/lib/actions/planner'
 interface DepartureSelectorProps {
   // Current departure display label and resolved IATA (for highlighting active option).
   current: { label: string; iata: string }
-  // Prior show — null if this is the first show or no resolved hub.
+  // Prior show, null if this is the first show or no resolved hub.
   priorShow: { venue_name: string | null; date: string; hub: string } | null
   // Selected person's home city.
   homeCity: string | null

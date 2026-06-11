@@ -15,7 +15,7 @@ import {
 } from '@/lib/logistics/adapters/google-transit'
 import type { GroundTransit, TravelOption } from '@/lib/logistics/types'
 
-// Freeform travel planner — not tied to a show.
+// Freeform travel planner, not tied to a show.
 // Computes a full door-to-door journey:
 //   first mile: origin city → departure hub (Google transit)
 //   main leg:   hub → hub (Duffel flights + rail stubs + Google transit)
@@ -25,7 +25,7 @@ export type PlanFreeformInput = {
   from_iata: string
   from_lat: number
   from_lng: number
-  from_name: string   // city name as typed — used as text origin
+  from_name: string   // city name as typed, used as text origin
   to_iata: string
   to_lat: number
   to_lng: number
@@ -54,7 +54,7 @@ export async function planFreeformTravel(
     const cached = await redis.get<TravelOption[]>(cacheKey)
     if (cached) return cached
   } catch {
-    // Redis unavailable — proceed without cache.
+    // Redis unavailable, proceed without cache.
   }
 
   const originAirport = AIRPORTS.find((a) => a.iata === from_iata)
@@ -68,7 +68,7 @@ export async function planFreeformTravel(
   }
 
   // Fan out all providers in parallel. First/last-mile transits are computed
-  // once and applied to every option — they are route-level, not leg-level.
+  // once and applied to every option, they are route-level, not leg-level.
   const [
     providerResults,
     firstMileResult,
@@ -80,7 +80,7 @@ export async function planFreeformTravel(
       searchSncf(railParams),
       searchRenfe(railParams),
       searchDarwin(railParams),
-      // Google intercity transit — covers short-haul rail and coach routes.
+      // Google intercity transit, covers short-haul rail and coach routes.
       searchGoogleTransitCityToCity({
         from_lat: input.from_lat,
         from_lng: input.from_lng,
@@ -136,7 +136,7 @@ export async function planFreeformTravel(
       (opt.raw as Record<string, unknown>).provider === 'google-transit'
 
     // For Google city-to-city results, the route already covers origin→destination
-    // so no separate first/last mile needed — the option IS the full route.
+    // so no separate first/last mile needed, the option IS the full route.
     if (isGoogleCityToCity) {
       return {
         ...opt,
@@ -167,7 +167,7 @@ export async function planFreeformTravel(
     try {
       await redis.set(cacheKey, ranked, { ex: CACHE_TTL_SECONDS })
     } catch {
-      // Redis unavailable — skip caching.
+      // Redis unavailable, skip caching.
     }
   }
 

@@ -85,7 +85,7 @@ export async function recordHotelOption(
 }
 
 // Updates the confirmation number and promotes status to 'booked'.
-// This is the only place in the codebase that sets status='booked' —
+// This is the only place in the codebase that sets status='booked', 
 // and only after the TM has explicitly entered the reference.
 export async function confirmHotelBooking(
   stayId: string,

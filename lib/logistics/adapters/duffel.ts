@@ -14,7 +14,7 @@ const BASE = 'https://api.duffel.com'
 // Cap offers returned to the TM. 128 options for LHR-CDG is too many to render.
 const MAX_OFFERS = 20
 
-// Duffel response types — only the fields we read.
+// Duffel response types, only the fields we read.
 interface DuffelSegment {
   departing_at: string
   arriving_at: string
@@ -41,7 +41,7 @@ interface DuffelOfferRequestResponse {
 }
 
 // Constructs a Google Flights search URL as the off-platform book link.
-// The TM will book on the carrier site — this gets them to a pre-filled search.
+// The TM will book on the carrier site, this gets them to a pre-filled search.
 function bookUrl(from: string, to: string, date: string): string {
   return `https://www.google.com/travel/flights/search?hl=en&q=Flights+from+${from}+to+${to}+on+${date}`
 }
@@ -55,7 +55,7 @@ function toIso(localDatetime: string): string {
     : `${localDatetime}Z`
 }
 
-// Duffel adapter: flights search (V1 — search only, booking is off-platform).
+// Duffel adapter: flights search (V1, search only, booking is off-platform).
 // Returns normalised TravelOption[], never a raw Duffel offer.
 export async function searchDuffel(
   params: DuffelSearchParams

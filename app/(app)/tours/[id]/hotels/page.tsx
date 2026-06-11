@@ -69,7 +69,7 @@ export default async function HotelsPage({
   const description =
     total === 0
       ? undefined
-      : `${total} ${total === 1 ? 'night' : 'nights'} — ${confirmed} confirmed, ${toBook} to book`
+      : `${total} ${total === 1 ? 'night' : 'nights'}, ${confirmed} confirmed, ${toBook} to book`
 
   return (
     <PageLayout maxWidth="max-w-7xl">

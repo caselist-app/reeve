@@ -43,7 +43,7 @@ function Field({ label, value }: { label: string; value: string | null }) {
   return (
     <div className="space-y-0.5">
       <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className="text-sm">{value || '—'}</p>
+      <p className="text-sm">{value || '-'}</p>
     </div>
   )
 }
@@ -123,8 +123,8 @@ export function ContactDetail({ contact, tours }: Props) {
           <p className="text-xs uppercase tracking-wider text-muted-foreground">Passport expiry</p>
           <p className={cn('text-sm', PASSPORT_CLASS[status])}>
             {formatExpiry(contact.passport_expiry)}
-            {status === 'expired' && ' — expired'}
-            {status === 'soon' && ' — within 90 days'}
+            {status === 'expired' && ', expired'}
+            {status === 'soon' && ', within 90 days'}
           </p>
         </div>
       )}

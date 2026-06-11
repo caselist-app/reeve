@@ -16,7 +16,7 @@ const BOARDING_PASS_TEMPLATE = process.env.WHATSAPP_TEMPLATE_BOARDING_PASS
 export type BoardingPassPayload = {
   tour_id: string
   person_id: string
-  assignment_id: string  // transport_assignments.id — the dedup dimension
+  assignment_id: string  // transport_assignments.id, the dedup dimension
   segment_id: string
 }
 
@@ -95,7 +95,7 @@ export const boardingPassJob = task({
     const timezone = tour?.timezone ?? 'UTC'
 
     // Look for a ground segment assigned to this person departing within 4 hours
-    // of the main leg — this is the car/van to the departure hub.
+    // of the main leg, this is the car/van to the departure hub.
     let groundPickup: string | null = null
     let groundOrigin: string | null = null
     if (seg?.depart_at) {

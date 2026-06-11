@@ -16,7 +16,7 @@ export function passportStatus(expiry: string | null): PassportStatus {
 }
 
 export function formatExpiry(expiry: string | null): string {
-  if (!expiry) return '—'
+  if (!expiry) return '-'
   return new Date(`${expiry}T00:00:00`).toLocaleDateString('en-GB', {
     month: 'short',
     year: 'numeric',

@@ -52,7 +52,7 @@ export default async function TransportPage({
   const description =
     total === 0
       ? undefined
-      : `${total} ${total === 1 ? 'segment' : 'segments'} — ${booked} booked, ${planned} planned`
+      : `${total} ${total === 1 ? 'segment' : 'segments'}, ${booked} booked, ${planned} planned`
 
   return (
     <PageLayout maxWidth="max-w-7xl">

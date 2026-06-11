@@ -92,7 +92,7 @@ export function PlannerWorkspace({
   // Otherwise fall back to the person's home city (the auto-resolve default).
   const fromDisplay = fromOverride
     ? { label: fromOverride, iata: fromOverride }
-    : { label: selectedPerson?.home_city ?? '—', iata: selectedPerson?.home_city ?? '' }
+    : { label: selectedPerson?.home_city ?? '-', iata: selectedPerson?.home_city ?? '' }
 
   function handleRunPlan() {
     if (!selectedPersonId) return
@@ -125,7 +125,7 @@ export function PlannerWorkspace({
             })
             setNightBeforeResults(nightOptions)
           } catch {
-            // Night-before search failing is non-fatal — same-day results still show.
+            // Night-before search failing is non-fatal, same-day results still show.
           }
         }
       } catch (err) {
@@ -134,7 +134,7 @@ export function PlannerWorkspace({
     })
   }
 
-  // Hub not yet resolved — show a holding state.
+  // Hub not yet resolved, show a holding state.
   if (!show.hub_resolved_at) {
     return (
       <div className="rounded-lg border bg-muted/40 px-4 py-6 text-center text-sm text-muted-foreground">
@@ -159,7 +159,7 @@ export function PlannerWorkspace({
               {people.map((p) => (
                 <SelectItem key={p.id} value={p.id}>
                   {p.name}
-                  {p.role ? ` — ${p.role}` : ''}
+                  {p.role ? `, ${p.role}` : ''}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -171,7 +171,7 @@ export function PlannerWorkspace({
         </Button>
       </div>
 
-      {/* Context summary — "From" is an interactive departure selector */}
+      {/* Context summary, "From" is an interactive departure selector */}
       <ContextSummary
         fromNode={
           <DepartureSelector
@@ -225,7 +225,7 @@ export function PlannerWorkspace({
         </div>
       )}
 
-      {/* Night-before results — shown when all same-day options are infeasible */}
+      {/* Night-before results, shown when all same-day options are infeasible */}
       {nightBeforeResults !== null && (
         <div className="space-y-3">
           {/* Section header with hotel nudge */}

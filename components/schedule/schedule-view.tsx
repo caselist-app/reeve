@@ -97,7 +97,7 @@ const DAY_TYPE_LABELS: Record<DayType, string> = {
   day_off: 'Day Off',
 }
 
-// Colour accent per day type — matches the Day Sheets app convention.
+// Colour accent per day type, matches the Day Sheets app convention.
 const DAY_TYPE_COLOUR: Record<DayType, string> = {
   show: 'bg-green-500',
   rehearsal: 'bg-blue-500',

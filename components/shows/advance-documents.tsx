@@ -70,11 +70,11 @@ function ShareStatus({ share, onResend, isResending }: ShareStatusProps) {
         )}
         <span className="truncate">
           <span className="text-foreground font-medium">{share.recipient_name}</span>
-          {' — '}
+          {', '}
           {share.acknowledged_at
             ? `Acknowledged ${relativeTime(share.acknowledged_at)}`
             : openedLabel}
-          {share.opened_at && !share.acknowledged_at && ' — Awaiting acknowledgement'}
+          {share.opened_at && !share.acknowledged_at && ', Awaiting acknowledgement'}
         </span>
       </div>
 
@@ -133,7 +133,7 @@ export function AdvanceDocuments({
       const doc = dept.documents.find((d) => d.id === documentId)
       if (!doc) return
 
-      // Resend needs a recipient — open the sheet pre-filled to the same document.
+      // Resend needs a recipient, open the sheet pre-filled to the same document.
       // Simplest UX: re-open the send sheet so the TM picks the recipient.
       setSheetDept(dept)
     },

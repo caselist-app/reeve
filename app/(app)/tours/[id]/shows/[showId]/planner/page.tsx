@@ -54,7 +54,7 @@ export default async function PlannerPage({
   if (!tour) redirect('/')
   if (!show) redirect(`/tours/${id}/shows`)
 
-  // Prior show — needs show.date, so fetched after the redirect guard.
+  // Prior show, needs show.date, so fetched after the redirect guard.
   const { data: priorShowRaw } = await supabase
     .from('shows')
     .select('id, venue_name, date, transport_hub_iata, transport_hub_rail, hub_resolved_at')

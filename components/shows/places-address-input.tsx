@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Input } from '@/components/ui/input'
 
-// Minimal types for the Google Places API — avoids needing @types/google.maps.
+// Minimal types for the Google Places API, avoids needing @types/google.maps.
 interface GooglePlace {
   formatted_address?: string
   name?: string
@@ -69,7 +69,7 @@ export function PlacesAddressInput({
 
     const existing = document.querySelector('#google-maps-places-script')
     if (existing) {
-      // Script tag exists but hasn't fired onload yet — wait for the flag.
+      // Script tag exists but hasn't fired onload yet, wait for the flag.
       const interval = setInterval(() => {
         if (window.__googleMapsPlacesLoaded) {
           setScriptReady(true)
@@ -111,7 +111,7 @@ export function PlacesAddressInput({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scriptReady])
 
-  // No key — plain input.
+  // No key, plain input.
   if (!apiKey) {
     return (
       <Input

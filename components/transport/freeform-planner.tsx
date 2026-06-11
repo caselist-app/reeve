@@ -57,7 +57,7 @@ function fmtDuration(mins: number): string {
   return h > 0 ? (m > 0 ? `${h}h ${m}m` : `${h}h`) : `${m}m`
 }
 
-// Map Google vehicle types to icons and colours — shared with option-row.
+// Map Google vehicle types to icons and colours, shared with option-row.
 function transitIcon(vehicleType: string | null) {
   switch (vehicleType) {
     case 'HIGH_SPEED_TRAIN':
@@ -415,7 +415,7 @@ export function FreeformPlanner({ tourId, people, timezone }: FreeformPlannerPro
       {/* Optional person */}
       <div className="flex flex-col gap-1.5">
         <label className="text-xs font-medium text-muted-foreground">
-          Person <span className="font-normal">(optional — required to record)</span>
+          Person <span className="font-normal">(optional, required to record)</span>
         </label>
         <Select value={selectedPersonId} onValueChange={handlePersonChange}>
           <SelectTrigger className="w-52">

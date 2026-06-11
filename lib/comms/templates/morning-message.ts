@@ -5,21 +5,21 @@ import { createAdminClient } from '@/lib/supabase/admin'
 // Source of truth: day_sheet times, show venue, hotel check-out.
 
 export type MorningMessageData = {
-  // First name only — split from full name at the caller.
+  // First name only, split from full name at the caller.
   person_first_name: string
   venue_name: string
   // YYYY-MM-DD in the tour's local timezone.
   show_date: string
   // IANA timezone string for the tour (e.g. "Europe/London").
   timezone: string
-  // timestamptz ISO strings — formatted into timezone at render time.
+  // timestamptz ISO strings, formatted into timezone at render time.
   load_in: string | null
   soundcheck: string | null
   doors: string | null
   headliner_on: string | null
   curfew: string | null
   hotel_name: string | null
-  // Wall clock checkout time as "HH:MM" — already in local time, display directly.
+  // Wall clock checkout time as "HH:MM", already in local time, display directly.
   hotel_checkout: string | null
 }
 

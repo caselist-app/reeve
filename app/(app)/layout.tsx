@@ -52,7 +52,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </main>
       </div>
 
-      {/* Command palette — mounts once, listens for ⌘K globally */}
+      {/* Command palette, mounts once, listens for ⌘K globally */}
       <CommandPalette />
     </div>
   )

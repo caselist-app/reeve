@@ -7,7 +7,7 @@ export type HotelAdapterParams = {
   check_in_date: string         // YYYY-MM-DD
   check_out_date: string        // YYYY-MM-DD
   rooms: number
-  arrive_at: string | null      // ISO — used to determine early_check_in_ok
+  arrive_at: string | null      // ISO, used to determine early_check_in_ok
   depart_at: string | null
   parking_required: boolean
   tier: 'artist' | 'crew'

@@ -14,7 +14,7 @@ const MODE_RANK: Record<TravelOption['mode'], number> = {
 // 3. Same door_to_site_at: duration ascending (arrive_at - depart_at).
 // 4. Same duration: mode preference (rail > flight > ground).
 //
-// Infeasible options are always included at the bottom — never dropped.
+// Infeasible options are always included at the bottom, never dropped.
 // The TM may knowingly accept a tight option.
 // There is no price field and there must not be one in V1.
 export function rankOptions(options: TravelOption[]): TravelOption[] {

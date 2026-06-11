@@ -164,7 +164,7 @@ export function HotelWorkspace({
 
       {!geocoded && (
         <p className="text-sm text-muted-foreground">
-          Hotel search unavailable — add a venue address to resolve the location first.
+          Hotel search unavailable, add a venue address to resolve the location first.
         </p>
       )}
 

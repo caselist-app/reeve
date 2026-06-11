@@ -27,7 +27,7 @@ async function syncDnsToCloudflare(
   const token = process.env.CLOUDFLARE_API_TOKEN
   const zoneId = process.env.CLOUDFLARE_ZONE_ID
   if (!token || !zoneId) {
-    console.warn('[syncDnsToCloudflare] CLOUDFLARE_API_TOKEN or CLOUDFLARE_ZONE_ID not set — skipping DNS sync')
+    console.warn('[syncDnsToCloudflare] CLOUDFLARE_API_TOKEN or CLOUDFLARE_ZONE_ID not set, skipping DNS sync')
     return
   }
 
@@ -114,7 +114,7 @@ export async function provisionTourEmailDomain(artistSlug: string): Promise<void
   if (!enableRes.ok) {
     console.error(`[provisionTourEmailDomain] Failed to enable receiving on ${domain}: ${enableRes.status}`)
   } else {
-    // Fetch the full domain record now that receiving is enabled — Resend
+    // Fetch the full domain record now that receiving is enabled, Resend
     // will have added inbound MX records that also need to land in Cloudflare.
     const { data: fullDomain, error: getError } = await resend.domains.get(data.id)
     if (getError || !fullDomain) {

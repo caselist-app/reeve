@@ -12,7 +12,7 @@ interface TransportViewProps {
   segments: SegmentWithContext[]
   // If set (from ?date= query param), scroll to and highlight that date group.
   focusDate: string | null
-  // Kept for backwards compatibility — no longer used for grouping.
+  // Kept for backwards compatibility, no longer used for grouping.
   shows?: unknown[]
 }
 

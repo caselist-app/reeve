@@ -8,8 +8,8 @@ export type TransitStep = {
   mode: 'walking' | 'waiting' | 'transit'
   from_name: string
   to_name: string
-  depart_at: string | null   // ISO — null for walking/waiting (no fixed schedule)
-  arrive_at: string | null   // ISO — null for walking/waiting
+  depart_at: string | null   // ISO, null for walking/waiting (no fixed schedule)
+  arrive_at: string | null   // ISO, null for walking/waiting
   duration_min: number
   line_name: string | null   // e.g. "Alvia", "Jubilee line"
   vehicle_type: string | null // "HIGH_SPEED_TRAIN" | "RAIL" | "BUS" | "SUBWAY" | "TRAM"
@@ -18,8 +18,8 @@ export type TransitStep = {
 
 // The full ground leg from hub exit to venue, with real transit steps.
 export type GroundTransit = {
-  depart_at: string       // ISO — when they leave the hub
-  arrive_at: string       // ISO — when they arrive at the venue
+  depart_at: string       // ISO, when they leave the hub
+  arrive_at: string       // ISO, when they arrive at the venue
   duration_min: number    // total including walks and waits
   steps: TransitStep[]
   maps_url: string        // Google Maps directions link for this leg
@@ -38,7 +38,7 @@ export type TravelOption = {
   feasible: boolean       // door_to_site_at <= required_site_arrival
   book_url: string        // deep link to the carrier booking page
   // First-mile transit: origin city → departure hub (freeform planner only).
-  // Null in the show planner — the person is assumed to start from their home hub.
+  // Null in the show planner, the person is assumed to start from their home hub.
   first_mile_transit?: GroundTransit | null
   ground_transit: GroundTransit | null // real transit steps, null = car/taxi estimate
   raw: unknown            // original provider payload, never read outside the adapter

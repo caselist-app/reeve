@@ -47,7 +47,7 @@ const SECTION_ROUTE: Record<string, string> = {
   people: 'people',
   transport: 'transport',
   hotels: 'hotels',
-  documents: 'settings', // not yet built — brief 18
+  documents: 'settings', // not yet built, brief 18
   settings: 'settings',
 }
 

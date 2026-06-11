@@ -24,7 +24,7 @@ function addMinutes(iso: string, minutes: number): string {
   return new Date(new Date(iso).getTime() + minutes * 60_000).toISOString()
 }
 
-// Bucket an ISO timestamp by hour — used to group flight arrivals so we query
+// Bucket an ISO timestamp by hour, used to group flight arrivals so we query
 // Google Transit once per hour bucket rather than once per flight.
 function hourBucket(iso: string): string {
   return iso.slice(0, 13) // "YYYY-MM-DDTHH"
@@ -37,7 +37,7 @@ export async function planTravel(
 
   const admin = createAdminClient()
 
-  // Read the show and its cached hub resolution. Never call resolveHub() here —
+  // Read the show and its cached hub resolution. Never call resolveHub() here, 
   // hub resolution runs in a background job. If hub_resolved_at is null the
   // venue has not been resolved yet; surface a clear error to the TM.
   const { data: show } = await admin
@@ -69,14 +69,14 @@ export async function planTravel(
   // changing the show's hub or ground transfer data.
   const searchDate = input.date_override ?? show.date
 
-  // Check Redis cache before hitting providers. Redis is a performance layer —
+  // Check Redis cache before hitting providers. Redis is a performance layer, 
   // if unavailable, fall through and call providers directly.
   const cacheKey = `plan:${CACHE_VERSION}:${fromHub}:${toHub}:${searchDate}`
   try {
     const cached = await redis.get<TravelOption[]>(cacheKey)
     if (cached) return cached
   } catch {
-    // Redis unavailable — proceed without cache.
+    // Redis unavailable, proceed without cache.
   }
 
   // required_site_arrival: load-in minus ground transfer and airport buffer.
@@ -92,7 +92,7 @@ export async function planTravel(
     passengers: 1,
   }
 
-  // Fan out to all providers in parallel. A failed adapter is discarded —
+  // Fan out to all providers in parallel. A failed adapter is discarded, 
   // it never crashes the plan for the other providers.
   const providerResults = await Promise.allSettled([
     searchDuffel({ from_iata: fromHub, to_iata: toHub, date: searchDate, passengers: 1, ground_min: groundMin }),
@@ -137,7 +137,7 @@ export async function planTravel(
           await admin.from('shows').update({ venue_lat: venueLat, venue_lng: venueLng }).eq('id', input.show_id)
         }
       } catch {
-        // Non-fatal — fall back to address-based destination below.
+        // Non-fatal, fall back to address-based destination below.
       }
     }
   }
@@ -156,7 +156,7 @@ export async function planTravel(
       if (!buckets.has(bucket)) buckets.set(bucket, hubExitAt)
     }
 
-    // Query Google once per bucket — run concurrently, failures are silently dropped.
+    // Query Google once per bucket, run concurrently, failures are silently dropped.
     const transitQueries = Array.from(buckets.entries()).map(async ([bucket, departAfter]) => {
       const result = await searchGoogleTransit({
         origin_lat: hubAirport.lat,
@@ -212,7 +212,7 @@ export async function planTravel(
     try {
       await redis.set(cacheKey, ranked, { ex: CACHE_TTL_SECONDS })
     } catch {
-      // Redis unavailable — skip caching.
+      // Redis unavailable, skip caching.
     }
   }
 

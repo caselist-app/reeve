@@ -1,7 +1,7 @@
-// Google Directions API adapter — transit mode.
+// Google Directions API adapter, transit mode.
 // Two entrypoints:
-//   searchGoogleTransit    — ground leg from hub to venue (returns GroundTransit)
-//   searchGoogleTransitCityToCity — freeform city-to-city (returns TravelOption[])
+//   searchGoogleTransit   , ground leg from hub to venue (returns GroundTransit)
+//   searchGoogleTransitCityToCity, freeform city-to-city (returns TravelOption[])
 // Requires GOOGLE_MAPS_API_KEY.
 
 import type { GroundTransit, TransitStep, TravelOption } from '@/lib/logistics/types'
@@ -9,11 +9,11 @@ import type { GroundTransit, TransitStep, TravelOption } from '@/lib/logistics/t
 export type GoogleTransitParams = {
   origin_lat: number
   origin_lng: number
-  origin_name?: string | null  // airport or station name — used as text origin when set
-  dest_address: string         // venue address — fallback destination
-  dest_lat?: number | null     // venue geocoded lat — preferred destination
-  dest_lng?: number | null     // venue geocoded lng — preferred destination
-  depart_after: string         // ISO — earliest the person can leave the hub
+  origin_name?: string | null  // airport or station name, used as text origin when set
+  dest_address: string         // venue address, fallback destination
+  dest_lat?: number | null     // venue geocoded lat, preferred destination
+  dest_lng?: number | null     // venue geocoded lng, preferred destination
+  depart_after: string         // ISO, earliest the person can leave the hub
 }
 
 // ── Google Directions API response types (only fields we read) ──
@@ -117,7 +117,7 @@ function parseSteps(steps: GDStep[]): TransitStep[] {
       const nextStep = steps[i + 1]
       if (nextStep?.travel_mode === 'TRANSIT' && nextStep.transit_details) {
         // We'd need to know when the walking step ends to compute wait.
-        // Google doesn't give absolute times on walking steps — only the transit
+        // Google doesn't give absolute times on walking steps, only the transit
         // departure is anchored. We derive wait = transit.depart - (leg.depart + cumulative walking).
         // As a pragmatic V1 approach: if the transit step is the next step and has
         // a departure time, the wait is implicit in the total duration. We don't
@@ -142,7 +142,7 @@ function insertWaits(steps: GDStep[], legDepartUnix: number): TransitStep[] {
     let endUnix: number
 
     if (step.travel_mode === 'TRANSIT' && step.transit_details) {
-      // Transit steps are anchored to schedule — the actual depart time.
+      // Transit steps are anchored to schedule, the actual depart time.
       // The cursor may be behind the transit departure (that's the wait).
       const transitDepart = step.transit_details.departure_time.value
       endUnix = step.transit_details.arrival_time.value
@@ -224,7 +224,7 @@ function insertWaits(steps: GDStep[], legDepartUnix: number): TransitStep[] {
 
   // Merge consecutive walking steps that share the same destination.
   // Google often splits a single walk into sub-legs (e.g. "exit terminal" +
-  // "walk to platform") with the same to_name — combine them into one step.
+  // "walk to platform") with the same to_name, combine them into one step.
   const merged: TransitStep[] = []
   for (const step of result) {
     const prev = merged[merged.length - 1]
@@ -250,11 +250,11 @@ function insertWaits(steps: GDStep[], legDepartUnix: number): TransitStep[] {
 export type GoogleTransitCityParams = {
   from_lat: number
   from_lng: number
-  from_name: string   // city or place name — used as origin text
+  from_name: string   // city or place name, used as origin text
   to_lat: number
   to_lng: number
   to_name: string
-  date: string        // YYYY-MM-DD — we depart at 06:00 local, giving a full day
+  date: string        // YYYY-MM-DD, we depart at 06:00 local, giving a full day
 }
 
 // Determine the dominant vehicle type for a route's legs to pick a mode.
@@ -374,11 +374,11 @@ export async function searchGoogleTransit(
   const departUnix = Math.floor(new Date(params.depart_after).getTime() / 1000)
 
   // Use airport/station name as origin text when provided. The Directions API
-  // resolves named places more reliably than raw coordinates for airports —
+  // resolves named places more reliably than raw coordinates for airports, 
   // coordinates can miss the terminal transit connections that named places pick up.
   const origin = params.origin_name ?? `${params.origin_lat},${params.origin_lng}`
 
-  // Prefer geocoded coordinates for destination — more precise than address text
+  // Prefer geocoded coordinates for destination, more precise than address text
   // for smaller cities where Google's GTFS may not resolve street addresses.
   const destination =
     params.dest_lat != null && params.dest_lng != null

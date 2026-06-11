@@ -77,8 +77,8 @@ export function SegmentRow({ segment, tourId, timezone }: SegmentRowProps) {
   const arrive = formatDateTime(segment.arrive_at, timezone)
 
   const timeRange = depart.time
-    ? `${depart.time} – ${arrive.time || '—'}`
-    : '—'
+    ? `${depart.time} – ${arrive.time || '-'}`
+    : '-'
 
   const dateLabel = depart.date || ''
 
@@ -115,7 +115,7 @@ export function SegmentRow({ segment, tourId, timezone }: SegmentRowProps) {
       {/* Carrier + ref */}
       <td className="py-3 pr-4">
         <span className="text-sm text-muted-foreground truncate max-w-[180px] block">
-          {formatCarrier(segment) || '—'}
+          {formatCarrier(segment) || '-'}
         </span>
       </td>
 
@@ -126,7 +126,7 @@ export function SegmentRow({ segment, tourId, timezone }: SegmentRowProps) {
             {segment.assigned_count} {segment.assigned_count === 1 ? 'person' : 'people'}
           </span>
         ) : (
-          <span className="text-sm text-muted-foreground/40">—</span>
+          <span className="text-sm text-muted-foreground/40">-</span>
         )}
       </td>
 

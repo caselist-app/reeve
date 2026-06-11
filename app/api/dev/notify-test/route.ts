@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { buildMorningMessageData } from '@/lib/comms/templates/morning-message'
 import { notify } from '@/lib/comms/notify'
@@ -6,40 +7,42 @@ import { sendTemplate } from '@/lib/comms/whatsapp'
 import { provisionTourEmailDomain } from '@/lib/comms/email'
 
 // Diagnostic route: fire a real notification to one person so the channel
-// plumbing can be verified end to end. Guarded by CRON_SECRET. Not user-facing.
+// plumbing can be verified end to end.
+// Only available outside production. Guarded by CRON_SECRET in the header.
 //
-//   GET /api/dev/notify-test?secret=...&email=you@x.com&force=1
-//   GET /api/dev/notify-test?secret=...&whatsapp=+447700900123&force=1
-//   GET /api/dev/notify-test?secret=...&person_id=...&force=1
+// POST /api/dev/notify-test
+// Headers: x-cron-secret: <CRON_SECRET>
+// Body (JSON): { email?, whatsapp?, person_id?, type?, force? }
 //
-// Identify the recipient by person_id, or by the email / whatsapp number on
-// their roster contact (whichever is easier). The channel that actually fires
-// is resolved from that contact's preferred_channel.
-//
-// type   currently only morning_message
-// force  when 1, clears prior notification_log rows for this send so it
-//        re-sends (otherwise idempotency correctly skips an already-sent one)
-export async function GET(request: NextRequest) {
-  const params = request.nextUrl.searchParams
-  const secret = params.get('secret')
+// type  currently only morning_message
+// force when true, clears prior notification_log rows so the send retries
+//       (otherwise idempotency correctly skips an already-sent one)
+export async function POST(request: NextRequest) {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  }
 
-  if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
+  const headerSecret = request.headers.get('x-cron-secret')
+  if (!process.env.CRON_SECRET || headerSecret !== process.env.CRON_SECRET) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const personId = params.get('person_id')
-  const email = params.get('email')
-  const whatsapp = params.get('whatsapp')
-  const type = params.get('type') ?? 'morning_message'
-  const force = params.get('force') === '1'
+  let body: Record<string, unknown> = {}
+  try {
+    body = await request.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
 
-  // Raw template delivery test: bypasses notify() entirely and sends an approved
-  // template (e.g. hello_world) straight to a number. Proves Meta -> phone
-  // delivery works, independent of the 24-hour window or any in-review template.
-  //   ?secret=...&template=hello_world&to=+447944630634
-  // Domain provisioning test: provision a sending subdomain for an artist slug.
-  //   GET /api/dev/notify-test?secret=...&provision=tesseract
-  const provisionSlug = params.get('provision')
+  const personId = typeof body.person_id === 'string' ? body.person_id : null
+  const email = typeof body.email === 'string' ? body.email : null
+  const whatsapp = typeof body.whatsapp === 'string' ? body.whatsapp : null
+  const type = typeof body.type === 'string' ? body.type : 'morning_message'
+  const force = body.force === true
+
+  // Raw template delivery: bypasses notify() and sends an approved template
+  // straight to a number. Body: { template, to, lang? }
+  const provisionSlug = typeof body.provision === 'string' ? body.provision : null
   if (provisionSlug) {
     try {
       await provisionTourEmailDomain(provisionSlug)
@@ -52,14 +55,13 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  const templateName = params.get('template')
+  const templateName = typeof body.template === 'string' ? body.template : null
   if (templateName) {
-    const to = params.get('to') ?? whatsapp
+    const to = typeof body.to === 'string' ? body.to : whatsapp
     if (!to) {
-      return NextResponse.json({ error: 'template test needs &to=+E164number' }, { status: 400 })
+      return NextResponse.json({ error: 'template test requires body.to' }, { status: 400 })
     }
-    // hello_world is en_US; default others to 'en'.
-    const languageCode = params.get('lang') ?? (templateName === 'hello_world' ? 'en_US' : 'en')
+    const languageCode = typeof body.lang === 'string' ? body.lang : (templateName === 'hello_world' ? 'en_US' : 'en')
     try {
       const result = await sendTemplate({ to, templateName, languageCode })
       return NextResponse.json({ ok: true, sent_template: templateName, to, ...result })

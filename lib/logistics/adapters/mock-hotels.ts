@@ -1,4 +1,4 @@
-// Mock hotel adapter — used when no real provider credentials are configured.
+// Mock hotel adapter, used when no real provider credentials are configured.
 // Returns deterministic results seeded from the venue lat/lng so the same
 // location always produces the same hotels. Prices vary by tier and seed.
 // Book links open Google Hotels pre-filled with location and dates so they
@@ -109,7 +109,7 @@ export async function searchMockHotels(
   const rng = makePrng(seedFrom(params.lat, params.lng))
   const pool = params.tier === 'artist' ? ARTIST_HOTELS : CREW_HOTELS
 
-  // Return 5 results per tier — same count as MAX_RESULTS_PER_TIER in hotels.ts.
+  // Return 5 results per tier, same count as MAX_RESULTS_PER_TIER in hotels.ts.
   const count = 5
   const results: HotelOption[] = []
 

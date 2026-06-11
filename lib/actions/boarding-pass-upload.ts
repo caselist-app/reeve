@@ -98,7 +98,7 @@ export async function uploadBoardingPassAction(
     if (linkError) return { error: linkError.message }
   }
 
-  // Enqueue the send job — 3h before departure or immediately.
+  // Enqueue the send job, 3h before departure or immediately.
   await scheduleBoardingPassSend(safeAssignmentId, tourId)
 
   return { error: null }

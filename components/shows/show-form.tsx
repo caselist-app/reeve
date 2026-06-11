@@ -170,7 +170,7 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
           onChange={setAddress}
           onPlaceSelect={(addr, name) => {
             setAddress(addr)
-            // Only fill venue name if it is empty — don't overwrite what the TM typed.
+            // Only fill venue name if it is empty, don't overwrite what the TM typed.
             if (name && !venueName) setVenueName(name)
           }}
           placeholder="211 Stockwell Rd, London SW9 9SL"

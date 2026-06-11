@@ -102,7 +102,7 @@ export async function planHotels(
     const cached = await redis.get<{ artist: HotelOption[]; crew: HotelOption[] }>(cacheKey)
     if (cached) return cached
   } catch {
-    // Redis unavailable — proceed without cache.
+    // Redis unavailable, proceed without cache.
   }
 
   const baseParams = {
@@ -117,7 +117,7 @@ export async function planHotels(
   }
 
   // Fan out artist and crew searches in parallel across all providers.
-  // A failed adapter is discarded — never crashes the plan.
+  // A failed adapter is discarded, never crashes the plan.
   const [rhArtist, rhCrew, hbArtist, hbCrew, exArtist, exCrew] =
     await Promise.allSettled([
       searchRatehawk({ ...baseParams, rooms: input.party.artist_count, tier: 'artist' }),
@@ -140,10 +140,11 @@ export async function planHotels(
     ...(exCrew.status === 'fulfilled' ? exCrew.value : []),
   ]
 
-  // No real provider returned results — fall back to mock data so the UI is
-  // usable for demos and testing. Mock results are clearly labelled in raw.
-  // Remove this block once a real provider is wired up.
-  if (artistRaw.length === 0 && crewRaw.length === 0) {
+  // When no real provider returns results, fall back to mock data only if
+  // ENABLE_MOCK_HOTELS=true. This keeps demo mode explicit and prevents a TM
+  // from accidentally recording a fabricated hotel as real tour data.
+  // Remove once a real hotel adapter is wired up and deployed.
+  if (artistRaw.length === 0 && crewRaw.length === 0 && process.env.ENABLE_MOCK_HOTELS === 'true') {
     const [mockArtist, mockCrew] = await Promise.all([
       searchMockHotels({ ...baseParams, rooms: input.party.artist_count, tier: 'artist' }),
       searchMockHotels({ ...baseParams, rooms: input.party.crew_count, tier: 'crew' }),
@@ -152,7 +153,7 @@ export async function planHotels(
     crewRaw.push(...mockCrew)
   }
 
-  // Parking is a HARD filter for bus/truck tours — a property without a truck
+  // Parking is a HARD filter for bus/truck tours, a property without a truck
   // bay is not an option, not a down-ranked one. Strip it entirely.
   function applyFilters(options: HotelOption[]): HotelOption[] {
     let filtered = options
@@ -171,7 +172,7 @@ export async function planHotels(
     try {
       await redis.set(cacheKey, result, { ex: CACHE_TTL_SECONDS })
     } catch {
-      // Redis unavailable — skip caching.
+      // Redis unavailable, skip caching.
     }
   }
 

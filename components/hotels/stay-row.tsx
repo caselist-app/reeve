@@ -15,7 +15,7 @@ interface StayRowProps {
 }
 
 function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '—'
+  if (!dateStr) return '-'
   const d = new Date(`${dateStr}T00:00:00`)
   return d.toLocaleDateString('en-GB', {
     weekday: 'short',
@@ -63,7 +63,7 @@ export function StayRow({ stay, tourId }: StayRowProps) {
 
       {/* City */}
       <td className="py-3 pr-4">
-        <span className="text-sm text-muted-foreground">{city || '—'}</span>
+        <span className="text-sm text-muted-foreground">{city || '-'}</span>
       </td>
 
       {/* Check-in */}
@@ -83,7 +83,7 @@ export function StayRow({ stay, tourId }: StayRowProps) {
             {stay.room_count} {stay.room_count === 1 ? 'room' : 'rooms'}
           </span>
         ) : (
-          <span className="text-sm text-muted-foreground/40">—</span>
+          <span className="text-sm text-muted-foreground/40">-</span>
         )}
       </td>
 
@@ -108,7 +108,7 @@ export function StayRow({ stay, tourId }: StayRowProps) {
         </span>
       </td>
 
-      {/* Details link — more prominent when unconfirmed */}
+      {/* Details link, more prominent when unconfirmed */}
       <td className="py-3 pr-4 whitespace-nowrap">
         <Link
           href={detailsHref}

@@ -1,7 +1,7 @@
 import { type ReactNode } from 'react'
 
 interface PageHeaderProps {
-  /** Small label rendered above the title — typically the artist act name. */
+  /** Small label rendered above the title, typically the artist act name. */
   eyebrow?: string
   title: string
   description?: string
