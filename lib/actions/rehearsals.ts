@@ -55,7 +55,7 @@ export async function createRehearsal(
 
   if (tdError) return { error: tdError.message }
 
-  const { date, ...rest } = parsed.data
+  const { date: _date, ...rest } = parsed.data
 
   const { data: rehearsal, error: rError } = await supabase
     .from('rehearsals')

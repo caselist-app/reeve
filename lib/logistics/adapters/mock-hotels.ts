@@ -127,7 +127,7 @@ export async function searchMockHotels(
       ? `${template.name} ${template.suffix}`
       : template.name
     const stars = mockStars(params.tier, rng)
-    const price = mockPrice(params.tier, rng)
+    const _price = mockPrice(params.tier, rng)
     const hasParking = rng() > 0.45
 
     results.push({

@@ -4,13 +4,6 @@ import { useState, useTransition } from 'react'
 import { Star, ParkingCircle, Clock, ExternalLink } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { recordHotelOption } from '@/lib/actions/hotels'
 import type { HotelOption } from '@/lib/logistics/types'
 
