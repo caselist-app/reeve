@@ -18,7 +18,7 @@ export default function DataDeletionPage() {
         </p>
         <p>
           If you no longer have access to your account, email matt@ordinaryworld.co with the
-          subject line "Data deletion request" and we will process it within 30 days.
+          subject line &quot;Data deletion request&quot; and we will process it within 30 days.
         </p>
       </section>
 
