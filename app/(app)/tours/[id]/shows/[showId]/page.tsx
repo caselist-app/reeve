@@ -159,6 +159,8 @@ export default async function ShowDetailPage({
           <TabsTrigger value="venue">Venue</TabsTrigger>
           <TabsTrigger value="schedule">Schedule</TabsTrigger>
           <TabsTrigger value="advance">Advance</TabsTrigger>
+          <TabsTrigger value="travel">Travel</TabsTrigger>
+          <TabsTrigger value="hotels">Hotels</TabsTrigger>
         </TabsList>
 
         <TabsContent value="venue">
@@ -187,6 +189,38 @@ export default async function ShowDetailPage({
             departments={departmentData}
             people={contactablePeople}
           />
+        </TabsContent>
+
+        <TabsContent value="travel">
+          <div className="flex flex-col items-start gap-4">
+            <p className="text-sm text-muted-foreground">
+              Plan and record transport legs for this show. Options are ranked by
+              feasibility and saved as planned segments. Book off-platform, then
+              paste the reference back in.
+            </p>
+            <Link
+              href={`/tours/${id}/shows/${showId}/planner`}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90 transition-opacity"
+            >
+              Open travel planner
+            </Link>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="hotels">
+          <div className="flex flex-col items-start gap-4">
+            <p className="text-sm text-muted-foreground">
+              Search and record hotel options for this show night. Book
+              off-platform, then enter the confirmation number to mark as
+              confirmed.
+            </p>
+            <Link
+              href={`/tours/${id}/shows/${showId}/hotels`}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-foreground px-4 py-2 text-sm font-medium text-background hover:opacity-90 transition-opacity"
+            >
+              Open hotel search
+            </Link>
+          </div>
         </TabsContent>
       </Tabs>
     </PageLayout>

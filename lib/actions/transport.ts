@@ -45,8 +45,9 @@ export async function recordTransportOption(
       source_provider: sourceProvider,
       door_to_site_at: option.door_to_site_at,
       book_url: option.book_url,
+      // show_id is stored here so the transport overview can group segments by show.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      details_json: { raw: option.raw } as any,
+      details_json: { raw: option.raw, show_id: showId } as any,
     })
     .select('id')
     .single()

@@ -40,8 +40,9 @@ export async function recordHotelOption(
       status: 'planned',
       room_block_size: party.crew_people.length + party.artist_people.length,
       parking_json: { ok: option.parking_ok },
+      // show_id stored here so the hotels overview can group stays by show.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      room_types_json: { raw: option.raw } as any,
+      room_types_json: { raw: option.raw, show_id: showId } as any,
     })
     .select('id')
     .single()
