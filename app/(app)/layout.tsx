@@ -2,6 +2,7 @@ import { cookies } from 'next/headers'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { ResizableSidebar } from '@/components/layout/resizable-sidebar'
+import { AppContent } from '@/components/layout/app-content'
 import { CommandPalette } from '@/components/nav/command-palette'
 
 const DEFAULT_SIDEBAR_WIDTH = 220
@@ -45,14 +46,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="flex h-screen overflow-hidden bg-sidebar">
       <ResizableSidebar tours={tours ?? []} initialWidth={sidebarWidth} lastTourId={lastTourId} />
 
-      {/* Main content floats inside the sidebar background, rounded card style like Croft */}
-      <div className="flex flex-1 gap-2 py-2 pr-2 min-h-0 overflow-hidden">
-        <main className="flex-1 min-w-0 bg-background border border-border rounded-3xl overflow-y-auto overflow-x-hidden">
-          {children}
-        </main>
-      </div>
+      {/* AppContent owns the main card and the side panel, both animated. */}
+      <AppContent>{children}</AppContent>
 
-      {/* Command palette, mounts once, listens for ⌘K globally */}
+      {/* Command palette, mounts once, listens for Cmd+K globally */}
       <CommandPalette />
     </div>
   )
