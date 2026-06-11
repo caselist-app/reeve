@@ -24,16 +24,16 @@ export default async function ContactPage({
 
   const { data: memberships } = await supabase
     .from('people')
-    .select('id, person_type, role, tour_id, tours(name, artist_act, status)')
+    .select('id, person_type, role, tour_id, tours(name, artists(name), status)')
     .eq('contact_id', contactId)
 
   const tours = (memberships ?? []).map((m) => {
-    const t = m.tours as { name: string; artist_act: string; status: string } | null
+    const t = m.tours as unknown as { name: string; artists: { name: string } | null; status: string } | null
     return {
       personId: m.id,
       tourId: m.tour_id,
       tourName: t?.name ?? 'Untitled tour',
-      artistAct: t?.artist_act ?? '',
+      artistAct: (t?.artists as { name: string } | null)?.name ?? '',
       status: t?.status ?? '',
       role: m.role,
       personType: m.person_type,

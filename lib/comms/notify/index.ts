@@ -75,10 +75,10 @@ export async function notify<T extends ImplementedType>(
   if (channels.includes('email')) {
     const { data: tour } = await admin
       .from('tours')
-      .select('artist_slug')
+      .select('artists(slug)')
       .eq('id', input.tourId)
       .single()
-    artistSlug = tour?.artist_slug ?? null
+    artistSlug = (tour?.artists as unknown as { slug: string | null } | null)?.slug ?? null
   }
 
   const outcomes: ChannelOutcome[] = []

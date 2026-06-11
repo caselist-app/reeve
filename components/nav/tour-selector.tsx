@@ -14,7 +14,7 @@ import { cn } from '@/lib/utils'
 interface Tour {
   id: string
   name: string
-  artist_act: string
+  artist_name: string
 }
 
 interface TourSelectorProps {
@@ -52,7 +52,7 @@ export function TourSelector({ tours, activeTourId }: TourSelectorProps) {
             {activeTour ? (
               <>
                 <p className="truncate text-xs font-semibold" style={{ color: 'var(--sidebar-foreground)' }}>
-                  {activeTour.artist_act}
+                  {activeTour.artist_name}
                 </p>
                 <p className="truncate text-xs" style={{ color: 'var(--sidebar-muted-foreground)' }}>
                   {activeTour.name}
@@ -76,7 +76,7 @@ export function TourSelector({ tours, activeTourId }: TourSelectorProps) {
             className={cn(tour.id === activeTourId && 'bg-accent')}
           >
             <div className="min-w-0">
-              <p className="truncate text-xs font-medium">{tour.artist_act}</p>
+              <p className="truncate text-xs font-medium">{tour.artist_name}</p>
               <p className="truncate text-xs text-muted-foreground">{tour.name}</p>
             </div>
           </DropdownMenuItem>

@@ -1,8 +1,9 @@
 import { sendEmail } from '@/lib/comms/email'
 import type { RenderedEmail } from '../types'
 
-// Operational mail uses the 'crew' local-part on the tour's branded subdomain,
-// keeping its sending reputation separate from the formal 'advancing' stream.
+// Operational mail uses the 'crew' local-part on the tour's branded subdomain
+// (crew@{slug}.yourreeve.com), keeping its sending reputation separate from
+// the formal 'advancing' stream.
 const OPERATIONAL_LOCAL_PART = 'crew'
 
 // Sends a rendered email and returns the Resend message id for receipt tracking.

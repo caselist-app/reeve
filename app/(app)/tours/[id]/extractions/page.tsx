@@ -17,7 +17,7 @@ export default async function ExtractionsPage({
 
   const { data: tour } = await supabase
     .from('tours')
-    .select('id, name, artist_act')
+    .select('id, name, artists(name)')
     .eq('id', id)
     .eq('account_id', user.id)
     .single()
@@ -46,7 +46,7 @@ export default async function ExtractionsPage({
   return (
     <PageLayout>
       <PageHeader
-        eyebrow={tour.artist_act}
+        eyebrow={(tour.artists as unknown as { name: string } | null)?.name ?? ''}
         title="Extractions"
         description={
           pendingCount > 0

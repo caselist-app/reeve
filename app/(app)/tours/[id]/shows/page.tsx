@@ -17,12 +17,12 @@ export default async function SchedulePage({
 
   const { data: tour } = await supabase
     .from('tours')
-    .select('id, name, artist_act, timezone')
+    .select('id, name, artists(name), timezone')
     .eq('id', id)
     .eq('account_id', user.id)
     .single()
 
-  if (!tour) redirect('/app')
+  if (!tour) redirect('/')
 
   const { data: tourDates } = await supabase
     .from('tour_dates')
@@ -54,7 +54,7 @@ export default async function SchedulePage({
 
   return (
     <PageLayout>
-      <PageHeader eyebrow={tour.artist_act} title={tour.name} />
+      <PageHeader eyebrow={(tour.artists as unknown as { name: string } | null)?.name ?? ''} title={tour.name} />
       <ScheduleView tourId={id} dates={dates} timezone={tour.timezone} />
     </PageLayout>
   )

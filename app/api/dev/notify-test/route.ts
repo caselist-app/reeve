@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { buildMorningMessageData } from '@/lib/comms/templates/morning-message'
 import { notify } from '@/lib/comms/notify'
+import { sendTemplate } from '@/lib/comms/whatsapp'
+import { provisionTourEmailDomain } from '@/lib/comms/email'
 
 // Diagnostic route: fire a real notification to one person so the channel
 // plumbing can be verified end to end. Guarded by CRON_SECRET. Not user-facing.
@@ -30,6 +32,44 @@ export async function GET(request: NextRequest) {
   const whatsapp = params.get('whatsapp')
   const type = params.get('type') ?? 'morning_message'
   const force = params.get('force') === '1'
+
+  // Raw template delivery test: bypasses notify() entirely and sends an approved
+  // template (e.g. hello_world) straight to a number. Proves Meta -> phone
+  // delivery works, independent of the 24-hour window or any in-review template.
+  //   ?secret=...&template=hello_world&to=+447944630634
+  // Domain provisioning test: provision a sending subdomain for an artist slug.
+  //   GET /api/dev/notify-test?secret=...&provision=tesseract
+  const provisionSlug = params.get('provision')
+  if (provisionSlug) {
+    try {
+      await provisionTourEmailDomain(provisionSlug)
+      return NextResponse.json({ ok: true, provisioned: `${provisionSlug}.yourreeve.com` })
+    } catch (err) {
+      return NextResponse.json(
+        { ok: false, error: err instanceof Error ? err.message : String(err) },
+        { status: 502 }
+      )
+    }
+  }
+
+  const templateName = params.get('template')
+  if (templateName) {
+    const to = params.get('to') ?? whatsapp
+    if (!to) {
+      return NextResponse.json({ error: 'template test needs &to=+E164number' }, { status: 400 })
+    }
+    // hello_world is en_US; default others to 'en'.
+    const languageCode = params.get('lang') ?? (templateName === 'hello_world' ? 'en_US' : 'en')
+    try {
+      const result = await sendTemplate({ to, templateName, languageCode })
+      return NextResponse.json({ ok: true, sent_template: templateName, to, ...result })
+    } catch (err) {
+      return NextResponse.json(
+        { ok: false, error: err instanceof Error ? err.message : String(err) },
+        { status: 502 }
+      )
+    }
+  }
 
   if (type !== 'morning_message') {
     return NextResponse.json({ error: `unsupported type: ${type}` }, { status: 400 })

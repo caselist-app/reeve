@@ -21,7 +21,7 @@ import { useCommandPalette } from '@/stores/command-palette-store'
 interface Tour {
   id: string
   name: string
-  artist_act: string
+  artist_name: string
 }
 
 interface SidebarProps {

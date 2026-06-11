@@ -26,7 +26,7 @@ export type TourContext = {
   tour: {
     id: string
     name: string
-    artist_act: string
+    artist_name: string
     territory: string | null
     base_currency: string
   }
@@ -125,7 +125,7 @@ export async function assembleTourContext(tour_id: string): Promise<TourContext>
 
   const [tourRes, showsRes, peopleRes, transportRes, hotelsRes, attentionRes] =
     await Promise.all([
-      admin.from('tours').select('id, name, artist_act, territory, base_currency').eq('id', tour_id).single(),
+      admin.from('tours').select('id, name, artists(name), territory, base_currency').eq('id', tour_id).single(),
       admin
         .from('shows')
         .select(`
@@ -167,8 +167,22 @@ export async function assembleTourContext(tour_id: string): Promise<TourContext>
 
   if (!tourRes.data) throw new Error(`Tour not found: ${tour_id}`)
 
+  const rawTour = tourRes.data as unknown as {
+    id: string
+    name: string
+    artists: { name: string } | null
+    territory: string | null
+    base_currency: string
+  }
+
   const context: TourContext = {
-    tour: tourRes.data,
+    tour: {
+      id: rawTour.id,
+      name: rawTour.name,
+      artist_name: (rawTour.artists as { name: string } | null)?.name ?? rawTour.name,
+      territory: rawTour.territory,
+      base_currency: rawTour.base_currency,
+    },
     shows: (showsRes.data ?? []).map((s) => ({
       id: s.id,
       date: s.date,

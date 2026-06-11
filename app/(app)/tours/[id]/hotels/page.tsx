@@ -18,7 +18,7 @@ export default async function HotelsPage({
 
   const { data: tour } = await supabase
     .from('tours')
-    .select('id, name, artist_act')
+    .select('id, name, artists(name)')
     .eq('id', id)
     .eq('account_id', user.id)
     .single()
@@ -74,7 +74,7 @@ export default async function HotelsPage({
   return (
     <PageLayout maxWidth="max-w-7xl">
       <PageHeader
-        eyebrow={tour.artist_act}
+        eyebrow={(tour.artists as unknown as { name: string } | null)?.name ?? ''}
         title="Hotels"
         description={description}
       />

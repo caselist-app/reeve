@@ -24,7 +24,7 @@ export default async function SharePage({
       acknowledged_at,
       documents ( title, doc_type, storage_path ),
       people ( contacts ( name ) ),
-      tours ( name, artist_act )
+      tours ( name, artists ( name ) )
     `)
     .eq('share_token', token)
     .single()
@@ -33,7 +33,7 @@ export default async function SharePage({
 
   const doc = share.documents as { title: string; doc_type: string; storage_path: string } | null
   const person = (share.people as { contacts: { name: string } | null } | null)?.contacts ?? null
-  const tour = share.tours as { name: string; artist_act: string | null } | null
+  const tour = share.tours as unknown as { name: string; artists: { name: string } | null } | null
 
   if (!doc) notFound()
 
@@ -53,7 +53,7 @@ export default async function SharePage({
     .from('documents')
     .createSignedUrl(doc.storage_path, 60 * 60) // 1 hour
 
-  const artistName = tour?.artist_act ?? tour?.name ?? 'Reeve'
+  const artistName = (tour?.artists as { name: string } | null)?.name ?? tour?.name ?? 'Reeve'
   const isAcknowledged = !!share.acknowledged_at
 
   return (

@@ -16,7 +16,7 @@ export default async function HotelsPage({
 
   const { data: tour } = await supabase
     .from('tours')
-    .select('id, name, artist_act, timezone')
+    .select('id, name, artists(name), timezone')
     .eq('id', id)
     .eq('account_id', user.id)
     .single()
@@ -75,7 +75,7 @@ export default async function HotelsPage({
       </Link>
 
       <div className="mb-8">
-        <p className="text-sm text-muted-foreground">{tour.artist_act}</p>
+        <p className="text-sm text-muted-foreground">{(tour.artists as unknown as { name: string } | null)?.name ?? ''}</p>
         <h1 className="text-2xl font-semibold">Hotel search</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {show.venue_name} &nbsp;·&nbsp; {formattedDate}

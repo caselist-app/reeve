@@ -13,12 +13,12 @@ export default async function PeoplePage({ params }: { params: Promise<{ id: str
 
   const { data: tour } = await supabase
     .from('tours')
-    .select('id, name, artist_act')
+    .select('id, name, artists(name)')
     .eq('id', id)
     .eq('account_id', user.id)
     .single()
 
-  if (!tour) redirect('/app')
+  if (!tour) redirect('/')
 
   const [{ data: peopleRows }, { data: crewDetailRows }] = await Promise.all([
     supabase
@@ -44,7 +44,7 @@ export default async function PeoplePage({ params }: { params: Promise<{ id: str
 
   return (
     <PageLayout>
-      <PageHeader eyebrow={tour.artist_act} title={tour.name} />
+      <PageHeader eyebrow={(tour.artists as unknown as { name: string } | null)?.name ?? ''} title={tour.name} />
       <PeopleView
         tourId={id}
         people={people}

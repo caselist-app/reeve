@@ -39,12 +39,12 @@ export default async function ShowDetailPage({
 
   const { data: tour } = await supabase
     .from('tours')
-    .select('id, name, artist_act, timezone')
+    .select('id, name, artists(name), timezone')
     .eq('id', id)
     .eq('account_id', user.id)
     .single()
 
-  if (!tour) redirect('/app')
+  if (!tour) redirect('/')
 
   const [
     { data: show },
@@ -152,7 +152,7 @@ export default async function ShowDetailPage({
       </Link>
 
       <PageHeader
-        eyebrow={tour.artist_act}
+        eyebrow={(tour.artists as unknown as { name: string } | null)?.name ?? ''}
         title={show.venue_name}
         description={formattedDate}
       />

@@ -27,12 +27,12 @@ export default async function RehearsalDetailPage({
 
   const { data: tour } = await supabase
     .from('tours')
-    .select('id, name, artist_act')
+    .select('id, name, artists(name)')
     .eq('id', id)
     .eq('account_id', user.id)
     .single()
 
-  if (!tour) redirect('/app')
+  if (!tour) redirect('/')
 
   const { data: rehearsal } = await supabase
     .from('rehearsals')
@@ -61,7 +61,7 @@ export default async function RehearsalDetailPage({
         </Link>
       </div>
 
-      <PageHeader eyebrow={tour.artist_act} title={dateLabel} description="Rehearsal" />
+      <PageHeader eyebrow={(tour.artists as unknown as { name: string } | null)?.name ?? ''} title={dateLabel} description="Rehearsal" />
 
       <RehearsalForm
         rehearsalId={rehearsalId}

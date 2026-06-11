@@ -58,7 +58,7 @@ async function fetchEmailBody(emailId: string): Promise<string> {
 
 // Receives forwarded emails from the TM.
 // The TM forwards a tech pack, hotel confirmation, or flight itinerary to
-// advancing@{artist_slug}.reeve.me. Resend delivers it here via email.received webhook.
+// advancing@{artist_slug}.yourreeve.com. Resend delivers it here via email.received webhook.
 // Rule: verify Svix signature, fetch body from Resend API, store raw row, enqueue job, return 200 fast.
 // The extraction job proposes rows; nothing is written to the spine until the TM confirms.
 export async function POST(request: NextRequest) {
@@ -101,9 +101,9 @@ export async function POST(request: NextRequest) {
   }
 
   // The recipient address tells us which tour this is for.
-  // advancing@{artist_slug}.reeve.me -> look up tour by artist_slug.
+  // advancing@{artist_slug}.yourreeve.com -> look up artist by slug, then route to most recent active tour.
   const toAddress = toAddresses[0] ?? ''
-  const slugMatch = toAddress.match(/advancing@([^.]+)\.reeve\.me/)
+  const slugMatch = toAddress.match(/advancing@([^.]+)\.yourreeve\.com/)
   const artistSlug = slugMatch?.[1]
 
   if (!artistSlug) {
@@ -112,10 +112,25 @@ export async function POST(request: NextRequest) {
 
   const admin = createAdminClient()
 
+  // Look up the artist by slug.
+  const { data: artistRow } = await admin
+    .from('artists')
+    .select('id')
+    .eq('slug', artistSlug)
+    .single()
+
+  if (!artistRow) {
+    return NextResponse.json({ error: 'Unrecognised recipient' }, { status: 200 })
+  }
+
+  // Route to the most recently created active tour for this artist.
   const { data: tour } = await admin
     .from('tours')
     .select('id')
-    .eq('artist_slug', artistSlug)
+    .eq('artist_id', artistRow.id)
+    .neq('status', 'archived')
+    .order('created_at', { ascending: false })
+    .limit(1)
     .single()
 
   if (!tour) {

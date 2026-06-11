@@ -45,7 +45,7 @@ export default async function TourHomePage({
 
   const { data: tour } = await supabase
     .from('tours')
-    .select('id, name, artist_act, timezone')
+    .select('id, name, artists(name), timezone')
     .eq('id', id)
     .eq('account_id', user.id)
     .single()
@@ -88,7 +88,7 @@ export default async function TourHomePage({
 
   return (
     <PageLayout maxWidth="max-w-3xl">
-      <PageHeader eyebrow={tour.artist_act} title={tour.name} description={headerDescription} />
+      <PageHeader eyebrow={(tour.artists as unknown as { name: string } | null)?.name ?? ''} title={tour.name} description={headerDescription} />
 
       {/* Attention feed */}
       <section className="mb-10">

@@ -33,7 +33,7 @@ export async function sendRider(params: SendRiderParams): Promise<SendRiderResul
   // Verify tour ownership before any read or write.
   const { data: tour } = await supabase
     .from('tours')
-    .select('id, name, artist_act, artist_slug')
+    .select('id, name, artists(name, slug)')
     .eq('id', tourId)
     .eq('account_id', user.id)
     .single()
@@ -105,8 +105,8 @@ export async function sendRider(params: SendRiderParams): Promise<SendRiderResul
   await sendRiderEmailJob.trigger({
     to: person.contact_email,
     recipient_name: person.name,
-    artist_name: tour.artist_act ?? tour.name,
-    artist_slug: tour.artist_slug ?? null,
+    artist_name: (tour.artists as unknown as { name: string } | null)?.name ?? tour.name,
+    artist_slug: (tour.artists as unknown as { name: string; slug: string | null } | null)?.slug ?? null,
     document_title: doc.title,
     share_token: shareToken,
     share_url: shareUrl,

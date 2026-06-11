@@ -105,7 +105,7 @@ export default async function DayViewPage({
 
   const { data: tour } = await supabase
     .from('tours')
-    .select('id, name, artist_act, timezone')
+    .select('id, name, artists(name), timezone')
     .eq('id', id)
     .eq('account_id', user.id)
     .single()
