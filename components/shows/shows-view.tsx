@@ -1,18 +1,11 @@
 'use client'
 
-import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet'
-import { ShowForm } from '@/components/shows/show-form'
+import { useSidePanel } from '@/stores/side-panel-store'
 import type { Tables } from '@/lib/types/database'
 
 export interface ShowWithAdvance extends Tables<'shows'> {
@@ -63,17 +56,25 @@ function formatDate(dateStr: string): string {
 
 export function ShowsView({ tourId, shows, timezone }: ShowsViewProps) {
   const router = useRouter()
-  const [addOpen, setAddOpen] = useState(false)
+  const { open } = useSidePanel()
 
   const today = new Date().toISOString().slice(0, 10)
   // The first show on or after today is highlighted as the upcoming show.
   const nextShowIdx = shows.findIndex((s) => s.date >= today)
 
+  function handleAddShow() {
+    open({
+      type: 'add-show',
+      tourId,
+      onSuccess: (showId) => router.push(`/tours/${tourId}/shows/${showId}`),
+    })
+  }
+
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
         <h2 className="text-lg font-medium">Shows</h2>
-        <Button size="sm" onClick={() => setAddOpen(true)}>
+        <Button size="sm" onClick={handleAddShow}>
           <Plus className="mr-1.5 h-4 w-4" />
           Add show
         </Button>
@@ -146,23 +147,6 @@ export function ShowsView({ tourId, shows, timezone }: ShowsViewProps) {
           </table>
         </div>
       )}
-
-      <Sheet open={addOpen} onOpenChange={setAddOpen}>
-        <SheetContent className="overflow-y-auto sm:max-w-lg">
-          <SheetHeader>
-            <SheetTitle>Add show</SheetTitle>
-          </SheetHeader>
-          <div className="mt-6">
-            <ShowForm
-              tourId={tourId}
-              onSuccess={(showId) => {
-                setAddOpen(false)
-                router.push(`/tours/${tourId}/shows/${showId}`)
-              }}
-            />
-          </div>
-        </SheetContent>
-      </Sheet>
     </div>
   )
 }

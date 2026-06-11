@@ -11,7 +11,7 @@ import { deleteContact } from '@/lib/actions/contacts'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
-import { ContactSheet } from '@/components/roster/contact-sheet'
+import { useSidePanel } from '@/stores/side-panel-store'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -50,7 +50,7 @@ function Field({ label, value }: { label: string; value: string | null }) {
 
 export function ContactDetail({ contact, tours }: Props) {
   const router = useRouter()
-  const [editOpen, setEditOpen] = useState(false)
+  const { open } = useSidePanel()
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
 
@@ -65,6 +65,14 @@ export function ContactDetail({ contact, tours }: Props) {
       } else {
         router.push('/roster')
       }
+    })
+  }
+
+  function handleEdit() {
+    open({
+      type: 'contact',
+      contact,
+      onSuccess: () => router.refresh(),
     })
   }
 
@@ -83,7 +91,7 @@ export function ContactDetail({ contact, tours }: Props) {
         title={contact.name}
         actions={
           <>
-            <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
+            <Button size="sm" variant="outline" onClick={handleEdit}>
               Edit
             </Button>
             <AlertDialog>
@@ -176,16 +184,6 @@ export function ContactDetail({ contact, tours }: Props) {
           ))}
         </div>
       )}
-
-      <ContactSheet
-        contact={contact}
-        open={editOpen}
-        onOpenChange={setEditOpen}
-        onSuccess={() => {
-          setEditOpen(false)
-          router.refresh()
-        }}
-      />
     </>
   )
 }

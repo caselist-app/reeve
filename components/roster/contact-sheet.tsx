@@ -1,16 +1,11 @@
 'use client'
 
-import { useState, useId, useTransition, useEffect } from 'react'
+import { useState, useId, useTransition } from 'react'
 import { createContact, updateContact } from '@/lib/actions/contacts'
 import { contactSchema } from '@/lib/validators/contact'
 import type { Tables } from '@/lib/types/database'
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-  SheetDescription,
-} from '@/components/ui/sheet'
+import { useSidePanel } from '@/stores/side-panel-store'
+import { PanelShell } from '@/components/layout/panel-shell'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -31,16 +26,16 @@ const CURRENCIES = ['GBP', 'USD', 'EUR', 'AUD', 'CAD', 'CHF', 'DKK', 'NOK', 'SEK
 
 interface Props {
   contact: Tables<'contacts'> | null
-  open: boolean
-  onOpenChange: (open: boolean) => void
   onSuccess: (contactId?: string) => void
 }
 
-export function ContactSheet({ contact, open, onOpenChange, onSuccess }: Props) {
+export function ContactSheet({ contact, onSuccess }: Props) {
   const formId = useId()
+  const { close } = useSidePanel()
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
+  // Panel unmounts between opens, so initial state is always fresh.
   const [preferredChannel, setPreferredChannel] = useState<Channel>(
     (contact?.preferred_channel as Channel) ?? 'whatsapp'
   )
@@ -49,16 +44,6 @@ export function ContactSheet({ contact, open, onOpenChange, onSuccess }: Props) 
   )
   const [perDiemCurrency, setPerDiemCurrency] = useState(contact?.default_per_diem_currency ?? 'GBP')
   const [wageCurrency, setWageCurrency] = useState(contact?.default_wage_currency ?? 'GBP')
-
-  useEffect(() => {
-    if (open) {
-      setPreferredChannel((contact?.preferred_channel as Channel) ?? 'whatsapp')
-      setDefaultType((contact?.default_person_type as PersonType) ?? 'crew')
-      setPerDiemCurrency(contact?.default_per_diem_currency ?? 'GBP')
-      setWageCurrency(contact?.default_wage_currency ?? 'GBP')
-      setError(null)
-    }
-  }, [open, contact])
 
   const isEditing = contact !== null
 
@@ -109,290 +94,283 @@ export function ContactSheet({ contact, open, onOpenChange, onSuccess }: Props) 
       if (result.error) {
         setError(result.error)
       } else {
+        close()
         onSuccess(result.contactId)
       }
     })
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="overflow-y-auto sm:max-w-lg">
-        <SheetHeader>
-          <SheetTitle>{isEditing ? `Edit ${contact.name}` : 'New contact'}</SheetTitle>
-          <SheetDescription>
-            {isEditing
-              ? "Update this person's details. Changes apply on every tour they are on."
-              : 'Add someone to your roster. You can add them to a tour later.'}
-          </SheetDescription>
-        </SheetHeader>
+    <PanelShell
+      title={isEditing ? `Edit ${contact.name}` : 'New contact'}
+      description={
+        isEditing
+          ? "Update this person's details. Changes apply on every tour they are on."
+          : 'Add someone to your roster. You can add them to a tour later.'
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-4 pb-8">
+        <div className="space-y-2">
+          <Label htmlFor={`${formId}-name`}>Name</Label>
+          <Input id={`${formId}-name`} name="name" defaultValue={contact?.name} required />
+        </div>
 
-        <form
-          key={`${contact?.id ?? 'new'}-${String(open)}`}
-          onSubmit={handleSubmit}
-          className="mt-6 space-y-4 pb-8"
-        >
+        <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
-            <Label htmlFor={`${formId}-name`}>Name</Label>
-            <Input id={`${formId}-name`} name="name" defaultValue={contact?.name} required />
+            <Label>Default type</Label>
+            <Select value={defaultType} onValueChange={(v) => setDefaultType(v as PersonType)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="artist">Artist</SelectItem>
+                <SelectItem value="crew">Crew</SelectItem>
+                <SelectItem value="management">Management</SelectItem>
+                <SelectItem value="support">Support</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>Default type</Label>
-              <Select value={defaultType} onValueChange={(v) => setDefaultType(v as PersonType)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="artist">Artist</SelectItem>
-                  <SelectItem value="crew">Crew</SelectItem>
-                  <SelectItem value="management">Management</SelectItem>
-                  <SelectItem value="support">Support</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor={`${formId}-default_role`}>Default role</Label>
-              <Input
-                id={`${formId}-default_role`}
-                name="default_role"
-                defaultValue={contact?.default_role ?? ''}
-                placeholder="FOH Engineer"
-              />
-            </div>
-          </div>
-
-          <Separator />
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Contact</p>
-
           <div className="space-y-2">
-            <Label htmlFor={`${formId}-contact_email`}>Email</Label>
+            <Label htmlFor={`${formId}-default_role`}>Default role</Label>
             <Input
-              id={`${formId}-contact_email`}
-              name="contact_email"
-              type="email"
-              defaultValue={contact?.contact_email ?? ''}
+              id={`${formId}-default_role`}
+              name="default_role"
+              defaultValue={contact?.default_role ?? ''}
+              placeholder="FOH Engineer"
             />
           </div>
+        </div>
 
+        <Separator />
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Contact</p>
+
+        <div className="space-y-2">
+          <Label htmlFor={`${formId}-contact_email`}>Email</Label>
+          <Input
+            id={`${formId}-contact_email`}
+            name="contact_email"
+            type="email"
+            defaultValue={contact?.contact_email ?? ''}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor={`${formId}-contact_phone`}>Phone</Label>
+          <Input
+            id={`${formId}-contact_phone`}
+            name="contact_phone"
+            defaultValue={contact?.contact_phone ?? ''}
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
-            <Label htmlFor={`${formId}-contact_phone`}>Phone</Label>
+            <Label>Preferred channel</Label>
+            <Select value={preferredChannel} onValueChange={(v) => setPreferredChannel(v as Channel)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="whatsapp">WhatsApp</SelectItem>
+                <SelectItem value="email">Email</SelectItem>
+                <SelectItem value="both">Both</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor={`${formId}-whatsapp_number`}>
+              WhatsApp
+              <span className="ml-1 text-xs text-muted-foreground">E.164</span>
+            </Label>
             <Input
-              id={`${formId}-contact_phone`}
-              name="contact_phone"
-              defaultValue={contact?.contact_phone ?? ''}
+              id={`${formId}-whatsapp_number`}
+              name="whatsapp_number"
+              defaultValue={contact?.whatsapp_number ?? ''}
+              placeholder="+447700900123"
             />
           </div>
+        </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label>Preferred channel</Label>
-              <Select value={preferredChannel} onValueChange={(v) => setPreferredChannel(v as Channel)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                  <SelectItem value="email">Email</SelectItem>
-                  <SelectItem value="both">Both</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor={`${formId}-whatsapp_number`}>
-                WhatsApp
-                <span className="ml-1 text-xs text-muted-foreground">E.164</span>
-              </Label>
-              <Input
-                id={`${formId}-whatsapp_number`}
-                name="whatsapp_number"
-                defaultValue={contact?.whatsapp_number ?? ''}
-                placeholder="+447700900123"
-              />
-            </div>
-          </div>
+        <div className="space-y-2">
+          <Label htmlFor={`${formId}-sms_number`}>SMS number</Label>
+          <Input id={`${formId}-sms_number`} name="sms_number" defaultValue={contact?.sms_number ?? ''} />
+        </div>
 
+        <Separator />
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Emergency contact</p>
+
+        <div className="space-y-2">
+          <Label htmlFor={`${formId}-emergency_contact_name`}>Name</Label>
+          <Input
+            id={`${formId}-emergency_contact_name`}
+            name="emergency_contact_name"
+            defaultValue={contact?.emergency_contact_name ?? ''}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor={`${formId}-emergency_contact_phone`}>Phone</Label>
+          <Input
+            id={`${formId}-emergency_contact_phone`}
+            name="emergency_contact_phone"
+            defaultValue={contact?.emergency_contact_phone ?? ''}
+          />
+        </div>
+
+        <Separator />
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Travel</p>
+
+        <div className="space-y-2">
+          <Label htmlFor={`${formId}-home_city`}>Home city</Label>
+          <Input
+            id={`${formId}-home_city`}
+            name="home_city"
+            defaultValue={contact?.home_city ?? ''}
+            placeholder="London"
+          />
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
-            <Label htmlFor={`${formId}-sms_number`}>SMS number</Label>
-            <Input id={`${formId}-sms_number`} name="sms_number" defaultValue={contact?.sms_number ?? ''} />
-          </div>
-
-          <Separator />
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Emergency contact</p>
-
-          <div className="space-y-2">
-            <Label htmlFor={`${formId}-emergency_contact_name`}>Name</Label>
+            <Label htmlFor={`${formId}-passport_number`}>Passport number</Label>
             <Input
-              id={`${formId}-emergency_contact_name`}
-              name="emergency_contact_name"
-              defaultValue={contact?.emergency_contact_name ?? ''}
+              id={`${formId}-passport_number`}
+              name="passport_number"
+              defaultValue={contact?.passport_number ?? ''}
             />
           </div>
-
           <div className="space-y-2">
-            <Label htmlFor={`${formId}-emergency_contact_phone`}>Phone</Label>
+            <Label htmlFor={`${formId}-passport_expiry`}>Expiry</Label>
             <Input
-              id={`${formId}-emergency_contact_phone`}
-              name="emergency_contact_phone"
-              defaultValue={contact?.emergency_contact_phone ?? ''}
+              id={`${formId}-passport_expiry`}
+              name="passport_expiry"
+              type="date"
+              defaultValue={contact?.passport_expiry ?? ''}
             />
           </div>
+        </div>
 
-          <Separator />
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Travel</p>
+        <div className="space-y-2">
+          <Label htmlFor={`${formId}-passport_country`}>Issuing country</Label>
+          <Input
+            id={`${formId}-passport_country`}
+            name="passport_country"
+            defaultValue={contact?.passport_country ?? ''}
+            placeholder="GBR"
+          />
+        </div>
 
+        <Separator />
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Dietary</p>
+
+        <div className="space-y-2">
+          <Label htmlFor={`${formId}-dietary`}>Requirements</Label>
+          <Textarea
+            id={`${formId}-dietary`}
+            name="dietary"
+            defaultValue={contact?.dietary ?? ''}
+            placeholder="Vegan"
+            rows={2}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor={`${formId}-allergies`}>Allergies</Label>
+          <Textarea
+            id={`${formId}-allergies`}
+            name="allergies"
+            defaultValue={contact?.allergies ?? ''}
+            placeholder="Nuts, dairy"
+            rows={2}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor={`${formId}-tshirt_size`}>T-shirt size</Label>
+          <Input
+            id={`${formId}-tshirt_size`}
+            name="tshirt_size"
+            defaultValue={contact?.tshirt_size ?? ''}
+            placeholder="L"
+          />
+        </div>
+
+        <Separator />
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Default pay</p>
+        <p className="text-xs text-muted-foreground">
+          Used to pre-fill per diem and wage when this contact is added to a tour. Optional.
+        </p>
+
+        <div className="grid grid-cols-2 gap-3">
           <div className="space-y-2">
-            <Label htmlFor={`${formId}-home_city`}>Home city</Label>
+            <Label htmlFor={`${formId}-default_per_diem_rate`}>Per diem</Label>
             <Input
-              id={`${formId}-home_city`}
-              name="home_city"
-              defaultValue={contact?.home_city ?? ''}
-              placeholder="London"
+              id={`${formId}-default_per_diem_rate`}
+              name="default_per_diem_rate"
+              type="number"
+              step="0.01"
+              min="0"
+              defaultValue={contact?.default_per_diem_rate ?? ''}
             />
           </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor={`${formId}-passport_number`}>Passport number</Label>
-              <Input
-                id={`${formId}-passport_number`}
-                name="passport_number"
-                defaultValue={contact?.passport_number ?? ''}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor={`${formId}-passport_expiry`}>Expiry</Label>
-              <Input
-                id={`${formId}-passport_expiry`}
-                name="passport_expiry"
-                type="date"
-                defaultValue={contact?.passport_expiry ?? ''}
-              />
-            </div>
-          </div>
-
           <div className="space-y-2">
-            <Label htmlFor={`${formId}-passport_country`}>Issuing country</Label>
+            <Label>Currency</Label>
+            <Select value={perDiemCurrency} onValueChange={setPerDiemCurrency}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CURRENCIES.map((c) => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor={`${formId}-default_daily_wage_rate`}>Daily wage</Label>
             <Input
-              id={`${formId}-passport_country`}
-              name="passport_country"
-              defaultValue={contact?.passport_country ?? ''}
-              placeholder="GBR"
+              id={`${formId}-default_daily_wage_rate`}
+              name="default_daily_wage_rate"
+              type="number"
+              step="0.01"
+              min="0"
+              defaultValue={contact?.default_daily_wage_rate ?? ''}
             />
           </div>
-
-          <Separator />
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Dietary</p>
-
           <div className="space-y-2">
-            <Label htmlFor={`${formId}-dietary`}>Requirements</Label>
-            <Textarea
-              id={`${formId}-dietary`}
-              name="dietary"
-              defaultValue={contact?.dietary ?? ''}
-              placeholder="Vegan"
-              rows={2}
-            />
+            <Label>Wage currency</Label>
+            <Select value={wageCurrency} onValueChange={setWageCurrency}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CURRENCIES.map((c) => (
+                  <SelectItem key={c} value={c}>{c}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
+        </div>
 
-          <div className="space-y-2">
-            <Label htmlFor={`${formId}-allergies`}>Allergies</Label>
-            <Textarea
-              id={`${formId}-allergies`}
-              name="allergies"
-              defaultValue={contact?.allergies ?? ''}
-              placeholder="Nuts, dairy"
-              rows={2}
-            />
-          </div>
+        <Separator />
 
-          <div className="space-y-2">
-            <Label htmlFor={`${formId}-tshirt_size`}>T-shirt size</Label>
-            <Input
-              id={`${formId}-tshirt_size`}
-              name="tshirt_size"
-              defaultValue={contact?.tshirt_size ?? ''}
-              placeholder="L"
-            />
-          </div>
+        <div className="space-y-2">
+          <Label htmlFor={`${formId}-notes`}>Notes</Label>
+          <Textarea
+            id={`${formId}-notes`}
+            name="notes"
+            defaultValue={contact?.notes ?? ''}
+            placeholder="Private notes. Never sent to anyone."
+            rows={2}
+          />
+        </div>
 
-          <Separator />
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Default pay</p>
-          <p className="text-xs text-muted-foreground">
-            Used to pre-fill per diem and wage when this contact is added to a tour. Optional.
-          </p>
+        {error && <p className="text-sm text-destructive">{error}</p>}
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
-              <Label htmlFor={`${formId}-default_per_diem_rate`}>Per diem</Label>
-              <Input
-                id={`${formId}-default_per_diem_rate`}
-                name="default_per_diem_rate"
-                type="number"
-                step="0.01"
-                min="0"
-                defaultValue={contact?.default_per_diem_rate ?? ''}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Currency</Label>
-              <Select value={perDiemCurrency} onValueChange={setPerDiemCurrency}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CURRENCIES.map((c) => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor={`${formId}-default_daily_wage_rate`}>Daily wage</Label>
-              <Input
-                id={`${formId}-default_daily_wage_rate`}
-                name="default_daily_wage_rate"
-                type="number"
-                step="0.01"
-                min="0"
-                defaultValue={contact?.default_daily_wage_rate ?? ''}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Wage currency</Label>
-              <Select value={wageCurrency} onValueChange={setWageCurrency}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CURRENCIES.map((c) => (
-                    <SelectItem key={c} value={c}>{c}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <Separator />
-
-          <div className="space-y-2">
-            <Label htmlFor={`${formId}-notes`}>Notes</Label>
-            <Textarea
-              id={`${formId}-notes`}
-              name="notes"
-              defaultValue={contact?.notes ?? ''}
-              placeholder="Private notes. Never sent to anyone."
-              rows={2}
-            />
-          </div>
-
-          {error && <p className="text-sm text-destructive">{error}</p>}
-
-          <Button type="submit" disabled={pending} className="w-full">
-            {pending ? 'Saving...' : isEditing ? 'Save changes' : 'Create contact'}
-          </Button>
-        </form>
-      </SheetContent>
-    </Sheet>
+        <Button type="submit" disabled={pending} className="w-full">
+          {pending ? 'Saving...' : isEditing ? 'Save changes' : 'Create contact'}
+        </Button>
+      </form>
+    </PanelShell>
   )
 }

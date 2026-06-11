@@ -9,7 +9,7 @@ import { passportStatus, formatExpiry, PASSPORT_CLASS } from '@/lib/roster/passp
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { ContactSheet } from '@/components/roster/contact-sheet'
+import { useSidePanel } from '@/stores/side-panel-store'
 
 // Subset of contacts fetched by the roster page. Emergency contact details,
 // passport numbers, and wage defaults are excluded from the list payload
@@ -28,8 +28,8 @@ interface Props {
 
 export function RosterView({ contacts }: Props) {
   const router = useRouter()
+  const { open } = useSidePanel()
   const [query, setQuery] = useState('')
-  const [sheetOpen, setSheetOpen] = useState(false)
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -41,13 +41,18 @@ export function RosterView({ contacts }: Props) {
     )
   }, [contacts, query])
 
-  function handleCreated(contactId?: string) {
-    setSheetOpen(false)
-    if (contactId) {
-      router.push(`/roster/${contactId}`)
-    } else {
-      router.refresh()
-    }
+  function handleNew() {
+    open({
+      type: 'contact',
+      contact: null,
+      onSuccess: (contactId) => {
+        if (contactId) {
+          router.push(`/roster/${contactId}`)
+        } else {
+          router.refresh()
+        }
+      },
+    })
   }
 
   return (
@@ -56,7 +61,7 @@ export function RosterView({ contacts }: Props) {
         title="Roster"
         description="Everyone you tour with. Update a passport or allergy once, and it is current on every tour."
         actions={
-          <Button size="sm" onClick={() => setSheetOpen(true)}>
+          <Button size="sm" onClick={handleNew}>
             New contact
           </Button>
         }
@@ -129,13 +134,6 @@ export function RosterView({ contacts }: Props) {
           </table>
         </div>
       )}
-
-      <ContactSheet
-        contact={null}
-        open={sheetOpen}
-        onOpenChange={setSheetOpen}
-        onSuccess={handleCreated}
-      />
     </>
   )
 }

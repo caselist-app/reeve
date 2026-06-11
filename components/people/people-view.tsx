@@ -1,14 +1,14 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { PeopleTable } from '@/components/people/people-table'
-import { PersonSheet } from '@/components/people/person-sheet'
-import { BulkAdd } from '@/components/people/bulk-add'
 import { removePerson } from '@/lib/actions/people'
+import { useSidePanel } from '@/stores/side-panel-store'
 import type { Tables } from '@/lib/types/database'
+import { useState } from 'react'
 
 // A tour membership joined with its account-level contact (identity lives there).
 export type PersonWithContact = Tables<'people'> & { contacts: Tables<'contacts'> }
@@ -30,23 +30,38 @@ interface Props {
 
 export function PeopleView({ tourId, people, crewDetails }: Props) {
   const router = useRouter()
-
-  const [sheetOpen, setSheetOpen] = useState(false)
-  const [editingPerson, setEditingPerson] = useState<PersonWithContact | null>(null)
-  const [addType, setAddType] = useState<PersonType>('crew')
+  const { open } = useSidePanel()
   const [removeError, setRemoveError] = useState<string | null>(null)
   const [_removePending, startRemove] = useTransition()
 
   function handleAdd(type: PersonType) {
-    setEditingPerson(null)
-    setAddType(type)
-    setSheetOpen(true)
+    open({
+      type: 'person',
+      tourId,
+      defaultType: type,
+      person: null,
+      crewDetail: null,
+      onSuccess: () => router.refresh(),
+    })
   }
 
   function handleEdit(person: PersonWithContact) {
-    setEditingPerson(person)
-    setAddType(person.person_type as PersonType)
-    setSheetOpen(true)
+    open({
+      type: 'person',
+      tourId,
+      defaultType: person.person_type as PersonType,
+      person,
+      crewDetail: crewDetails[person.id] ?? null,
+      onSuccess: () => router.refresh(),
+    })
+  }
+
+  function handleBulkAdd() {
+    open({
+      type: 'bulk-add',
+      tourId,
+      onSuccess: () => router.refresh(),
+    })
   }
 
   function handleRemove(personId: string) {
@@ -59,11 +74,6 @@ export function PeopleView({ tourId, people, crewDetails }: Props) {
         router.refresh()
       }
     })
-  }
-
-  function handleSuccess() {
-    setSheetOpen(false)
-    router.refresh()
   }
 
   const byType = (type: PersonType) =>
@@ -102,7 +112,9 @@ export function PeopleView({ tourId, people, crewDetails }: Props) {
                 </span>
                 <div className="flex gap-2">
                   {tab.value === 'crew' && (
-                    <BulkAdd tourId={tourId} onSuccess={handleSuccess} />
+                    <Button size="sm" variant="outline" onClick={handleBulkAdd}>
+                      Bulk add
+                    </Button>
                   )}
                   <Button size="sm" onClick={() => handleAdd(tab.value)}>
                     Add {tab.singular}
@@ -120,16 +132,6 @@ export function PeopleView({ tourId, people, crewDetails }: Props) {
           )
         })}
       </Tabs>
-
-      <PersonSheet
-        tourId={tourId}
-        defaultType={addType}
-        person={editingPerson}
-        crewDetail={editingPerson ? (crewDetails[editingPerson.id] ?? null) : null}
-        open={sheetOpen}
-        onOpenChange={setSheetOpen}
-        onSuccess={handleSuccess}
-      />
     </>
   )
 }
