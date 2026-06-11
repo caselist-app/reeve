@@ -13,14 +13,15 @@ interface Tour {
 interface ResizableSidebarProps {
   tours: Tour[]
   initialWidth: number
+  lastTourId?: string | null
 }
 
-export function ResizableSidebar({ tours, initialWidth }: ResizableSidebarProps) {
+export function ResizableSidebar({ tours, initialWidth, lastTourId = null }: ResizableSidebarProps) {
   const { width, isDragging, onDragStart } = useSidebarWidth(initialWidth)
 
   return (
     <div className="relative flex-shrink-0" style={{ width }}>
-      <Sidebar tours={tours} />
+      <Sidebar tours={tours} lastTourId={lastTourId} />
 
       {/* Drag handle on the right edge */}
       <div

@@ -31,9 +31,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     ? DEFAULT_SIDEBAR_WIDTH
     : Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, rawWidth))
 
+  // Last tour visited, so account-level pages keep the tour context in the sidebar.
+  const lastTourId = cookieStore.get('reeve:last-tour')?.value ?? null
+
   return (
     <div className="flex h-screen overflow-hidden bg-sidebar">
-      <ResizableSidebar tours={tours ?? []} initialWidth={sidebarWidth} />
+      <ResizableSidebar tours={tours ?? []} initialWidth={sidebarWidth} lastTourId={lastTourId} />
 
       {/* Main content floats inside the sidebar background, rounded card style like Croft */}
       <div className="flex flex-1 gap-2 py-2 pr-2 min-h-0 overflow-hidden">

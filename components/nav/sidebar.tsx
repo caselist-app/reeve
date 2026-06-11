@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import {
   Users,
@@ -11,6 +12,7 @@ import {
   Settings,
   LayoutDashboard,
   Search,
+  Contact,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TourSelector } from '@/components/nav/tour-selector'
@@ -24,6 +26,9 @@ interface Tour {
 
 interface SidebarProps {
   tours: Tour[]
+  /** Last tour visited, read from a cookie server-side, so account-level pages
+   *  (e.g. Roster) keep the tour context after a hard reload. */
+  lastTourId?: string | null
 }
 
 const TOUR_NAV = [
@@ -45,12 +50,27 @@ const SECTION_ROUTE: Record<string, string> = {
   settings: 'settings',
 }
 
-export function Sidebar({ tours }: SidebarProps) {
+export function Sidebar({ tours, lastTourId = null }: SidebarProps) {
   const pathname = usePathname()
   const { openPalette } = useCommandPalette()
 
   const tourIdMatch = pathname.match(/\/tours\/([^/]+)/)
-  const activeTourId = tourIdMatch?.[1] ?? null
+  const pathTourId = tourIdMatch?.[1] ?? null
+
+  // Remember the last tour so account-level pages (Roster) keep the tour context
+  // in the sidebar instead of resetting to "Select tour". The component stays
+  // mounted across client navigation, so this survives entering and leaving the
+  // roster; the cookie covers a hard reload.
+  const [rememberedTourId, setRememberedTourId] = useState<string | null>(lastTourId)
+  useEffect(() => {
+    if (pathTourId && pathTourId !== rememberedTourId) {
+      setRememberedTourId(pathTourId)
+      document.cookie = `reeve:last-tour=${pathTourId}; path=/; max-age=31536000; samesite=lax`
+    }
+  }, [pathTourId, rememberedTourId])
+
+  // The tour shown in the sidebar: the one in the URL, else the last one visited.
+  const activeTourId = pathTourId ?? rememberedTourId
 
   function navHref(section: string): string {
     if (!activeTourId) return '/tours/new'
@@ -69,6 +89,8 @@ export function Sidebar({ tours }: SidebarProps) {
   const isHome = activeTourId
     ? pathname === `/tours/${activeTourId}`
     : pathname === '/'
+
+  const isRoster = pathname.startsWith('/roster')
 
   return (
     <aside className="flex h-screen flex-col bg-sidebar sticky top-0" style={{ width: '100%' }}>
@@ -111,12 +133,26 @@ export function Sidebar({ tours }: SidebarProps) {
               ⌘K
             </kbd>
           </button>
+
+          <Link
+            href="/roster"
+            className={cn(
+              'flex items-center gap-2.5 rounded-lg px-2 h-7 text-xs font-medium transition-colors',
+              isRoster
+                ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                : 'hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
+            )}
+            style={isRoster ? undefined : { color: 'var(--sidebar-muted-foreground)' }}
+          >
+            <Contact className="h-3.5 w-3.5 shrink-0" />
+            Roster
+          </Link>
         </nav>
       </div>
 
       {/* Tour nav */}
       {activeTourId && (
-        <div className="px-3 pb-2">
+        <div className="px-3 pb-2 mt-4">
           <p
             className="mb-1 px-2 text-[10px] font-medium uppercase tracking-wider"
             style={{ color: 'var(--sidebar-muted-foreground)' }}
