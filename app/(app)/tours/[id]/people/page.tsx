@@ -44,7 +44,7 @@ export default async function PeoplePage({ params }: { params: Promise<{ id: str
 
   return (
     <PageLayout>
-      <PageHeader eyebrow={(tour.artists as unknown as { name: string } | null)?.name ?? ''} title={tour.name} />
+      <PageHeader eyebrow={tour.artists?.name ?? ''} title={tour.name} />
       <PeopleView
         tourId={id}
         people={people}

@@ -33,7 +33,7 @@ export default async function SharePage({
 
   const doc = share.documents as { title: string; doc_type: string; storage_path: string } | null
   const person = (share.people as { contacts: { name: string } | null } | null)?.contacts ?? null
-  const tour = share.tours as unknown as { name: string; artists: { name: string } | null } | null
+  const tour = share.tours
 
   if (!doc) notFound()
 
@@ -53,7 +53,7 @@ export default async function SharePage({
     .from('documents')
     .createSignedUrl(doc.storage_path, 60 * 60) // 1 hour
 
-  const artistName = (tour?.artists as { name: string } | null)?.name ?? tour?.name ?? 'Reeve'
+  const artistName = tour?.artists?.name ?? tour?.name ?? 'Reeve'
   const isAcknowledged = !!share.acknowledged_at
 
   return (

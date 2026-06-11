@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { nearestAirport, estimateGroundMinutes } from '@/lib/logistics/airports'
+import { AIRPORT_TRANSIT_MIN, RAIL_TRANSIT_MIN } from '@/lib/logistics/constants'
 import type { HubResolution } from '@/lib/logistics/types'
 
 // Resolution order (stops at first hit):
@@ -27,10 +28,6 @@ const KNOWN_VENUES: Record<string, KnownVenueEntry> = {
   coachella: { iata: 'PSP', rail: null, ground_minutes: 25 },
   lollapalooza: { iata: 'ORD', rail: null, ground_minutes: 30 },
 }
-
-// Standard transit buffers used when no specific data is available.
-export const AIRPORT_TRANSIT_MIN = 45
-export const RAIL_TRANSIT_MIN = 15
 
 function lookupKnownVenue(venueName: string): KnownVenueEntry | null {
   const key = venueName.toLowerCase().trim()

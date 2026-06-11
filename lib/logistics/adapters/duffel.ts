@@ -1,4 +1,4 @@
-import { AIRPORT_TRANSIT_MIN } from '@/lib/logistics/hub-resolver'
+import { AIRPORT_TRANSIT_MIN } from '@/lib/logistics/constants'
 import type { TravelOption } from '@/lib/logistics/types'
 
 export type DuffelSearchParams = {

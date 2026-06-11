@@ -45,7 +45,6 @@ export function NewTourForm({ artists }: Props) {
   const [artistId, setArtistId] = useState(artists.length === 1 ? artists[0].id : '')
   const [newArtistName, setNewArtistName] = useState('')
   const [newArtistSlug, setNewArtistSlug] = useState('')
-  const [slugTouched, setSlugTouched] = useState(false)
   const [currency, setCurrency] = useState('GBP')
   const [timezone, setTimezone] = useState('')
 
@@ -64,7 +63,7 @@ export function NewTourForm({ artists }: Props) {
       if (isNewArtist) {
         const artistData = new FormData()
         artistData.set('name', newArtistName)
-        if (newArtistSlug) artistData.set('slug', newArtistSlug)
+        artistData.set('slug', newArtistSlug)
         const result = await createArtistAction({ error: null }, artistData)
         if (result.error || !result.artistId) {
           setError(result.error ?? 'Failed to create artist')
@@ -110,25 +109,23 @@ export function NewTourForm({ artists }: Props) {
               value={newArtistName}
               onChange={(e) => {
                 setNewArtistName(e.target.value)
-                if (!slugTouched) setNewArtistSlug(toSlug(e.target.value))
+                setNewArtistSlug(toSlug(e.target.value))
               }}
               placeholder="Tesseract"
               required={isNewArtist}
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor={`${formId}-new-artist-slug`}>
+            <Label>
               Slug
               <span className="ml-1 text-xs text-muted-foreground">for advancing@ email</span>
             </Label>
             <Input
-              id={`${formId}-new-artist-slug`}
               value={newArtistSlug}
-              onChange={(e) => {
-                setNewArtistSlug(e.target.value)
-                setSlugTouched(true)
-              }}
-              placeholder="tesseract"
+              readOnly
+              disabled
+              className="cursor-default"
+              placeholder="derived from artist name"
             />
           </div>
         </div>

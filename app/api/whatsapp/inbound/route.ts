@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createHmac } from 'crypto'
+import { createHmac, timingSafeEqual } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { tasks } from '@trigger.dev/sdk/v3'
 
@@ -24,15 +24,17 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const rawBody = await request.text()
 
-  // Verify Meta signature using the App Secret.
-  // WHATSAPP_APP_SECRET is the Meta App's app secret (not the verify token).
+  // Verify Meta signature using the App Secret. Fail closed if the secret is unset.
   const appSecret = process.env.WHATSAPP_APP_SECRET
-  if (appSecret) {
-    const signature = request.headers.get('x-hub-signature-256')
-    const expected = `sha256=${createHmac('sha256', appSecret).update(rawBody).digest('hex')}`
-    if (signature !== expected) {
-      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
-    }
+  if (!appSecret) {
+    return NextResponse.json({ error: 'Webhook not configured' }, { status: 401 })
+  }
+  const signature = request.headers.get('x-hub-signature-256') ?? ''
+  const expected = `sha256=${createHmac('sha256', appSecret).update(rawBody).digest('hex')}`
+  const sigBuf = Buffer.from(signature, 'utf8')
+  const expBuf = Buffer.from(expected, 'utf8')
+  if (sigBuf.length !== expBuf.length || !timingSafeEqual(sigBuf, expBuf)) {
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
   }
 
   let payload: unknown

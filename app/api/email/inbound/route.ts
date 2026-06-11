@@ -64,7 +64,10 @@ async function fetchEmailBody(emailId: string): Promise<string> {
 export async function POST(request: NextRequest) {
   const rawBody = await request.text()
 
-  const secret = process.env.RESEND_WEBHOOK_SECRET ?? ''
+  const secret = process.env.RESEND_WEBHOOK_SECRET
+  if (!secret) {
+    return NextResponse.json({ error: 'Webhook not configured' }, { status: 401 })
+  }
   const valid = verifySvixSignature(
     rawBody,
     request.headers.get('svix-id'),

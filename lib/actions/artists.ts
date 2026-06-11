@@ -1,5 +1,6 @@
 'use server'
 
+import { redirect } from 'next/navigation'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { artistSchema } from '@/lib/validators/artist'
@@ -46,4 +47,46 @@ export async function createArtistAction(
   }
 
   return { error: null, artistId: data?.id }
+}
+
+export async function deleteArtistAction(artistId: string): Promise<void> {
+  const user = await requireUser()
+  const supabase = await createClient()
+
+  // Verify ownership before touching anything.
+  const { data: artist, error: fetchError } = await supabase
+    .from('artists')
+    .select('id')
+    .eq('id', artistId)
+    .eq('account_id', user.id)
+    .single()
+
+  if (fetchError || !artist) {
+    throw new Error('Artist not found or access denied')
+  }
+
+  // Delete all tours for this artist. Every tour child table (shows, people,
+  // transport, hotels, documents, etc.) has ON DELETE CASCADE, so one delete
+  // clears everything.
+  const { error: toursError } = await supabase
+    .from('tours')
+    .delete()
+    .eq('artist_id', artistId)
+
+  if (toursError) {
+    throw new Error(toursError.message)
+  }
+
+  // Now safe to delete the artist (tours FK was RESTRICT, tours are gone).
+  const { error: artistError } = await supabase
+    .from('artists')
+    .delete()
+    .eq('id', artistId)
+    .eq('account_id', user.id)
+
+  if (artistError) {
+    throw new Error(artistError.message)
+  }
+
+  redirect('/')
 }

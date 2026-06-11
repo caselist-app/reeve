@@ -61,7 +61,7 @@ export default async function RehearsalDetailPage({
         </Link>
       </div>
 
-      <PageHeader eyebrow={(tour.artists as unknown as { name: string } | null)?.name ?? ''} title={dateLabel} description="Rehearsal" />
+      <PageHeader eyebrow={tour.artists?.name ?? ''} title={dateLabel} description="Rehearsal" />
 
       <RehearsalForm
         rehearsalId={rehearsalId}

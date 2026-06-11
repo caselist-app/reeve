@@ -1,5 +1,6 @@
 'use server'
 
+import { requireUser } from '@/lib/auth/helpers'
 import { nearestAirport, estimateGroundMinutes } from '@/lib/logistics/airports'
 
 // Geocode a city name to its nearest airport IATA code.
@@ -7,6 +8,8 @@ import { nearestAirport, estimateGroundMinutes } from '@/lib/logistics/airports'
 export async function resolveHomeCity(
   city: string
 ): Promise<{ iata: string | null; lat: number | null; lng: number | null; ground_minutes: number | null }> {
+  await requireUser()
+
   const apiKey = process.env.GOOGLE_MAPS_API_KEY
   if (!apiKey || !city.trim()) return { iata: null, lat: null, lng: null, ground_minutes: null }
 

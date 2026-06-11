@@ -46,7 +46,7 @@ export default async function ExtractionsPage({
   return (
     <PageLayout>
       <PageHeader
-        eyebrow={(tour.artists as unknown as { name: string } | null)?.name ?? ''}
+        eyebrow={tour.artists?.name ?? ''}
         title="Extractions"
         description={
           pendingCount > 0

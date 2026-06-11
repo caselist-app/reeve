@@ -77,15 +77,31 @@ export async function recordTransportOption(
 // Called after the TM uploads a boarding pass against a transport_assignment.
 // Schedules the boarding pass send job 3 hours before the segment departs.
 // If departure is fewer than 3 hours away, triggers immediately.
-export async function scheduleBoardingPassSend(assignmentId: string): Promise<void> {
-  await requireUser()
+export async function scheduleBoardingPassSend(assignmentId: string, tourId: string): Promise<void> {
+  const user = await requireUser()
+  const supabase = await createClient()
+
+  // Verify caller owns this tour before using the admin client.
+  const { data: tour } = await supabase
+    .from('tours')
+    .select('id')
+    .eq('id', tourId)
+    .eq('account_id', user.id)
+    .single()
+
+  if (!tour) {
+    console.error('[scheduleBoardingPassSend] Tour not found or not owned by caller:', tourId)
+    return
+  }
 
   const admin = createAdminClient()
 
+  // Scope the fetch to the verified tour to prevent cross-tenant reads.
   const { data: assignment } = await admin
     .from('transport_assignments')
     .select('id, tour_id, person_id, segment_id, transport_segments(depart_at)')
     .eq('id', assignmentId)
+    .eq('tour_id', tourId)
     .single()
 
   if (!assignment) {

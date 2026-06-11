@@ -1,6 +1,5 @@
 'use server'
 
-import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
@@ -19,10 +18,7 @@ export async function requestOtpAction(
     return { error: 'Enter a valid email address.', sent: false, email: '' }
   }
 
-  const headersList = await headers()
-  const host = headersList.get('x-forwarded-host') ?? headersList.get('host') ?? 'localhost:3000'
-  const proto = headersList.get('x-forwarded-proto') ?? 'http'
-  const origin = `${proto}://${host}`
+  const origin = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'
 
   const supabase = await createClient()
   const { error } = await supabase.auth.signInWithOtp({

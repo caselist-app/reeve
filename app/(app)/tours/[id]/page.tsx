@@ -88,7 +88,7 @@ export default async function TourHomePage({
 
   return (
     <PageLayout maxWidth="max-w-3xl">
-      <PageHeader eyebrow={(tour.artists as unknown as { name: string } | null)?.name ?? ''} title={tour.name} description={headerDescription} />
+      <PageHeader eyebrow={tour.artists?.name ?? ''} title={tour.name} description={headerDescription} />
 
       {/* Attention feed */}
       <section className="mb-10">

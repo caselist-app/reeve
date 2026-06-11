@@ -28,12 +28,12 @@ export default async function ContactPage({
     .eq('contact_id', contactId)
 
   const tours = (memberships ?? []).map((m) => {
-    const t = m.tours as unknown as { name: string; artists: { name: string } | null; status: string } | null
+    const t = m.tours
     return {
       personId: m.id,
       tourId: m.tour_id,
       tourName: t?.name ?? 'Untitled tour',
-      artistAct: (t?.artists as { name: string } | null)?.name ?? '',
+      artistAct: t?.artists?.name ?? '',
       status: t?.status ?? '',
       role: m.role,
       personType: m.person_type,

@@ -47,7 +47,7 @@ export default async function TransportPlannerPage({
       </Link>
 
       <div className="mb-8">
-        <p className="text-sm text-muted-foreground">{(tour.artists as unknown as { name: string } | null)?.name ?? ''}</p>
+        <p className="text-sm text-muted-foreground">{tour.artists?.name ?? ''}</p>
         <h1 className="text-2xl font-semibold">Plan travel</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Search routes between any two cities, independent of shows.

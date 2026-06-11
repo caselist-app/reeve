@@ -152,7 +152,7 @@ export default async function ShowDetailPage({
       </Link>
 
       <PageHeader
-        eyebrow={(tour.artists as unknown as { name: string } | null)?.name ?? ''}
+        eyebrow={tour.artists?.name ?? ''}
         title={show.venue_name}
         description={formattedDate}
       />

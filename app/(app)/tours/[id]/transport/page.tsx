@@ -57,7 +57,7 @@ export default async function TransportPage({
   return (
     <PageLayout maxWidth="max-w-7xl">
       <PageHeader
-        eyebrow={(tour.artists as unknown as { name: string } | null)?.name ?? ''}
+        eyebrow={tour.artists?.name ?? ''}
         title="Transport"
         description={description}
         actions={

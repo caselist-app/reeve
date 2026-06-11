@@ -25,7 +25,7 @@ export default async function TourSettingsPage({
     redirect('/')
   }
 
-  const artistName = (tourRaw.artists as unknown as { name: string } | null)?.name ?? ''
+  const artistName = tourRaw.artists?.name ?? ''
   // Pass only the base tour fields (no joined artists) to the form which expects Tables<'tours'>.
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { artists: _artists, ...tour } = tourRaw

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { AIRPORT_TRANSIT_MIN } from '@/lib/logistics/hub-resolver'
+import { AIRPORT_TRANSIT_MIN } from '@/lib/logistics/constants'
 import { planTravel } from '@/lib/logistics/plan'
 import { ContextSummary } from '@/components/planner/context-summary'
 import { OptionRow } from '@/components/planner/option-row'

@@ -54,7 +54,7 @@ export default async function SchedulePage({
 
   return (
     <PageLayout>
-      <PageHeader eyebrow={(tour.artists as unknown as { name: string } | null)?.name ?? ''} title={tour.name} />
+      <PageHeader eyebrow={tour.artists?.name ?? ''} title={tour.name} />
       <ScheduleView tourId={id} dates={dates} timezone={tour.timezone} />
     </PageLayout>
   )

@@ -105,8 +105,8 @@ export async function sendRider(params: SendRiderParams): Promise<SendRiderResul
   await sendRiderEmailJob.trigger({
     to: person.contact_email,
     recipient_name: person.name,
-    artist_name: (tour.artists as unknown as { name: string } | null)?.name ?? tour.name,
-    artist_slug: (tour.artists as unknown as { name: string; slug: string | null } | null)?.slug ?? null,
+    artist_name: tour.artists?.name ?? tour.name,
+    artist_slug: tour.artists?.slug ?? null,
     document_title: doc.title,
     share_token: shareToken,
     share_url: shareUrl,

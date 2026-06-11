@@ -167,19 +167,13 @@ export async function assembleTourContext(tour_id: string): Promise<TourContext>
 
   if (!tourRes.data) throw new Error(`Tour not found: ${tour_id}`)
 
-  const rawTour = tourRes.data as unknown as {
-    id: string
-    name: string
-    artists: { name: string } | null
-    territory: string | null
-    base_currency: string
-  }
+  const rawTour = tourRes.data
 
   const context: TourContext = {
     tour: {
       id: rawTour.id,
       name: rawTour.name,
-      artist_name: (rawTour.artists as { name: string } | null)?.name ?? rawTour.name,
+      artist_name: rawTour.artists?.name ?? rawTour.name,
       territory: rawTour.territory,
       base_currency: rawTour.base_currency,
     },

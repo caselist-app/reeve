@@ -78,7 +78,7 @@ export async function notify<T extends ImplementedType>(
       .select('artists(slug)')
       .eq('id', input.tourId)
       .single()
-    artistSlug = (tour?.artists as unknown as { slug: string | null } | null)?.slug ?? null
+    artistSlug = tour?.artists?.slug ?? null
   }
 
   const outcomes: ChannelOutcome[] = []

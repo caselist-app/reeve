@@ -75,7 +75,7 @@ export default async function HotelsPage({
       </Link>
 
       <div className="mb-8">
-        <p className="text-sm text-muted-foreground">{(tour.artists as unknown as { name: string } | null)?.name ?? ''}</p>
+        <p className="text-sm text-muted-foreground">{tour.artists?.name ?? ''}</p>
         <h1 className="text-2xl font-semibold">Hotel search</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {show.venue_name} &nbsp;·&nbsp; {formattedDate}

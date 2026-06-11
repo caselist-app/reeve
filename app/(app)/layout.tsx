@@ -15,7 +15,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Fetch all active tours for the sidebar tour selector.
   const { data: toursRaw } = await supabase
     .from('tours')
-    .select('id, name, status, artists(name)')
+    .select('id, name, status, artist_id, artists(name)')
     .eq('account_id', user.id)
     .neq('status', 'archived')
     .order('created_at', { ascending: false })
@@ -23,7 +23,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const tours = (toursRaw ?? []).map((t) => ({
     id: t.id,
     name: t.name,
-    artist_name: (t.artists as unknown as { name: string } | null)?.name ?? t.name,
+    artist_id: t.artist_id,
+    artist_name: t.artists?.name ?? t.name,
   }))
 
   // Read persisted sidebar width from cookie so the server renders it correctly

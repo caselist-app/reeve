@@ -7,6 +7,7 @@ import { Sidebar } from '@/components/nav/sidebar'
 interface Tour {
   id: string
   name: string
+  artist_id: string
   artist_name: string
 }
 

@@ -65,7 +65,7 @@ export const advanceReminderJob = task({
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://reeve.me'
     const shareUrl = `${appUrl}/a/${share.share_token}`
-    const artistName = (tour.artists as unknown as { name: string } | null)?.name ?? tour.name
+    const artistName = tour.artists?.name ?? tour.name
 
     const html = renderAdvanceReminderEmail({
       recipientName: person.name,
@@ -83,7 +83,7 @@ export const advanceReminderJob = task({
       to: person.contact_email,
       subject: `Reminder: ${doc.title} — ${artistName}`,
       html,
-      artist_slug: (tour.artists as unknown as { slug: string | null } | null)?.slug ?? null,
+      artist_slug: tour.artists?.slug ?? null,
       share_token: share.share_token,
     })
 
