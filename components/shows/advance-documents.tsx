@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useTransition, useCallback } from 'react'
+import { useState, useCallback } from 'react'
 import { Mail, RotateCcw, CheckCircle, Clock, Eye } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { sendRider } from '@/lib/actions/documents'
-import { SendRiderSheet, type SendableDocument, type ContactablePerson } from './send-rider-sheet'
+import { useSidePanel } from '@/stores/side-panel-store'
+import type { SendableDocument, ContactablePerson } from './send-rider-sheet'
 
 // A single document_shares row, shaped for the UI.
 export type ShareRow = {
@@ -50,10 +50,9 @@ function relativeTime(iso: string): string {
 interface ShareStatusProps {
   share: ShareRow
   onResend: (documentId: string) => void
-  isResending: boolean
 }
 
-function ShareStatus({ share, onResend, isResending }: ShareStatusProps) {
+function ShareStatus({ share, onResend }: ShareStatusProps) {
   const openedLabel = share.opened_at
     ? `Opened ${relativeTime(share.opened_at)}`
     : 'Not yet opened'
@@ -82,8 +81,7 @@ function ShareStatus({ share, onResend, isResending }: ShareStatusProps) {
         <button
           type="button"
           onClick={() => onResend(share.document_id)}
-          disabled={isResending}
-          className="flex items-center gap-1 shrink-0 text-xs text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+          className="flex items-center gap-1 shrink-0 text-xs text-muted-foreground hover:text-foreground transition-colors"
           title="Resend"
         >
           <RotateCcw className="h-3 w-3" />
@@ -100,12 +98,10 @@ export function AdvanceDocuments({
   departments,
   people,
 }: AdvanceDocumentsProps) {
-  const [sheetDept, setSheetDept] = useState<DepartmentShareData | null>(null)
+  const { open } = useSidePanel()
   const [sharesByDept, setSharesByDept] = useState<Record<string, ShareRow[]>>(
     Object.fromEntries(departments.map((d) => [d.department, d.shares]))
   )
-  const [resendingDoc, setResendingDoc] = useState<string | null>(null)
-  const [, startTransition] = useTransition()
 
   // Optimistically appends a new share row after a successful send.
   // The server returns immediately after enqueue; the row exists in the DB.
@@ -128,16 +124,31 @@ export function AdvanceDocuments({
     }))
   }
 
-  const handleResend = useCallback(
-    (dept: DepartmentShareData, documentId: string) => {
-      const doc = dept.documents.find((d) => d.id === documentId)
-      if (!doc) return
-
-      // Resend needs a recipient, open the sheet pre-filled to the same document.
-      // Simplest UX: re-open the send sheet so the TM picks the recipient.
-      setSheetDept(dept)
+  const openSendPanel = useCallback(
+    (dept: DepartmentShareData) => {
+      const firstDoc = dept.documents[0]
+      open({
+        type: 'send-rider',
+        tourId,
+        showId,
+        departmentLabel: dept.label,
+        documents: dept.documents,
+        people,
+        onSent: () => {
+          if (firstDoc) handleSent(dept.department, dept.docType, firstDoc.id, firstDoc.title)
+        },
+      })
     },
-    []
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [open, tourId, showId, people]
+  )
+
+  const handleResend = useCallback(
+    (dept: DepartmentShareData) => {
+      // Re-open the send panel so the TM picks the recipient for resend.
+      openSendPanel(dept)
+    },
+    [openSendPanel]
   )
 
   return (
@@ -153,12 +164,11 @@ export function AdvanceDocuments({
 
         return (
           <div key={dept.department} className="space-y-2">
-            {/* Department header */}
             <div className="flex items-center justify-between">
               <p className="text-sm font-medium">{dept.label}</p>
               <button
                 type="button"
-                onClick={() => setSheetDept(dept)}
+                onClick={() => openSendPanel(dept)}
                 className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 <Mail className="h-3.5 w-3.5" />
@@ -166,7 +176,6 @@ export function AdvanceDocuments({
               </button>
             </div>
 
-            {/* Share rows */}
             {shares.length === 0 ? (
               <p className="pl-2 text-xs text-muted-foreground">Not yet sent</p>
             ) : (
@@ -175,8 +184,7 @@ export function AdvanceDocuments({
                   <ShareStatus
                     key={share.id}
                     share={share}
-                    onResend={(docId) => handleResend(dept, docId)}
-                    isResending={resendingDoc === share.document_id}
+                    onResend={() => handleResend(dept)}
                   />
                 ))}
               </div>
@@ -186,23 +194,6 @@ export function AdvanceDocuments({
           </div>
         )
       })}
-
-      {/* Send sheet */}
-      {sheetDept && (
-        <SendRiderSheet
-          open={!!sheetDept}
-          onOpenChange={(open) => { if (!open) setSheetDept(null) }}
-          tourId={tourId}
-          showId={showId}
-          departmentLabel={sheetDept.label}
-          documents={sheetDept.documents}
-          people={people}
-          onSent={() => {
-            const firstDoc = sheetDept.documents[0]
-            if (firstDoc) handleSent(sheetDept.department, sheetDept.docType, firstDoc.id, firstDoc.title)
-          }}
-        />
-      )}
     </div>
   )
 }
