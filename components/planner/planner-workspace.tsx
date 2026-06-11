@@ -151,7 +151,7 @@ export function PlannerWorkspace({
           <label className="text-xs font-medium text-muted-foreground">
             Person
           </label>
-          <Select value={selectedPersonId} onValueChange={setSelectedPersonId}>
+          <Select value={selectedPersonId} onValueChange={handlePersonChange}>
             <SelectTrigger className="w-52">
               <SelectValue placeholder="Select person" />
             </SelectTrigger>
