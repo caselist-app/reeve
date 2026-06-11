@@ -1,12 +1,14 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback, useTransition } from 'react'
+import { useEffect, useRef, useCallback, useTransition } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import * as Dialog from '@radix-ui/react-dialog'
 import { Search, Calendar, Users, Settings, LayoutDashboard } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { getPaletteData } from '@/lib/actions/palette'
 import type { PaletteData } from '@/lib/actions/palette'
+import { useCommandPalette } from '@/stores/command-palette-store'
+import { useState } from 'react'
 
 type ResultItem = {
   id: string
@@ -60,14 +62,13 @@ function buildResults(tourId: string, data: PaletteData, query: string): ResultI
 export function CommandPalette() {
   const router = useRouter()
   const pathname = usePathname()
-  const [open, setOpen] = useState(false)
+  const { open, openPalette, closePalette, togglePalette } = useCommandPalette()
   const [query, setQuery] = useState('')
   const [selected, setSelected] = useState(0)
   const [data, setData] = useState<PaletteData | null>(null)
   const [isPending, startTransition] = useTransition()
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // Extract the active tour ID from the current URL.
   const tourIdMatch = pathname.match(/\/tours\/([^/]+)/)
   const tourId = tourIdMatch?.[1] ?? null
 
@@ -90,11 +91,11 @@ export function CommandPalette() {
 
   const navigate = useCallback(
     (href: string) => {
-      setOpen(false)
+      closePalette()
       setQuery('')
       router.push(href)
     },
-    [router],
+    [router, closePalette],
   )
 
   // ⌘K / Ctrl+K to toggle.
@@ -102,12 +103,12 @@ export function CommandPalette() {
     function onKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault()
-        setOpen((v) => !v)
+        togglePalette()
       }
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [])
+  }, [togglePalette])
 
   // Reset query + focus input on open.
   useEffect(() => {
@@ -132,7 +133,7 @@ export function CommandPalette() {
   }
 
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
+    <Dialog.Root open={open} onOpenChange={(v) => (v ? openPalette() : closePalette())}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
 

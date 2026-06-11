@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:is(.dark *));
+
 @theme inline {
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
@@ -29,16 +31,18 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  --font-sans: var(--font-geist);
+  --text-xs: 0.8125rem;
 }
 
 :root {
-  /* Sidebar — warm stone, light mode */
-  --sidebar: #f5f4f2;
-  --sidebar-foreground: #1c1917;
-  --sidebar-accent: #e7e5e0;
-  --sidebar-accent-foreground: #1c1917;
-  --sidebar-border: #e7e5e0;
-  --sidebar-muted-foreground: #78716c;
+  /* Sidebar — light mode */
+  --sidebar: #f5f5f5;
+  --sidebar-foreground: #1a1a1a;
+  --sidebar-accent: #e5e5e5;
+  --sidebar-accent-foreground: #1a1a1a;
+  --sidebar-border: #e5e5e5;
+  --sidebar-muted-foreground: #52525b;
 
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -58,19 +62,19 @@
   --border: oklch(0.922 0 0);
   --input: oklch(0.922 0 0);
   --ring: oklch(0.708 0 0);
-  --radius: 0.625rem;
+  --radius: 0.5rem;
 }
 
 .dark {
-  /* Sidebar — warm dark, dark mode */
-  --sidebar: #141412;
-  --sidebar-foreground: #fafaf9;
-  --sidebar-accent: #222220;
-  --sidebar-accent-foreground: #fafaf9;
-  --sidebar-border: #2a2926;
-  --sidebar-muted-foreground: #a8a29e;
+  /* Sidebar — dark mode */
+  --sidebar: #111111;
+  --sidebar-foreground: #fafafa;
+  --sidebar-accent: #1a1a1a;
+  --sidebar-accent-foreground: #fafafa;
+  --sidebar-border: #1f1f1f;
+  --sidebar-muted-foreground: #a3a3a3;
 
-  --background: oklch(0.145 0 0);
+  --background: #161616;
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);

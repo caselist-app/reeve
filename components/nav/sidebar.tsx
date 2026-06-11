@@ -10,9 +10,11 @@ import {
   FileText,
   Settings,
   LayoutDashboard,
+  Search,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TourSelector } from '@/components/nav/tour-selector'
+import { useCommandPalette } from '@/stores/command-palette-store'
 
 interface Tour {
   id: string
@@ -37,16 +39,16 @@ const TOUR_NAV = [
 const SECTION_ROUTE: Record<string, string> = {
   shows: 'shows',
   people: 'people',
-  transport: 'shows',    // per-show via planner; top-level page in a future brief
-  hotels: 'shows',       // per-show via hotel search; top-level page in a future brief
-  documents: 'settings', // not yet built
+  transport: 'transport',
+  hotels: 'hotels',
+  documents: 'settings', // not yet built — brief 18
   settings: 'settings',
 }
 
 export function Sidebar({ tours }: SidebarProps) {
   const pathname = usePathname()
+  const { openPalette } = useCommandPalette()
 
-  // Extract active tour ID from the current URL path.
   const tourIdMatch = pathname.match(/\/tours\/([^/]+)/)
   const activeTourId = tourIdMatch?.[1] ?? null
 
@@ -59,12 +61,10 @@ export function Sidebar({ tours }: SidebarProps) {
   function isActive(section: string): boolean {
     if (!activeTourId) return false
     // Match against the section name itself, not its stub destination.
-    // This prevents stubbed sections (transport, hotels) from inheriting
-    // the active state of the real page they point to.
+    // Prevents stubbed sections from inheriting the active state of the page they point to.
     return pathname.startsWith(`/tours/${activeTourId}/${section}`)
   }
 
-  // "Home" goes to the per-tour overview; fall back to / if no tour is active.
   const homeHref = activeTourId ? `/tours/${activeTourId}` : '/'
   const isHome = activeTourId
     ? pathname === `/tours/${activeTourId}`
@@ -75,6 +75,43 @@ export function Sidebar({ tours }: SidebarProps) {
       {/* Tour selector */}
       <div className="px-3 pt-5 pb-4">
         <TourSelector tours={tours} activeTourId={activeTourId} />
+      </div>
+
+      {/* Top nav: Home + Search */}
+      <div className="px-3 pb-2">
+        <nav className="space-y-0.5">
+          <Link
+            href={homeHref}
+            className={cn(
+              'flex items-center gap-2.5 rounded-lg px-2 h-7 text-xs font-medium transition-colors',
+              isHome
+                ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                : 'hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
+            )}
+            style={isHome ? undefined : { color: 'var(--sidebar-muted-foreground)' }}
+          >
+            <LayoutDashboard className="h-3.5 w-3.5 shrink-0" />
+            Home
+          </Link>
+
+          <button
+            onClick={openPalette}
+            className={cn(
+              'flex items-center gap-2.5 rounded-lg px-2 h-7 text-xs font-medium transition-colors w-full',
+              'hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
+            )}
+            style={{ color: 'var(--sidebar-muted-foreground)' }}
+          >
+            <Search className="h-3.5 w-3.5 shrink-0" />
+            Search
+            <kbd
+              className="ml-auto rounded border px-1 py-0.5 text-[10px] leading-none"
+              style={{ borderColor: 'var(--sidebar-border)', color: 'var(--sidebar-muted-foreground)' }}
+            >
+              ⌘K
+            </kbd>
+          </button>
+        </nav>
       </div>
 
       {/* Tour nav */}
@@ -97,7 +134,7 @@ export function Sidebar({ tours }: SidebarProps) {
                     'flex items-center gap-2.5 rounded-lg px-2 h-7 text-xs font-medium transition-colors',
                     active
                       ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                      : 'hover:bg-sidebar-accent/60',
+                      : 'hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
                   )}
                   style={active ? undefined : { color: 'var(--sidebar-muted-foreground)' }}
                 >
@@ -111,23 +148,6 @@ export function Sidebar({ tours }: SidebarProps) {
       )}
 
       <div className="flex-1" />
-
-      {/* Bottom nav */}
-      <div className="px-3 py-3 border-t" style={{ borderColor: 'var(--sidebar-border)' }}>
-        <Link
-          href={homeHref}
-          className={cn(
-            'flex items-center gap-2.5 rounded-lg px-2 h-7 text-xs font-medium transition-colors',
-            isHome
-              ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-              : 'hover:bg-sidebar-accent/60',
-          )}
-          style={isHome ? undefined : { color: 'var(--sidebar-muted-foreground)' }}
-        >
-          <LayoutDashboard className="h-3.5 w-3.5 shrink-0" />
-          Home
-        </Link>
-      </div>
     </aside>
   )
 }

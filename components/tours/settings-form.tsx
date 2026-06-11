@@ -1,6 +1,7 @@
 'use client'
 
-import { useActionState, useState, useId, useRef, useTransition } from 'react'
+import { useActionState, useState, useId, useRef, useTransition, useEffect } from 'react'
+import { useTheme } from 'next-themes'
 import { updateTourAction, archiveTourAction } from '@/lib/actions/tours'
 import { TOUR_TIMEZONES } from '@/lib/validators/tour'
 import type { Tables } from '@/lib/types/database'
@@ -55,6 +56,10 @@ export function TourSettingsForm({ tour }: Props) {
 
   const [archivePending, startArchive] = useTransition()
   const [archiveError, setArchiveError] = useState<string | null>(null)
+
+  const { theme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
 
   // Derived: true only after a successful save (not on initial render).
   const saved = attempted.current && !pending && !state.error
@@ -187,6 +192,31 @@ export function TourSettingsForm({ tour }: Props) {
           {state.error && <p className="text-sm text-destructive">{state.error}</p>}
         </div>
       </form>
+
+      <Separator />
+
+      <div className="space-y-3">
+        <h2 className="text-base font-medium">Appearance</h2>
+        <p className="text-sm text-muted-foreground">Choose how Reeve looks on this device.</p>
+        {mounted && (
+          <div className="flex gap-2">
+            {(['light', 'dark', 'system'] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTheme(t)}
+                className={`rounded-md border px-3 py-1.5 text-sm capitalize transition-colors ${
+                  theme === t
+                    ? 'border-foreground bg-foreground text-background'
+                    : 'border-border text-muted-foreground hover:border-foreground/40 hover:text-foreground'
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       <Separator />
 
