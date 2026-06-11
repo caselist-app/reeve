@@ -11,7 +11,16 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { ContactSheet } from '@/components/roster/contact-sheet'
 
-type ContactRow = Tables<'contacts'> & { tourCount: number }
+// Subset of contacts fetched by the roster page. Emergency contact details,
+// passport numbers, and wage defaults are excluded from the list payload
+// to reduce browser exposure of sensitive data. They load when the sheet opens.
+type ContactRow = Omit<
+  Tables<'contacts'>,
+  | 'emergency_contact_name' | 'emergency_contact_phone'
+  | 'passport_number'
+  | 'default_per_diem_rate' | 'default_per_diem_currency'
+  | 'default_daily_wage_rate' | 'default_wage_currency'
+> & { tourCount: number }
 
 interface Props {
   contacts: ContactRow[]

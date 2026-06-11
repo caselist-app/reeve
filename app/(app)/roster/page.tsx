@@ -8,7 +8,14 @@ export default async function RosterPage() {
   const supabase = await createClient()
 
   const [{ data: contacts }, { data: memberships }] = await Promise.all([
-    supabase.from('contacts').select('*').eq('account_id', user.id).order('name'),
+    // Select display + list-action columns only. Emergency contact details,
+    // wage defaults, and phone numbers are not shown in the roster list view.
+    // Full record loads when the contact sheet opens.
+    supabase
+      .from('contacts')
+      .select('id, account_id, name, photo_url, contact_email, whatsapp_number, sms_number, contact_phone, preferred_channel, home_city, tshirt_size, dietary, allergies, passport_expiry, passport_country, default_role, default_person_type, notes, created_at, updated_at')
+      .eq('account_id', user.id)
+      .order('name'),
     // people RLS scopes to the caller's tours, so this is every membership the
     // caller owns. Used to count how many tours each contact is on.
     supabase.from('people').select('contact_id, tour_id'),

@@ -1,6 +1,6 @@
 import { anthropic, MODELS } from '@/lib/ai/client'
 import { EMAIL_EXTRACTION_SYSTEM_PROMPT } from '@/lib/ai/prompts'
-import { createAdminClient } from '@/lib/supabase/admin'
+import { logAiCall } from '@/lib/ai/log'
 
 export type ExtractEmailForwardInput = {
   tour_id: string
@@ -39,20 +39,6 @@ export type ExtractionProposal = {
   }>
 }
 
-async function logAiCall(params: {
-  tour_id: string
-  model: string
-  trigger_case: 'crew_qa' | 'email_extraction' | 'logistics_synthesis'
-  input_tokens: number
-  output_tokens: number
-  cache_read_tokens: number
-  cache_write_tokens: number
-  duration_ms: number
-}): Promise<void> {
-  const admin = createAdminClient()
-  await admin.from('ai_call_log').insert(params)
-}
-
 export async function extractEmailForward(
   input: ExtractEmailForwardInput
 ): Promise<ExtractionProposal> {
@@ -61,7 +47,14 @@ export async function extractEmailForward(
   const response = await anthropic.messages.create({
     model: MODELS.sonnet,
     max_tokens: 2048,
-    system: EMAIL_EXTRACTION_SYSTEM_PROMPT,
+    // System as an array enables prompt caching.
+    system: [
+      {
+        type: 'text' as const,
+        text: EMAIL_EXTRACTION_SYSTEM_PROMPT,
+        cache_control: { type: 'ephemeral' },
+      },
+    ],
     tools: [
       {
         name: 'extract_tour_data',
@@ -140,8 +133,8 @@ export async function extractEmailForward(
     trigger_case: 'email_extraction',
     input_tokens: response.usage.input_tokens,
     output_tokens: response.usage.output_tokens,
-    cache_read_tokens: (response.usage as unknown as Record<string, number>).cache_read_input_tokens ?? 0,
-    cache_write_tokens: (response.usage as unknown as Record<string, number>).cache_creation_input_tokens ?? 0,
+    cache_read_tokens: response.usage.cache_read_input_tokens ?? 0,
+    cache_write_tokens: response.usage.cache_creation_input_tokens ?? 0,
     duration_ms: Date.now() - start,
   })
 

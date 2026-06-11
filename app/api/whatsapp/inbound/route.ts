@@ -121,19 +121,39 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // Map the sender number to a person across the TM's tours. The number
-        // lives on the contact; a number maps to at most one person per tour
-        // (enforced by trigger), but could appear on two tours. Pick the most
-        // recently created tour so the person gets the active tour context.
+        // Map the sender number to a person across the TM's active tours. The
+        // number lives on the contact; a number maps to at most one person per
+        // tour (enforced by unique index), but the same contact can be on
+        // multiple tours (as crew on two separate legs, for example).
+        // Fetch all matches and select the best one in code: an active or
+        // planning tour beats completed or archived. Within the same status,
+        // prefer the most recently created tour.
         const { data: people } = await admin
           .from('people')
-          .select('id, tour_id, tours!inner(created_at), contacts!inner(whatsapp_number)')
+          .select('id, tour_id, tours!inner(id, status, created_at), contacts!inner(whatsapp_number)')
           .eq('contacts.whatsapp_number', fromNumber)
-          .order('tours.created_at', { ascending: false })
-          .limit(1)
 
-        const person = people?.[0]
-        if (!person) continue  // Unknown number - no tour context, drop silently.
+        if (!people || people.length === 0) continue  // Unknown number.
+
+        // Sort: active > planning > completed > archived, then newest first.
+        const STATUS_ORDER: Record<string, number> = {
+          active: 0,
+          planning: 1,
+          completed: 2,
+          archived: 3,
+        }
+
+        const sorted = [...people].sort((a, b) => {
+          const ta = a.tours as { status: string; created_at: string } | null
+          const tb = b.tours as { status: string; created_at: string } | null
+          const sa = STATUS_ORDER[ta?.status ?? 'archived'] ?? 3
+          const sb = STATUS_ORDER[tb?.status ?? 'archived'] ?? 3
+          if (sa !== sb) return sa - sb
+          return new Date(tb?.created_at ?? 0).getTime() - new Date(ta?.created_at ?? 0).getTime()
+        })
+
+        const person = sorted[0]
+        if (!person) continue  // Should not happen given length check above.
 
         // Enqueue the router job. The handler does nothing else.
         await tasks.trigger('whatsapp-router', {
