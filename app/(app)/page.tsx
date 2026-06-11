@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
 
-export default function AppPage() {
+export default async function AppPage() {
   redirect('/tours/new')
 }
