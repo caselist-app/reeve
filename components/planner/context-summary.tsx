@@ -1,7 +1,9 @@
+import { type ReactNode } from 'react'
 import { MapPin, Navigation } from 'lucide-react'
 
 interface ContextSummaryProps {
-  fromHub: string | null
+  // fromNode replaces the plain "From" text with a custom element (e.g. DepartureSelector).
+  fromNode: ReactNode
   toHub: string | null
   venueName: string
   requiredSiteArrival: string | null
@@ -18,7 +20,7 @@ function formatTime(iso: string, tz: string | null): string {
 }
 
 export function ContextSummary({
-  fromHub,
+  fromNode,
   toHub,
   venueName,
   requiredSiteArrival,
@@ -32,7 +34,7 @@ export function ContextSummary({
           <Navigation className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
           <div>
             <p className="text-xs text-muted-foreground">From</p>
-            <p className="font-medium">{fromHub ?? 'Unknown — set home city'}</p>
+            {fromNode}
           </div>
         </div>
 

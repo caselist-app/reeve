@@ -19,6 +19,7 @@ interface Show {
   tour_id: string
   venue_name: string
   date: string
+  address: string | null
   venue_lat: number | null
   venue_lng: number | null
 }
@@ -52,8 +53,9 @@ export function HotelWorkspace({
   const [planError, setPlanError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
 
-  // Venue not geocoded yet — hotel search will fail.
-  const geocoded = show.venue_lat != null && show.venue_lng != null
+  // Search is available if lat/lng is cached or an address is present.
+  // planHotels geocodes on the fly when lat/lng is null but address is set.
+  const geocoded = (show.venue_lat != null && show.venue_lng != null) || !!show.address
 
   function handleSearch() {
     setPlanError(null)

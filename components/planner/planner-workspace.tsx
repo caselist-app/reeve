@@ -5,6 +5,7 @@ import { AIRPORT_TRANSIT_MIN } from '@/lib/logistics/hub-resolver'
 import { planTravel } from '@/lib/logistics/plan'
 import { ContextSummary } from '@/components/planner/context-summary'
 import { OptionRow } from '@/components/planner/option-row'
+import { DepartureSelector } from '@/components/planner/departure-selector'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -26,6 +27,7 @@ interface Show {
   id: string
   tour_id: string
   venue_name: string
+  date: string
   load_in_at: string | null
   hub_resolved_at: string | null
   transport_hub_iata: string | null
@@ -33,11 +35,18 @@ interface Show {
   hub_ground_minutes: number | null
 }
 
+interface PriorShow {
+  venue_name: string | null
+  date: string
+  hub: string
+}
+
 interface PlannerWorkspaceProps {
   show: Show
   people: Person[]
   tourId: string
   timezone: string | null
+  priorShow: PriorShow | null
 }
 
 function addMinutes(iso: string, minutes: number): string {
@@ -49,10 +58,14 @@ export function PlannerWorkspace({
   people,
   tourId,
   timezone,
+  priorShow,
 }: PlannerWorkspaceProps) {
   const defaultPerson = people.find((p) => p.home_city) ?? people[0]
   const [selectedPersonId, setSelectedPersonId] = useState(defaultPerson?.id ?? '')
-  const [results, setResults] = useState<TravelOption[] | null>(null)
+  // null = auto-resolve (getFromHub); string = TM-selected IATA override
+  const [fromOverride, setFromOverride] = useState<string | null>(null)
+  const [sameDayResults, setSameDayResults] = useState<TravelOption[] | null>(null)
+  const [nightBeforeResults, setNightBeforeResults] = useState<TravelOption[] | null>(null)
   const [planError, setPlanError] = useState<string | null>(null)
   const [recordedIds, setRecordedIds] = useState<Set<string>>(new Set())
   const [isPending, startTransition] = useTransition()
@@ -65,23 +78,56 @@ export function PlannerWorkspace({
       ? addMinutes(show.load_in_at, -(groundMin + AIRPORT_TRANSIT_MIN))
       : null
 
-  // The fromHub for the context summary is resolved server-side only when the
-  // plan runs. Show a placeholder until then.
   const selectedPerson = people.find((p) => p.id === selectedPersonId)
-  const fromHubDisplay = selectedPerson?.home_city ?? null
+
+  // Reset everything whenever the person changes.
+  function handlePersonChange(personId: string) {
+    setSelectedPersonId(personId)
+    setFromOverride(null)
+    setSameDayResults(null)
+    setNightBeforeResults(null)
+  }
+
+  // Display label for the "From" line. When an override is set we show the IATA.
+  // Otherwise fall back to the person's home city (the auto-resolve default).
+  const fromDisplay = fromOverride
+    ? { label: fromOverride, iata: fromOverride }
+    : { label: selectedPerson?.home_city ?? '—', iata: selectedPerson?.home_city ?? '' }
 
   function handleRunPlan() {
     if (!selectedPersonId) return
     setPlanError(null)
-    setResults(null)
+    setSameDayResults(null)
+    setNightBeforeResults(null)
 
     startTransition(async () => {
       try {
         const options = await planTravel({
           person_id: selectedPersonId,
           show_id: show.id,
+          from_override: fromOverride,
         })
-        setResults(options)
+        setSameDayResults(options)
+
+        // If every same-day option is infeasible (or none exist), automatically
+        // search the night before so the TM has an actionable alternative.
+        const allInfeasible = options.length === 0 || options.every((o) => !o.feasible)
+        if (allInfeasible) {
+          const prevDate = new Date(show.date)
+          prevDate.setDate(prevDate.getDate() - 1)
+          const dateStr = prevDate.toISOString().slice(0, 10)
+          try {
+            const nightOptions = await planTravel({
+              person_id: selectedPersonId,
+              show_id: show.id,
+              from_override: fromOverride,
+              date_override: dateStr,
+            })
+            setNightBeforeResults(nightOptions)
+          } catch {
+            // Night-before search failing is non-fatal — same-day results still show.
+          }
+        }
       } catch (err) {
         setPlanError(err instanceof Error ? err.message : 'Something went wrong.')
       }
@@ -125,9 +171,20 @@ export function PlannerWorkspace({
         </Button>
       </div>
 
-      {/* Context summary */}
+      {/* Context summary — "From" is an interactive departure selector */}
       <ContextSummary
-        fromHub={fromHubDisplay}
+        fromNode={
+          <DepartureSelector
+            current={fromDisplay}
+            priorShow={priorShow}
+            homeCity={selectedPerson?.home_city ?? null}
+            onSelect={(iata) => {
+              setFromOverride(iata)
+              setSameDayResults(null)
+              setNightBeforeResults(null)
+            }}
+          />
+        }
         toHub={toHub}
         venueName={show.venue_name}
         requiredSiteArrival={requiredSiteArrival}
@@ -142,34 +199,78 @@ export function PlannerWorkspace({
         </p>
       )}
 
-      {/* Results */}
-      {results !== null && (
-        <div className="space-y-2">
-          {results.length === 0 ? (
+      {/* Same-day results */}
+      {sameDayResults !== null && (
+        <div className="space-y-3">
+          {sameDayResults.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No options found for this route and date.
             </p>
           ) : (
-            results.map((option, i) => (
+            sameDayResults.map((option, i) => (
               <OptionRow
-                key={`${option.mode}-${option.leg_ref}-${option.depart_at}-${i}`}
+                key={`same-${option.mode}-${option.leg_ref}-${option.depart_at}-${i}`}
                 option={option}
                 tourId={tourId}
                 showId={show.id}
                 personId={selectedPersonId}
                 timezone={timezone}
+                venueName={show.venue_name}
                 onRecorded={(segmentId) =>
                   setRecordedIds((prev) => new Set(prev).add(segmentId))
                 }
               />
             ))
           )}
-          {recordedIds.size > 0 && (
-            <p className="pt-1 text-xs text-muted-foreground">
-              {recordedIds.size} option{recordedIds.size > 1 ? 's' : ''} recorded. Book on the carrier and paste the reference into the transport detail.
+        </div>
+      )}
+
+      {/* Night-before results — shown when all same-day options are infeasible */}
+      {nightBeforeResults !== null && (
+        <div className="space-y-3">
+          {/* Section header with hotel nudge */}
+          <div className="flex items-center justify-between pt-2">
+            <div>
+              <h3 className="text-sm font-semibold">Travel the night before</h3>
+              <p className="text-xs text-muted-foreground">
+                No same-day options make load-in. These get them there the evening before.
+              </p>
+            </div>
+            <a
+              href={`/tours/${tourId}/shows/${show.id}/hotels`}
+              className="flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-300"
+            >
+              Hotel needed
+            </a>
+          </div>
+
+          {nightBeforeResults.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No options found for the evening before either.
             </p>
+          ) : (
+            nightBeforeResults.map((option, i) => (
+              <OptionRow
+                key={`night-${option.mode}-${option.leg_ref}-${option.depart_at}-${i}`}
+                option={option}
+                tourId={tourId}
+                showId={show.id}
+                personId={selectedPersonId}
+                timezone={timezone}
+                venueName={show.venue_name}
+                onRecorded={(segmentId) =>
+                  setRecordedIds((prev) => new Set(prev).add(segmentId))
+                }
+              />
+            ))
           )}
         </div>
+      )}
+
+      {recordedIds.size > 0 && (
+        <p className="pt-1 text-xs text-muted-foreground">
+          {recordedIds.size} option{recordedIds.size > 1 ? 's' : ''} recorded. Book on the carrier and paste the reference into the transport detail.
+        </p>
       )}
     </div>
   )

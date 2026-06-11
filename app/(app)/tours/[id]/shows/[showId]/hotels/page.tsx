@@ -26,7 +26,7 @@ export default async function HotelsPage({
   const [{ data: show }, { data: people }] = await Promise.all([
     supabase
       .from('shows')
-      .select('id, tour_id, venue_name, date, venue_lat, venue_lng')
+      .select('id, tour_id, venue_name, date, address, venue_lat, venue_lng')
       .eq('id', showId)
       .eq('tour_id', id)
       .single(),

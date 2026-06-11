@@ -5,6 +5,7 @@ import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { PlannerWorkspace } from '@/components/planner/planner-workspace'
 import { BoardingPassUploader, type TransportAssignmentRow } from '@/components/planner/boarding-pass-uploader'
+import { resolveHub } from '@/lib/logistics/hub-resolver'
 
 export default async function PlannerPage({
   params,
@@ -56,6 +57,41 @@ export default async function PlannerPage({
   ])
 
   if (!show) redirect(`/tours/${id}/shows`)
+
+  // Prior show — needs show.date, so fetched after the redirect guard.
+  const { data: priorShowRaw } = await supabase
+    .from('shows')
+    .select('id, venue_name, date, transport_hub_iata, transport_hub_rail, hub_resolved_at')
+    .eq('tour_id', id)
+    .lt('date', show.date)
+    .order('date', { ascending: false })
+    .limit(1)
+    .single()
+
+  // Only offer the prior show as a departure option if it has a resolved hub code.
+  const priorShow = priorShowRaw?.hub_resolved_at && (priorShowRaw.transport_hub_iata || priorShowRaw.transport_hub_rail)
+    ? {
+        venue_name: priorShowRaw.venue_name,
+        date: priorShowRaw.date,
+        hub: (priorShowRaw.transport_hub_iata ?? priorShowRaw.transport_hub_rail) as string,
+      }
+    : null
+
+  // If hub resolution hasn't run yet, or ran but yielded no usable hub code
+  // (null/null from a previous fallback run), resolve inline now. resolveHub
+  // caches the result on the show row so subsequent page loads skip this step.
+  const hubMissing = !show.hub_resolved_at || (!show.transport_hub_iata && !show.transport_hub_rail)
+  if (hubMissing) {
+    try {
+      const hub = await resolveHub(show.id)
+      show.hub_resolved_at = new Date().toISOString()
+      show.transport_hub_iata = hub.iata
+      show.transport_hub_rail = hub.rail
+      show.hub_ground_minutes = hub.ground_minutes
+    } catch {
+      // Non-fatal: the workspace will show the "resolving" state if this fails.
+    }
+  }
 
   // Shape assignment rows into a flat structure for the boarding pass uploader.
   const assignments: TransportAssignmentRow[] = (assignmentRows ?? []).map((a) => {
@@ -116,6 +152,7 @@ export default async function PlannerPage({
             people={people}
             tourId={id}
             timezone={tour.timezone}
+            priorShow={priorShow}
           />
 
           {assignments.length > 0 && (
