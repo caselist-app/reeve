@@ -79,11 +79,10 @@ export async function planTravel(
     // Redis unavailable, proceed without cache.
   }
 
-  // required_site_arrival: load-in minus ground transfer and airport buffer.
-  // Conservative by design; the TM may knowingly accept a tighter option.
-  const requiredSiteArrival = show.load_in_at
-    ? addMinutes(show.load_in_at, -(groundMin + AIRPORT_TRANSIT_MIN))
-    : null
+  // required_site_arrival: load-in is when crew must be on site.
+  // door_to_site_at (arrive_at + transit + ground) is compared directly against
+  // this, so do not subtract transit time here or it gets counted twice.
+  const requiredSiteArrival = show.load_in_at ?? null
 
   const railParams = {
     from_station: fromHub,
