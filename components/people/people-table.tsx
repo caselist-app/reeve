@@ -1,6 +1,7 @@
 'use client'
 
 import type { Tables } from '@/lib/types/database'
+import type { PersonWithContact } from '@/components/people/people-view'
 import { Button } from '@/components/ui/button'
 import {
   AlertDialog,
@@ -15,9 +16,9 @@ import {
 } from '@/components/ui/alert-dialog'
 
 interface Props {
-  people: Tables<'people'>[]
+  people: PersonWithContact[]
   crewDetails: Record<string, Tables<'crew_detail'>>
-  onEdit: (person: Tables<'people'>) => void
+  onEdit: (person: PersonWithContact) => void
   onRemove: (personId: string) => void
 }
 
@@ -46,16 +47,16 @@ export function PeopleTable({ people, onEdit, onRemove }: Props) {
         <tbody>
           {people.map((person) => (
             <tr key={person.id} className="border-b last:border-0 transition-colors hover:bg-muted/30">
-              <td className="px-4 py-2.5 font-medium">{person.name}</td>
+              <td className="px-4 py-2.5 font-medium">{person.contacts.name}</td>
               <td className="px-4 py-2.5 text-muted-foreground">{person.role ?? '-'}</td>
-              <td className="px-4 py-2.5 font-mono text-xs">{person.whatsapp_number ?? '-'}</td>
-              <td className="px-4 py-2.5">{formatExpiry(person.passport_expiry)}</td>
+              <td className="px-4 py-2.5 font-mono text-xs">{person.contacts.whatsapp_number ?? '-'}</td>
+              <td className="px-4 py-2.5">{formatExpiry(person.contacts.passport_expiry)}</td>
               <td className="px-4 py-2.5">
                 <div className="flex justify-end gap-1">
                   <Button variant="ghost" size="sm" onClick={() => onEdit(person)}>
                     Edit
                   </Button>
-                  <RemoveButton name={person.name} onConfirm={() => onRemove(person.id)} />
+                  <RemoveButton name={person.contacts.name} onConfirm={() => onRemove(person.id)} />
                 </div>
               </td>
             </tr>

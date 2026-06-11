@@ -4,6 +4,7 @@ import { useState, useId, useTransition, useEffect } from 'react'
 import { addPerson, updatePerson } from '@/lib/actions/people'
 import { personSchema, crewDetailSchema } from '@/lib/validators/person'
 import type { Tables } from '@/lib/types/database'
+import type { PersonWithContact } from '@/components/people/people-view'
 import {
   Sheet,
   SheetContent,
@@ -25,14 +26,14 @@ import {
 } from '@/components/ui/select'
 
 type PersonType = 'artist' | 'crew' | 'management' | 'support'
-type Channel = 'whatsapp' | 'sms' | ''
+type Channel = 'whatsapp' | 'email' | 'both' | ''
 
 const CURRENCIES = ['GBP', 'USD', 'EUR', 'AUD', 'CAD', 'CHF', 'DKK', 'NOK', 'SEK', 'JPY', 'NZD']
 
 interface Props {
   tourId: string
   defaultType: PersonType
-  person: Tables<'people'> | null
+  person: PersonWithContact | null
   crewDetail: Tables<'crew_detail'> | null
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -56,7 +57,7 @@ export function PersonSheet({
     (person?.person_type as PersonType) ?? defaultType
   )
   const [preferredChannel, setPreferredChannel] = useState<Channel>(
-    (person?.preferred_channel as Channel) ?? ''
+    (person?.contacts.preferred_channel as Channel) ?? ''
   )
   const [perDiemCurrency, setPerDiemCurrency] = useState(crewDetail?.per_diem_currency ?? 'GBP')
   const [wageCurrency, setWageCurrency] = useState(crewDetail?.wage_currency ?? 'GBP')
@@ -65,7 +66,7 @@ export function PersonSheet({
   useEffect(() => {
     if (open) {
       setPersonType((person?.person_type as PersonType) ?? defaultType)
-      setPreferredChannel((person?.preferred_channel as Channel) ?? '')
+      setPreferredChannel((person?.contacts.preferred_channel as Channel) ?? '')
       setPerDiemCurrency(crewDetail?.per_diem_currency ?? 'GBP')
       setWageCurrency(crewDetail?.wage_currency ?? 'GBP')
       setError(null)
@@ -88,7 +89,7 @@ export function PersonSheet({
       role: str('role'),
       contact_email: str('contact_email'),
       contact_phone: str('contact_phone'),
-      preferred_channel: (preferredChannel || undefined) as 'whatsapp' | 'sms' | undefined,
+      preferred_channel: (preferredChannel || undefined) as 'whatsapp' | 'email' | 'both' | undefined,
       whatsapp_number: str('whatsapp_number'),
       sms_number: str('sms_number'),
       emergency_contact_name: str('emergency_contact_name'),
@@ -141,7 +142,7 @@ export function PersonSheet({
       <SheetContent className="overflow-y-auto sm:max-w-lg">
         <SheetHeader>
           <SheetTitle>
-            {isEditing ? `Edit ${person.name}` : `Add ${personType}`}
+            {isEditing ? `Edit ${person.contacts.name}` : `Add ${personType}`}
           </SheetTitle>
           <SheetDescription>
             {isEditing ? "Update this person's details." : 'Add someone to the tour party.'}
@@ -181,7 +182,7 @@ export function PersonSheet({
             <Input
               id={`${formId}-name`}
               name="name"
-              defaultValue={person?.name}
+              defaultValue={person?.contacts.name}
               required
             />
           </div>
@@ -205,7 +206,7 @@ export function PersonSheet({
               id={`${formId}-contact_email`}
               name="contact_email"
               type="email"
-              defaultValue={person?.contact_email ?? ''}
+              defaultValue={person?.contacts.contact_email ?? ''}
             />
           </div>
 
@@ -214,7 +215,7 @@ export function PersonSheet({
             <Input
               id={`${formId}-contact_phone`}
               name="contact_phone"
-              defaultValue={person?.contact_phone ?? ''}
+              defaultValue={person?.contacts.contact_phone ?? ''}
             />
           </div>
 
@@ -230,7 +231,8 @@ export function PersonSheet({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                  <SelectItem value="sms">SMS</SelectItem>
+                  <SelectItem value="email">Email</SelectItem>
+                  <SelectItem value="both">Both</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -243,7 +245,7 @@ export function PersonSheet({
               <Input
                 id={`${formId}-whatsapp_number`}
                 name="whatsapp_number"
-                defaultValue={person?.whatsapp_number ?? ''}
+                defaultValue={person?.contacts.whatsapp_number ?? ''}
                 placeholder="+447700900123"
               />
             </div>
@@ -254,7 +256,7 @@ export function PersonSheet({
             <Input
               id={`${formId}-sms_number`}
               name="sms_number"
-              defaultValue={person?.sms_number ?? ''}
+              defaultValue={person?.contacts.sms_number ?? ''}
             />
           </div>
 
@@ -266,7 +268,7 @@ export function PersonSheet({
             <Input
               id={`${formId}-emergency_contact_name`}
               name="emergency_contact_name"
-              defaultValue={person?.emergency_contact_name ?? ''}
+              defaultValue={person?.contacts.emergency_contact_name ?? ''}
             />
           </div>
 
@@ -275,7 +277,7 @@ export function PersonSheet({
             <Input
               id={`${formId}-emergency_contact_phone`}
               name="emergency_contact_phone"
-              defaultValue={person?.emergency_contact_phone ?? ''}
+              defaultValue={person?.contacts.emergency_contact_phone ?? ''}
             />
           </div>
 
@@ -287,7 +289,7 @@ export function PersonSheet({
             <Input
               id={`${formId}-home_city`}
               name="home_city"
-              defaultValue={person?.home_city ?? ''}
+              defaultValue={person?.contacts.home_city ?? ''}
               placeholder="London"
             />
           </div>
@@ -298,7 +300,7 @@ export function PersonSheet({
               <Input
                 id={`${formId}-passport_number`}
                 name="passport_number"
-                defaultValue={person?.passport_number ?? ''}
+                defaultValue={person?.contacts.passport_number ?? ''}
               />
             </div>
             <div className="space-y-2">
@@ -307,7 +309,7 @@ export function PersonSheet({
                 id={`${formId}-passport_expiry`}
                 name="passport_expiry"
                 type="date"
-                defaultValue={person?.passport_expiry ?? ''}
+                defaultValue={person?.contacts.passport_expiry ?? ''}
               />
             </div>
           </div>
@@ -317,7 +319,7 @@ export function PersonSheet({
             <Input
               id={`${formId}-passport_country`}
               name="passport_country"
-              defaultValue={person?.passport_country ?? ''}
+              defaultValue={person?.contacts.passport_country ?? ''}
               placeholder="GBR"
             />
           </div>
@@ -333,7 +335,7 @@ export function PersonSheet({
             <Textarea
               id={`${formId}-dietary`}
               name="dietary"
-              defaultValue={person?.dietary ?? ''}
+              defaultValue={person?.contacts.dietary ?? ''}
               placeholder="Vegan"
               rows={2}
             />
@@ -344,7 +346,7 @@ export function PersonSheet({
             <Textarea
               id={`${formId}-allergies`}
               name="allergies"
-              defaultValue={person?.allergies ?? ''}
+              defaultValue={person?.contacts.allergies ?? ''}
               placeholder="Nuts, dairy"
               rows={2}
             />
@@ -355,7 +357,7 @@ export function PersonSheet({
             <Input
               id={`${formId}-tshirt_size`}
               name="tshirt_size"
-              defaultValue={person?.tshirt_size ?? ''}
+              defaultValue={person?.contacts.tshirt_size ?? ''}
               placeholder="L"
             />
           </div>

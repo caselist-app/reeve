@@ -8,6 +8,28 @@ import type { z } from 'zod'
 
 export type PeopleActionState = { error: string | null; personId?: string }
 
+// Maps the form DTO's identity fields to a contacts row. Empty strings become
+// null so DB constraints (and the date column) are satisfied.
+function contactIdentityFields(p: z.infer<typeof personSchema>) {
+  return {
+    name: p.name,
+    contact_email: p.contact_email || null,
+    contact_phone: p.contact_phone || null,
+    preferred_channel: p.preferred_channel ?? 'whatsapp',
+    whatsapp_number: p.whatsapp_number || null,
+    sms_number: p.sms_number || null,
+    emergency_contact_name: p.emergency_contact_name || null,
+    emergency_contact_phone: p.emergency_contact_phone || null,
+    dietary: p.dietary || null,
+    allergies: p.allergies || null,
+    home_city: p.home_city || null,
+    passport_number: p.passport_number || null,
+    passport_expiry: p.passport_expiry || null,
+    passport_country: p.passport_country || null,
+    tshirt_size: p.tshirt_size || null,
+  }
+}
+
 export async function addPerson(
   tourId: string,
   data: z.infer<typeof personSchema>,
@@ -18,6 +40,16 @@ export async function addPerson(
   const parsedPerson = personSchema.safeParse(data)
   if (!parsedPerson.success) {
     return { error: parsedPerson.error.issues[0].message }
+  }
+  const p = parsedPerson.data
+
+  let detail: z.infer<typeof crewDetailSchema> | undefined
+  if (p.person_type === 'crew' && crewDetail) {
+    const parsedDetail = crewDetailSchema.safeParse(crewDetail)
+    if (!parsedDetail.success) {
+      return { error: parsedDetail.error.issues[0].message }
+    }
+    detail = parsedDetail.data
   }
 
   const supabase = await createClient()
@@ -35,41 +67,60 @@ export async function addPerson(
     return { error: 'Tour not found.' }
   }
 
-  const { data: person, error: personError } = await supabase
-    .from('people')
+  // 1. Identity -> a new contact (single source of truth). Its defaults seed the
+  // per-tour terms for any future tour this contact is added to.
+  const { data: contact, error: contactError } = await supabase
+    .from('contacts')
     .insert({
-      tour_id: tourId,
-      ...parsedPerson.data,
-      // Coerce empty strings to null so DB constraints are satisfied.
-      contact_email: parsedPerson.data.contact_email || null,
-      whatsapp_number: parsedPerson.data.whatsapp_number || null,
+      account_id: user.id,
+      ...contactIdentityFields(p),
+      default_person_type: p.person_type,
+      default_role: p.role || null,
+      default_per_diem_rate: detail?.per_diem_rate ?? null,
+      default_per_diem_currency: detail?.per_diem_currency ?? null,
+      default_daily_wage_rate: detail?.daily_wage_rate ?? null,
+      default_wage_currency: detail?.wage_currency ?? null,
     })
     .select('id')
     .single()
 
-  if (personError) {
-    if (personError.code === '23505') {
-      return await whatsappConflictError(supabase, tourId, parsedPerson.data.whatsapp_number)
-    }
-    return { error: personError.message }
+  if (contactError || !contact) {
+    return { error: contactError?.message ?? 'Could not save contact.' }
   }
 
-  if (parsedPerson.data.person_type === 'crew' && crewDetail) {
-    const parsedDetail = crewDetailSchema.safeParse(crewDetail)
-    if (!parsedDetail.success) {
-      // Roll back: remove the person row so we do not leave an orphan.
-      await supabase.from('people').delete().eq('id', person.id)
-      return { error: parsedDetail.error.issues[0].message }
-    }
+  // 2. Membership -> people. The per-tour WhatsApp uniqueness trigger raises
+  // 23505 if another person on this tour already holds the number.
+  const { data: person, error: personError } = await supabase
+    .from('people')
+    .insert({
+      tour_id: tourId,
+      contact_id: contact.id,
+      person_type: p.person_type,
+      role: p.role || null,
+    })
+    .select('id')
+    .single()
 
+  if (personError || !person) {
+    // Roll back the contact we just created so we do not orphan it.
+    await supabase.from('contacts').delete().eq('id', contact.id)
+    if (personError?.code === '23505') {
+      return await whatsappConflictError(supabase, tourId, p.whatsapp_number)
+    }
+    return { error: personError?.message ?? 'Could not add person.' }
+  }
+
+  // 3. Per-tour rates.
+  if (detail) {
     const { error: detailError } = await supabase.from('crew_detail').insert({
       person_id: person.id,
       tour_id: tourId,
-      ...parsedDetail.data,
+      ...detail,
     })
 
     if (detailError) {
       await supabase.from('people').delete().eq('id', person.id)
+      await supabase.from('contacts').delete().eq('id', contact.id)
       return { error: 'Could not save pay details. Please try again.' }
     }
   }
@@ -90,6 +141,16 @@ export async function updatePerson(
   if (!parsedPerson.success) {
     return { error: parsedPerson.error.issues[0].message }
   }
+  const p = parsedPerson.data
+
+  let detail: z.infer<typeof crewDetailSchema> | undefined
+  if (p.person_type === 'crew' && crewDetail) {
+    const parsedDetail = crewDetailSchema.safeParse(crewDetail)
+    if (!parsedDetail.success) {
+      return { error: parsedDetail.error.issues[0].message }
+    }
+    detail = parsedDetail.data
+  }
 
   const supabase = await createClient()
 
@@ -97,7 +158,7 @@ export async function updatePerson(
   // does not own the person's tour. This is the ownership check.
   const { data: existing } = await supabase
     .from('people')
-    .select('tour_id')
+    .select('tour_id, contact_id')
     .eq('id', personId)
     .single()
 
@@ -105,43 +166,49 @@ export async function updatePerson(
     return { error: 'Person not found.' }
   }
 
-  const { error: personError } = await supabase
-    .from('people')
-    .update({
-      ...parsedPerson.data,
-      contact_email: parsedPerson.data.contact_email || null,
-      whatsapp_number: parsedPerson.data.whatsapp_number || null,
-    })
-    .eq('id', personId)
+  // 1. Identity -> the contact. This updates the person everywhere they appear:
+  // the contact is the single source of truth.
+  const { error: contactError } = await supabase
+    .from('contacts')
+    .update(contactIdentityFields(p))
+    .eq('id', existing.contact_id)
 
-  if (personError) {
-    if (personError.code === '23505') {
+  if (contactError) {
+    if (contactError.code === '23505') {
       return await whatsappConflictError(
         supabase,
         existing.tour_id,
-        parsedPerson.data.whatsapp_number,
+        p.whatsapp_number,
         personId
       )
     }
+    return { error: contactError.message }
+  }
+
+  // 2. Membership terms -> people.
+  const { error: personError } = await supabase
+    .from('people')
+    .update({ person_type: p.person_type, role: p.role || null })
+    .eq('id', personId)
+
+  if (personError) {
     return { error: personError.message }
   }
 
-  if (parsedPerson.data.person_type === 'crew' && crewDetail) {
-    const parsedDetail = crewDetailSchema.safeParse(crewDetail)
-    if (!parsedDetail.success) {
-      return { error: parsedDetail.error.issues[0].message }
-    }
-
+  // 3. Per-tour rates.
+  if (detail) {
     const { error: detailError } = await supabase.from('crew_detail').upsert({
       person_id: personId,
       tour_id: existing.tour_id,
-      ...parsedDetail.data,
+      ...detail,
     })
 
     if (detailError) {
       return { error: 'Could not save pay details. Please try again.' }
     }
   }
+
+  void bustTourContextCache(existing.tour_id)
 
   return { error: null }
 }
@@ -179,6 +246,7 @@ export async function removePerson(personId: string): Promise<PeopleActionState>
     return { error: "Remove this person's travel and hotel assignments first." }
   }
 
+  // Deletes the tour membership only. The contact stays in the roster.
   const { error } = await supabase.from('people').delete().eq('id', personId)
 
   if (error) {
@@ -191,8 +259,9 @@ export async function removePerson(personId: string): Promise<PeopleActionState>
 }
 
 // Looks up the name of the person who already holds a WhatsApp number on this tour
-// so the error message can name them. excludePersonId is set on updates to avoid
-// matching the person being edited.
+// so the error message can name them. The number lives on the contact, so this
+// joins people -> contacts. excludePersonId is set on updates to skip the person
+// being edited.
 async function whatsappConflictError(
   supabase: Awaited<ReturnType<typeof createClient>>,
   tourId: string,
@@ -203,20 +272,16 @@ async function whatsappConflictError(
     return { error: 'This WhatsApp number is already in use on this tour.' }
   }
 
-  let query = supabase
+  const { data: rows } = await supabase
     .from('people')
-    .select('name')
+    .select('id, contacts!inner(name)')
     .eq('tour_id', tourId)
-    .eq('whatsapp_number', number)
+    .eq('contacts.whatsapp_number', number)
 
-  if (excludePersonId) {
-    query = query.neq('id', excludePersonId)
-  }
-
-  const { data: conflict } = await query.single()
+  const conflict = (rows ?? []).find((r) => r.id !== excludePersonId)
 
   if (conflict) {
-    return { error: `This number is already assigned to ${conflict.name} on this tour.` }
+    return { error: `This number is already assigned to ${conflict.contacts.name} on this tour.` }
   }
 
   return { error: 'This WhatsApp number is already in use on this tour.' }

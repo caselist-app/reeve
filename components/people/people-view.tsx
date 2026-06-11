@@ -10,6 +10,9 @@ import { BulkAdd } from '@/components/people/bulk-add'
 import { removePerson } from '@/lib/actions/people'
 import type { Tables } from '@/lib/types/database'
 
+// A tour membership joined with its account-level contact (identity lives there).
+export type PersonWithContact = Tables<'people'> & { contacts: Tables<'contacts'> }
+
 type PersonType = 'artist' | 'crew' | 'management' | 'support'
 
 const TABS: { value: PersonType; label: string; singular: string }[] = [
@@ -21,7 +24,7 @@ const TABS: { value: PersonType; label: string; singular: string }[] = [
 
 interface Props {
   tourId: string
-  people: Tables<'people'>[]
+  people: PersonWithContact[]
   crewDetails: Record<string, Tables<'crew_detail'>>
 }
 
@@ -29,7 +32,7 @@ export function PeopleView({ tourId, people, crewDetails }: Props) {
   const router = useRouter()
 
   const [sheetOpen, setSheetOpen] = useState(false)
-  const [editingPerson, setEditingPerson] = useState<Tables<'people'> | null>(null)
+  const [editingPerson, setEditingPerson] = useState<PersonWithContact | null>(null)
   const [addType, setAddType] = useState<PersonType>('crew')
   const [removeError, setRemoveError] = useState<string | null>(null)
   const [_removePending, startRemove] = useTransition()
@@ -40,7 +43,7 @@ export function PeopleView({ tourId, people, crewDetails }: Props) {
     setSheetOpen(true)
   }
 
-  function handleEdit(person: Tables<'people'>) {
+  function handleEdit(person: PersonWithContact) {
     setEditingPerson(person)
     setAddType(person.person_type as PersonType)
     setSheetOpen(true)

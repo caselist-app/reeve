@@ -20,17 +20,21 @@ export default async function PeoplePage({ params }: { params: Promise<{ id: str
 
   if (!tour) redirect('/app')
 
-  const [{ data: people }, { data: crewDetailRows }] = await Promise.all([
+  const [{ data: peopleRows }, { data: crewDetailRows }] = await Promise.all([
     supabase
       .from('people')
-      .select('*')
-      .eq('tour_id', id)
-      .order('name'),
+      .select('*, contacts(*)')
+      .eq('tour_id', id),
     supabase
       .from('crew_detail')
       .select('*')
       .eq('tour_id', id),
   ])
+
+  // Identity lives on the contact; order by contact name in JS.
+  const people = (peopleRows ?? [])
+    .filter((p): p is typeof p & { contacts: NonNullable<typeof p.contacts> } => p.contacts !== null)
+    .sort((a, b) => a.contacts.name.localeCompare(b.contacts.name))
 
   // Index crew_detail by person_id for O(1) lookup in the client view.
   const crewDetails: Record<string, Tables<'crew_detail'>> = {}
@@ -43,7 +47,7 @@ export default async function PeoplePage({ params }: { params: Promise<{ id: str
       <PageHeader eyebrow={tour.artist_act} title={tour.name} />
       <PeopleView
         tourId={id}
-        people={people ?? []}
+        people={people}
         crewDetails={crewDetails}
       />
     </PageLayout>
