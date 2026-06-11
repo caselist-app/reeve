@@ -280,6 +280,7 @@ export type Database = {
           line_check: string | null
           load_in: string | null
           load_out: string | null
+          lobby_call_at: string | null
           show_id: string
           soundcheck: string | null
           support_off: string | null
@@ -300,6 +301,7 @@ export type Database = {
           line_check?: string | null
           load_in?: string | null
           load_out?: string | null
+          lobby_call_at?: string | null
           show_id: string
           soundcheck?: string | null
           support_off?: string | null
@@ -320,6 +322,7 @@ export type Database = {
           line_check?: string | null
           load_in?: string | null
           load_out?: string | null
+          lobby_call_at?: string | null
           show_id?: string
           soundcheck?: string | null
           support_off?: string | null
@@ -530,6 +533,7 @@ export type Database = {
           room_block_size: number | null
           room_types_json: Json
           status: string
+          tour_date_id: string | null
           tour_id: string
           updated_at: string
           wifi_network: string | null
@@ -556,6 +560,7 @@ export type Database = {
           room_block_size?: number | null
           room_types_json?: Json
           status?: string
+          tour_date_id?: string | null
           tour_id: string
           updated_at?: string
           wifi_network?: string | null
@@ -582,12 +587,20 @@ export type Database = {
           room_block_size?: number | null
           room_types_json?: Json
           status?: string
+          tour_date_id?: string | null
           tour_id?: string
           updated_at?: string
           wifi_network?: string | null
           wifi_password?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "hotel_stays_tour_date_id_fkey"
+            columns: ["tour_date_id"]
+            isOneToOne: false
+            referencedRelation: "tour_dates"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "hotel_stays_tour_id_fkey"
             columns: ["tour_id"]
@@ -673,6 +686,63 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "people_tour_id_fkey"
+            columns: ["tour_id"]
+            isOneToOne: false
+            referencedRelation: "tours"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rehearsals: {
+        Row: {
+          address: string | null
+          created_at: string
+          end_at: string | null
+          google_maps_url: string | null
+          id: string
+          location_name: string
+          notes: string | null
+          start_at: string | null
+          tour_date_id: string
+          tour_id: string
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          end_at?: string | null
+          google_maps_url?: string | null
+          id?: string
+          location_name: string
+          notes?: string | null
+          start_at?: string | null
+          tour_date_id: string
+          tour_id: string
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          end_at?: string | null
+          google_maps_url?: string | null
+          id?: string
+          location_name?: string
+          notes?: string | null
+          start_at?: string | null
+          tour_date_id?: string
+          tour_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rehearsals_tour_date_id_fkey"
+            columns: ["tour_date_id"]
+            isOneToOne: false
+            referencedRelation: "tour_dates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rehearsals_tour_id_fkey"
             columns: ["tour_id"]
             isOneToOne: false
             referencedRelation: "tours"
@@ -817,6 +887,7 @@ export type Database = {
           stage_dimensions: string | null
           stagehands: number | null
           tech_pack_document_id: string | null
+          tour_date_id: string
           tour_id: string
           transport_hub_iata: string | null
           transport_hub_rail: string | null
@@ -847,6 +918,7 @@ export type Database = {
           stage_dimensions?: string | null
           stagehands?: number | null
           tech_pack_document_id?: string | null
+          tour_date_id: string
           tour_id: string
           transport_hub_iata?: string | null
           transport_hub_rail?: string | null
@@ -877,6 +949,7 @@ export type Database = {
           stage_dimensions?: string | null
           stagehands?: number | null
           tech_pack_document_id?: string | null
+          tour_date_id?: string
           tour_id?: string
           transport_hub_iata?: string | null
           transport_hub_rail?: string | null
@@ -896,7 +969,52 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "shows_tour_date_id_fkey"
+            columns: ["tour_date_id"]
+            isOneToOne: false
+            referencedRelation: "tour_dates"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "shows_tour_id_fkey"
+            columns: ["tour_id"]
+            isOneToOne: false
+            referencedRelation: "tours"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tour_dates: {
+        Row: {
+          created_at: string
+          date: string
+          day_type: string
+          id: string
+          notes: string | null
+          tour_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          day_type?: string
+          id?: string
+          notes?: string | null
+          tour_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          day_type?: string
+          id?: string
+          notes?: string | null
+          tour_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tour_dates_tour_id_fkey"
             columns: ["tour_id"]
             isOneToOne: false
             referencedRelation: "tours"
@@ -1055,6 +1173,7 @@ export type Database = {
           origin: string | null
           source_provider: string | null
           status: string
+          tour_date_id: string | null
           tour_id: string
           updated_at: string
           vehicle_or_flight_no: string | null
@@ -1076,6 +1195,7 @@ export type Database = {
           origin?: string | null
           source_provider?: string | null
           status?: string
+          tour_date_id?: string | null
           tour_id: string
           updated_at?: string
           vehicle_or_flight_no?: string | null
@@ -1097,11 +1217,19 @@ export type Database = {
           origin?: string | null
           source_provider?: string | null
           status?: string
+          tour_date_id?: string | null
           tour_id?: string
           updated_at?: string
           vehicle_or_flight_no?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "transport_segments_tour_date_id_fkey"
+            columns: ["tour_date_id"]
+            isOneToOne: false
+            referencedRelation: "tour_dates"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "transport_segments_tour_id_fkey"
             columns: ["tour_id"]
