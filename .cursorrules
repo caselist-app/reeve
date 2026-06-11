@@ -4,10 +4,10 @@ Core loop: Input, Enrich, Alert, Act.
 
 ## The five non-negotiables (these override convenience every time)
 1. Database changes are migration-plus-types, ALWAYS. Every schema change is a timestamped SQL migration in supabase/migrations/, applied via the Supabase CLI, with types regenerated into lib/types/database.ts. All three committed together. Never any other way. (Full rule below.)
-2. RLS is ALWAYS on. Every user-facing table has Row Level Security and every policy scopes by tour ownership. Never disable RLS. Never use the service role key in client code.
+2. RLS is ALWAYS on. Every user-facing table has Row Level Security and every policy scopes by tour ownership. Never disable RLS. Never use the service role key in client code. Storage bucket policies follow the same rule: scope by tour ownership using `owns_tour((storage.foldername(name))[1]::uuid)`, not just `auth.role() = 'authenticated'`.
 3. pnpm only. Never npm, never yarn. Never add a dependency not already in package.json without explicit instruction.
 4. No em-dashes anywhere. Not in code, comments, copy, commit messages, or docs. They are an AI tell. Use commas, periods, colons, or parentheses.
-5. Nothing is sent or booked without the TM. Reeve never books travel or hotels autonomously and never messages crew without TM action. The only exception is answering a crew member's direct inbound WhatsApp question, which the TM opts into per tour.
+5. Nothing is sent or booked without the TM. Reeve never books travel or hotels autonomously and never messages crew without TM action. The only exception is answering a crew member's direct inbound WhatsApp question, which the TM opts into per tour. `inbound_qa_enabled` and `morning_message_enabled` both default false. Jobs and handlers must check the flag before doing anything. No schedule is registered and no Q&A fires until the TM explicitly enables it.
 
 ## Stack (NEVER deviate)
 - Next.js 16 with App Router and TypeScript (strict mode)
@@ -74,6 +74,9 @@ Commit all three together (migration, code using it, regenerated types) in one c
 - Only free text that is NOT a recognised command goes to Claude.
 - All scheduled and event comms run on Trigger.dev and are idempotent through Upstash Redis. A double-send to crew is the fastest way to lose TM trust.
 - NEVER send synchronously from a webhook handler. Enqueue and return fast.
+- Inbound webhook messages must be deduplicated before enqueueing: SET NX on the wamid (WhatsApp) or Svix event id (email). If Redis is down, proceed and rely on the job's own guard.
+- The send pattern for Trigger.dev jobs is claim-send-release: set the idempotency claim, attempt the send, release the claim on failure. Never set a claim and abandon it; a failed send with a live claim looks like a success to a retry. See `lib/comms/notify/index.ts` for the reference implementation.
+- Proactive WhatsApp sends (anything outside a 24-hour reply window) must use Meta-approved templates. Free-form messages are only valid in reply to an inbound crew message within 24 hours.
 
 ## AI layer -- hard rules
 - Claude fires in exactly three cases: free-text WhatsApp questions from crew, email-forward extraction (TM-initiated), logistics query synthesis.
@@ -81,13 +84,17 @@ Commit all three together (migration, code using it, regenerated types) in one c
 - Claude NEVER books and NEVER sends without TM approval.
 - Cost model: slash commands cost nothing (templates), simple free text uses Haiku, synthesis and extraction use Sonnet, repeated system prompts use prompt caching. Target under 5 dollars per active tour per month.
 - Store system prompts as STATIC constants in lib/ai/. Do NOT build them dynamically at runtime (dynamic prompts break caching).
+- Prompt caching is mandatory. Every call to Claude must include `cache_control: { type: 'ephemeral' }` on the first system block. A call without it pays full token cost on every request and blows the cost model.
 - Use Anthropic tool use to enforce output schemas. Do not parse free-text JSON.
 
 ## General hard rules
 - Server Components by default. Use 'use client' only for state, effects, or browser APIs.
 - Server actions for mutations. Write API routes only for webhooks, cron, Stripe callbacks, and inbound provider hooks.
+- Every server action calls `requireUser()` as its first statement. No exceptions. Server actions are publicly POSTable.
 - Always use Supabase RLS. The service role key is server-side admin only (webhooks, cron, Trigger.dev jobs), never client code.
-- All forms and all external payloads validate with Zod schemas in lib/validators/.
+- Every server action that uses the admin (service role) client must first verify tour ownership via the RLS client, then scope all admin queries with `.eq('tour_id', tourId)`.
+- Webhook signature checks fail closed: return 401 immediately when the secret env var is absent. Never verify against an empty string or a default fallback.
+- All forms and all external payloads (including webhook payloads) validate with Zod schemas in lib/validators/.
 - Async APIs (cookies, params, searchParams) must be awaited in Next.js 16.
 - Imports use the @/ alias. No relative imports across top-level folders.
 - Root middleware is middleware.ts and exports middleware. Use getUser(), never getSession().
@@ -126,12 +133,21 @@ Commit all three together (migration, code using it, regenerated types) in one c
 - Do not change the database without a migration, an apply, AND regenerated types. All three or none.
 - Do not hand-edit lib/types/database.ts or invent table or column names.
 - Do not disable RLS, and do not use the service role key from client code.
+- Do not scope storage bucket policies by authentication alone. Scope by tour ownership using `owns_tour()` on the path's tour id.
+- Do not use the admin (service role) client in a server action without first verifying tour ownership via the RLS client.
+- Do not verify a webhook signature against an empty string or a missing env var. Return 401 when the secret is absent.
+- Do not enqueue an inbound webhook message without first deduplicating on the message ID via Redis SET NX.
+- Do not set an idempotency claim before a send and leave it set if the send fails. Claim, send, release on failure.
+- Do not send proactive WhatsApp messages (outside a 24-hour reply window) as free-form messages. Use approved templates.
 - Do not build in-app booking or payment for travel or hotels in V1. Planner ranks, TM books off-platform, reference recorded back.
 - Do not rank logistics options by price in V1. Feasibility first. Infeasible options flagged, never hidden.
 - Do not auto-promote a transport_segment to booked. The TM does that.
 - Do not send anything to crew without TM action (except answering a direct inbound question the TM opted into).
+- Do not fire crew Q&A or register a morning-message schedule without checking the tour's opt-in flag first.
 - Do not run AI or send messages synchronously inside a webhook handler. Enqueue on Trigger.dev and return fast.
 - Do not build system prompts dynamically at runtime. Static constants only.
+- Do not call the Anthropic SDK without cache_control on the first system block.
+- Do not call a server action without requireUser() as the first line.
 - Do not duplicate dietary or allergies onto riders. Read from person.
 - Do not use getSession() anywhere. Always getUser().
 - Do not add an AI provider other than Anthropic.
