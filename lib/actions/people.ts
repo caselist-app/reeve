@@ -232,21 +232,33 @@ export async function removePerson(personId: string): Promise<PeopleActionState>
     return { error: 'Person not found.' }
   }
 
-  // transport_assignments and room_assignments both ON DELETE CASCADE from person_id,
-  // so the DB will not block deletion. Check here and surface a user-facing error.
-  const [{ count: transportCount }, { count: roomCount }] = await Promise.all([
-    supabase
-      .from('transport_assignments')
-      .select('id', { count: 'exact', head: true })
-      .eq('person_id', personId),
-    supabase
-      .from('room_assignments')
-      .select('id', { count: 'exact', head: true })
-      .eq('person_id', personId),
+  // Check all blocking constraints before attempting deletion.
+  // transport_assignments and room_assignments cascade-delete, so they block
+  // deletion at the app level (not the DB level) for a user-friendly message.
+  // document_shares and notification_log are now ON DELETE RESTRICT: the DB
+  // blocks deletion directly. Surface a clear message for those cases too.
+  const [
+    { count: transportCount },
+    { count: roomCount },
+    { count: shareCount },
+    { count: notifCount },
+  ] = await Promise.all([
+    supabase.from('transport_assignments').select('id', { count: 'exact', head: true }).eq('person_id', personId),
+    supabase.from('room_assignments').select('id', { count: 'exact', head: true }).eq('person_id', personId),
+    supabase.from('document_shares').select('id', { count: 'exact', head: true }).eq('recipient_person_id', personId),
+    supabase.from('notification_log').select('id', { count: 'exact', head: true }).eq('person_id', personId),
   ])
 
   if ((transportCount ?? 0) > 0 || (roomCount ?? 0) > 0) {
     return { error: "Remove this person's travel and hotel assignments first." }
+  }
+
+  if ((shareCount ?? 0) > 0) {
+    return { error: 'This person has a document delivery history that must be kept. Archive the tour instead of removing them.' }
+  }
+
+  if ((notifCount ?? 0) > 0) {
+    return { error: 'This person has a notification history that must be kept. Archive the tour instead of removing them.' }
   }
 
   // Deletes the tour membership only. The contact stays in the roster.
