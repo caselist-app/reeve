@@ -393,6 +393,63 @@ export type Database = {
           },
         ]
       }
+      day_events: {
+        Row: {
+          created_at: string
+          date: string
+          ends_at: string | null
+          id: string
+          location: string | null
+          notes: string | null
+          show_id: string | null
+          starts_at: string | null
+          title: string
+          tour_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          date: string
+          ends_at?: string | null
+          id?: string
+          location?: string | null
+          notes?: string | null
+          show_id?: string | null
+          starts_at?: string | null
+          title: string
+          tour_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          ends_at?: string | null
+          id?: string
+          location?: string | null
+          notes?: string | null
+          show_id?: string | null
+          starts_at?: string | null
+          title?: string
+          tour_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "day_events_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "day_events_tour_id_fkey"
+            columns: ["tour_id"]
+            isOneToOne: false
+            referencedRelation: "tours"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       day_sheets: {
         Row: {
           changeover: string | null
@@ -1033,6 +1090,7 @@ export type Database = {
           hub_resolved_at: string | null
           id: string
           load_in_at: string | null
+          notes: string | null
           parking: string | null
           production_office: boolean | null
           shore_power: string | null
@@ -1064,6 +1122,7 @@ export type Database = {
           hub_resolved_at?: string | null
           id?: string
           load_in_at?: string | null
+          notes?: string | null
           parking?: string | null
           production_office?: boolean | null
           shore_power?: string | null
@@ -1095,6 +1154,7 @@ export type Database = {
           hub_resolved_at?: string | null
           id?: string
           load_in_at?: string | null
+          notes?: string | null
           parking?: string | null
           production_office?: boolean | null
           shore_power?: string | null
