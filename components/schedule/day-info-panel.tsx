@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { NotesTextarea } from '@/components/schedule/notes-textarea'
 
 interface DayInfoPanelProps {
   tourId: string
@@ -22,9 +23,20 @@ export async function DayInfoPanel({ tourId, date, tourDateId, timezone }: DayIn
         .select('id, venue_name, address, capacity, venue_type, notes')
         .eq('tour_id', tourId)
         .eq('tour_date_id', tourDateId)
-    : { data: [] }
+    : { data: [] as Array<{ id: string; venue_name: string; address: string | null; capacity: number | null; venue_type: string | null; notes: string | null }> }
 
   const show = shows?.[0] ?? null
+
+  // For non-show days, fetch the __day_notes__ sentinel row.
+  const { data: dayNotesRow } = !show
+    ? await supabase
+        .from('day_events')
+        .select('notes')
+        .eq('tour_id', tourId)
+        .eq('date', date)
+        .eq('title', '__day_notes__')
+        .maybeSingle()
+    : { data: null }
 
   // Roster: people assigned via transport or hotel on this date.
   const [{ data: transportPeople }, { data: hotelPeople }] = await Promise.all([
@@ -122,17 +134,23 @@ export async function DayInfoPanel({ tourId, date, tourDateId, timezone }: DayIn
         </section>
       )}
 
-      {/* Notes -- wired up in Commit 6 */}
+      {/* Notes: saves on blur, no save button. */}
       <section className="flex-1">
         <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
           Notes
         </p>
-        <textarea
-          className="w-full resize-none rounded-md border border-border bg-transparent px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring min-h-[80px]"
-          placeholder="Add notes..."
-          defaultValue={show?.notes ?? ''}
-          readOnly
-        />
+        {show ? (
+          <NotesTextarea
+            showId={show.id}
+            initialValue={show.notes ?? ''}
+          />
+        ) : (
+          <NotesTextarea
+            tourId={tourId}
+            date={date}
+            initialValue={dayNotesRow?.notes ?? ''}
+          />
+        )}
       </section>
     </div>
   )

@@ -250,6 +250,34 @@ export async function updateDaySheet(
   return { error: null }
 }
 
+export async function updateShowNotes(
+  showId: string,
+  notes: string,
+): Promise<ShowActionState> {
+  await requireUser()
+
+  const supabase = await createClient()
+
+  const { data: show } = await supabase
+    .from('shows')
+    .select('tour_id')
+    .eq('id', showId)
+    .single()
+
+  if (!show) return { error: 'Show not found.' }
+
+  const { error } = await supabase
+    .from('shows')
+    .update({ notes })
+    .eq('id', showId)
+
+  if (error) return { error: error.message }
+
+  void bustTourContextCache(show.tour_id)
+  revalidatePath(`/tours/${show.tour_id}/schedule`)
+  return { error: null, showId }
+}
+
 export async function updateAdvanceStatus(
   showId: string,
   department: Department,
