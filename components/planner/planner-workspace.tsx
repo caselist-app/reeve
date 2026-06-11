@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { AIRPORT_TRANSIT_MIN } from '@/lib/logistics/constants'
+import { AIRPORT_TRANSIT_MIN, RAIL_TRANSIT_MIN } from '@/lib/logistics/constants'
 import { planTravel } from '@/lib/logistics/plan'
 import { ContextSummary } from '@/components/planner/context-summary'
 import { OptionRow } from '@/components/planner/option-row'
@@ -49,10 +49,6 @@ interface PlannerWorkspaceProps {
   priorShow: PriorShow | null
 }
 
-function addMinutes(iso: string, minutes: number): string {
-  return new Date(new Date(iso).getTime() + minutes * 60_000).toISOString()
-}
-
 export function PlannerWorkspace({
   show,
   people,
@@ -70,13 +66,14 @@ export function PlannerWorkspace({
   const [recordedIds, setRecordedIds] = useState<Set<string>>(new Set())
   const [isPending, startTransition] = useTransition()
 
-  const groundMin = show.hub_ground_minutes ?? AIRPORT_TRANSIT_MIN
+  const groundMin = show.hub_ground_minutes ?? (
+    show.transport_hub_rail && !show.transport_hub_iata ? RAIL_TRANSIT_MIN : AIRPORT_TRANSIT_MIN
+  )
   const toHub = show.transport_hub_iata ?? show.transport_hub_rail
 
-  const requiredSiteArrival =
-    show.load_in_at
-      ? addMinutes(show.load_in_at, -(groundMin + AIRPORT_TRANSIT_MIN))
-      : null
+  // Site arrival deadline is load-in. Ground and transit time is used for
+  // feasibility ranking, not for shifting this display time.
+  const requiredSiteArrival = show.load_in_at ?? null
 
   const selectedPerson = people.find((p) => p.id === selectedPersonId)
 

@@ -142,7 +142,9 @@ export async function resolveHub(show_id: string): Promise<HubResolution> {
     return {
       iata: show.transport_hub_iata,
       rail: show.transport_hub_rail,
-      ground_minutes: show.hub_ground_minutes ?? AIRPORT_TRANSIT_MIN,
+      ground_minutes: show.hub_ground_minutes ?? (
+        show.transport_hub_rail && !show.transport_hub_iata ? RAIL_TRANSIT_MIN : AIRPORT_TRANSIT_MIN
+      ),
     }
   }
 
