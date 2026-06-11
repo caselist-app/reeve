@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -43,6 +44,8 @@ export function TourSettingsForm({ tour }: Props) {
 
   const [currency, setCurrency] = useState(tour.base_currency)
   const [timezone, setTimezone] = useState(tour.timezone ?? '')
+  const [inboundQa, setInboundQa] = useState(tour.inbound_qa_enabled ?? false)
+  const [morningMsg, setMorningMsg] = useState(tour.morning_message_enabled ?? false)
 
   const [archivePending, startArchive] = useTransition()
   const [archiveError, setArchiveError] = useState<string | null>(null)
@@ -140,6 +143,44 @@ export function TourSettingsForm({ tour }: Props) {
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        <Separator />
+
+        <div className="space-y-4">
+          <h2 className="text-base font-medium">Crew comms</h2>
+
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-0.5">
+              <Label htmlFor={`${formId}-morning_msg`}>Morning messages</Label>
+              <p className="text-xs text-muted-foreground">
+                Send a day sheet to every crew member on show days at 07:00 local time.
+              </p>
+            </div>
+            <Switch
+              id={`${formId}-morning_msg`}
+              checked={morningMsg}
+              onCheckedChange={setMorningMsg}
+            />
+          </div>
+
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-0.5">
+              <Label htmlFor={`${formId}-inbound_qa`}>Crew Q&A</Label>
+              <p className="text-xs text-muted-foreground">
+                Allow crew to ask questions via WhatsApp and receive AI-generated answers.
+              </p>
+            </div>
+            <Switch
+              id={`${formId}-inbound_qa`}
+              checked={inboundQa}
+              onCheckedChange={setInboundQa}
+            />
+          </div>
+
+          {/* Hidden inputs carry the boolean values to the server action. */}
+          <input type="hidden" name="morning_message_enabled" value={String(morningMsg)} />
+          <input type="hidden" name="inbound_qa_enabled" value={String(inboundQa)} />
         </div>
 
         <div className="flex items-center gap-4">

@@ -39,11 +39,12 @@ export const morningMessageSchedule = schedules.task({
 
     const { data: tour } = await admin
       .from('tours')
-      .select('id, timezone')
+      .select('id, timezone, morning_message_enabled')
       .eq('id', tourId)
       .single()
 
     if (!tour) return { skipped: true, reason: 'tour_not_found' }
+    if (!tour.morning_message_enabled) return { skipped: true, reason: 'opt_in_disabled' }
 
     const timezone = tour.timezone ?? 'UTC'
     const today = localDate(timezone)

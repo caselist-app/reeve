@@ -63,6 +63,8 @@ export const tourSchema = z.object({
   territory: z.string().optional(),
   base_currency: z.string().length(3).default('GBP'),
   timezone: z.string().optional(),
+  inbound_qa_enabled: z.boolean().optional().default(false),
+  morning_message_enabled: z.boolean().optional().default(false),
 })
 
 export type Tour = z.infer<typeof tourSchema>

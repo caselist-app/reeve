@@ -22,6 +22,9 @@ function parseTourFormData(formData: FormData) {
     territory: formData.get('territory') || undefined,
     base_currency: formData.get('base_currency') || 'GBP',
     timezone: formData.get('timezone') || undefined,
+    // Checkboxes are absent from FormData when unchecked; treat absence as false.
+    inbound_qa_enabled: formData.get('inbound_qa_enabled') === 'true',
+    morning_message_enabled: formData.get('morning_message_enabled') === 'true',
   })
 }
 
@@ -52,19 +55,8 @@ export async function createTourAction(
     return { error: error.message }
   }
 
-  // Register a daily morning-message schedule for this tour.
-  // Fires at 07:00 UTC; the job resolves the tour's local date internally.
-  // A failed schedule registration does not block tour creation.
-  try {
-    await schedules.create({
-      task: 'morning-message',
-      cron: '0 7 * * *',
-      externalId: `morning-${data!.id}`,
-      deduplicationKey: `morning-${data!.id}`,
-    })
-  } catch (scheduleErr) {
-    console.error('[createTour] Failed to register morning-message schedule:', scheduleErr)
-  }
+  // morning_message_enabled defaults to false at creation; the schedule is
+  // registered when the TM first enables the toggle in tour settings.
 
   redirect(`/tours/${data!.id}/people`)
 }
@@ -83,14 +75,42 @@ export async function updateTourAction(
   }
 
   const supabase = await createClient()
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from('tours')
     .update(parsed.data)
     .eq('id', tourId)
     .eq('account_id', user.id)
+    .select('id, timezone, morning_message_enabled')
+    .single()
 
-  if (error) {
-    return { error: error.message }
+  if (error || !updated) {
+    return { error: error?.message ?? 'Update failed.' }
+  }
+
+  // Manage the morning-message schedule in sync with the toggle.
+  // schedules.create is idempotent via deduplicationKey; deactivate is safe to
+  // call even if the schedule does not exist yet.
+  const externalId = `morning-${tourId}`
+  if (updated.morning_message_enabled) {
+    try {
+      // Fire at 07:00 in the tour's local timezone. Trigger.dev honours the
+      // timezone field so no UTC offset arithmetic is needed here.
+      await schedules.create({
+        task: 'morning-message',
+        cron: '0 7 * * *',
+        timezone: updated.timezone ?? 'UTC',
+        externalId,
+        deduplicationKey: externalId,
+      })
+    } catch (scheduleErr) {
+      console.error('[updateTour] Failed to register morning-message schedule:', scheduleErr)
+    }
+  } else {
+    try {
+      await schedules.deactivate(externalId)
+    } catch {
+      // Schedule may not exist yet (e.g. never enabled). Silently ignore.
+    }
   }
 
   return { error: null }

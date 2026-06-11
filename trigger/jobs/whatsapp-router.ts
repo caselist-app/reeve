@@ -1,4 +1,5 @@
 import { task } from '@trigger.dev/sdk/v3'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { routeInbound } from '@/lib/comms/router'
 import { sendWhatsApp, sendInteractiveWhatsApp } from '@/lib/comms/whatsapp'
 import { answerCrewQuestion } from '@/lib/ai/answer'
@@ -12,7 +13,8 @@ export type WhatsAppRouterPayload = {
 
 // Processes an inbound WhatsApp message after the webhook handler has verified
 // the signature, mapped the number to a person, and returned 200.
-// Slash commands render from data with zero AI. Free text goes to Claude.
+// Slash commands render from data with zero AI. Free text goes to Claude only
+// when the TM has enabled inbound_qa_enabled on this tour.
 export const whatsappRouterJob = task({
   id: 'whatsapp-router',
   run: async (payload: WhatsAppRouterPayload) => {
@@ -39,7 +41,19 @@ export const whatsappRouterJob = task({
       return { action: 'template', sent: true }
     }
 
-    // Free text: assemble tour context and call Claude.
+    // Free text: check opt-in gate before calling Claude.
+    // The TM must enable inbound_qa_enabled on the tour settings page.
+    const admin = createAdminClient()
+    const { data: tour } = await admin
+      .from('tours')
+      .select('inbound_qa_enabled')
+      .eq('id', payload.tour_id)
+      .single()
+
+    if (!tour?.inbound_qa_enabled) {
+      return { action: 'ai_disabled', sent: false }
+    }
+
     const { answer } = await answerCrewQuestion({
       tour_id: payload.tour_id,
       person_id: payload.person_id,

@@ -1183,6 +1183,8 @@ export type Database = {
           created_at: string
           end_date: string | null
           id: string
+          inbound_qa_enabled: boolean
+          morning_message_enabled: boolean
           name: string
           start_date: string | null
           status: string
@@ -1197,6 +1199,8 @@ export type Database = {
           created_at?: string
           end_date?: string | null
           id?: string
+          inbound_qa_enabled?: boolean
+          morning_message_enabled?: boolean
           name: string
           start_date?: string | null
           status?: string
@@ -1211,6 +1215,8 @@ export type Database = {
           created_at?: string
           end_date?: string | null
           id?: string
+          inbound_qa_enabled?: boolean
+          morning_message_enabled?: boolean
           name?: string
           start_date?: string | null
           status?: string
