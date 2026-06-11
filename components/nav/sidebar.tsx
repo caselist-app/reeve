@@ -27,7 +27,7 @@ interface SidebarProps {
 }
 
 const TOUR_NAV = [
-  { section: 'shows', label: 'Shows', icon: Calendar },
+  { section: 'shows', label: 'Schedule', icon: Calendar },
   { section: 'people', label: 'People', icon: Users },
   { section: 'transport', label: 'Transport', icon: Plane },
   { section: 'hotels', label: 'Hotels', icon: Building2 },

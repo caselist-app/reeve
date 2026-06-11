@@ -1,12 +1,12 @@
 import { redirect } from 'next/navigation'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
-import { ShowsView } from '@/components/shows/shows-view'
+import { ScheduleView } from '@/components/schedule/schedule-view'
 import { PageLayout } from '@/components/layout/page-layout'
 import { PageHeader } from '@/components/layout/page-header'
-import type { Tables } from '@/lib/types/database'
+import type { ScheduleDateRow } from '@/components/schedule/schedule-view'
 
-export default async function ShowsPage({
+export default async function SchedulePage({
   params,
 }: {
   params: Promise<{ id: string }>
@@ -24,26 +24,38 @@ export default async function ShowsPage({
 
   if (!tour) redirect('/app')
 
-  const [{ data: shows }, { data: advances }] = await Promise.all([
-    supabase.from('shows').select('*').eq('tour_id', id).order('date', { ascending: true }),
-    supabase.from('show_advance').select('*').eq('tour_id', id),
-  ])
+  const { data: tourDates } = await supabase
+    .from('tour_dates')
+    .select(`
+      id,
+      date,
+      day_type,
+      notes,
+      shows (id, venue_name, address, load_in_at),
+      rehearsals (id, location_name),
+      transport_segments (id, mode, origin, destination, depart_at)
+    `)
+    .eq('tour_id', id)
+    .order('date', { ascending: true })
 
-  // Index advances by show_id for O(1) lookup in the view.
-  const advanceByShow: Record<string, Tables<'show_advance'>> = {}
-  for (const a of advances ?? []) {
-    advanceByShow[a.show_id] = a
-  }
-
-  const showsWithAdvance = (shows ?? []).map((show) => ({
-    ...show,
-    show_advance: advanceByShow[show.id] ?? null,
+  const dates: ScheduleDateRow[] = (tourDates ?? []).map((d) => ({
+    id: d.id,
+    date: d.date,
+    day_type: d.day_type as ScheduleDateRow['day_type'],
+    notes: d.notes,
+    shows: Array.isArray(d.shows) ? d.shows : d.shows ? [d.shows] : [],
+    rehearsals: Array.isArray(d.rehearsals) ? d.rehearsals : d.rehearsals ? [d.rehearsals] : [],
+    transport_segments: Array.isArray(d.transport_segments)
+      ? d.transport_segments
+      : d.transport_segments
+      ? [d.transport_segments]
+      : [],
   }))
 
   return (
     <PageLayout>
       <PageHeader eyebrow={tour.artist_act} title={tour.name} />
-      <ShowsView tourId={id} shows={showsWithAdvance} timezone={tour.timezone} />
+      <ScheduleView tourId={id} dates={dates} timezone={tour.timezone} />
     </PageLayout>
   )
 }
