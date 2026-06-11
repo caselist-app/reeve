@@ -67,13 +67,13 @@ export default async function ShowDetailPage({
     // All shares for this show, with person name and document title + type.
     supabase
       .from('document_shares')
-      .select('id, document_id, sent_at, opened_at, acknowledged_at, documents(title, doc_type), people(name)')
+      .select('id, document_id, sent_at, opened_at, acknowledged_at, documents(title, doc_type), people(contacts(name))')
       .eq('show_id', showId)
       .order('created_at', { ascending: true }),
     // People on this tour with an email address (the "Send to venue" picker).
     supabase
       .from('people')
-      .select('id, name, contact_email')
+      .select('id, contacts(name, contact_email)')
       .eq('tour_id', id)
       .not('contact_email', 'is', null),
   ])
@@ -111,7 +111,7 @@ export default async function ShowDetailPage({
   // Shape shares into ShareRow, carrying doc_type for O(1) department matching below.
   const shareRows: ShareRow[] = (shares ?? []).map((s) => {
     const doc = s.documents as { title: string; doc_type: string } | null
-    const person = s.people as { name: string } | null
+    const person = (s.people as { contacts: { name: string } | null } | null)?.contacts ?? null
     return {
       id: s.id,
       document_id: s.document_id,
@@ -135,8 +135,11 @@ export default async function ShowDetailPage({
   )
 
   const contactablePeople = (people ?? [])
-    .filter((p): p is typeof p & { contact_email: string } => !!p.contact_email)
-    .map((p) => ({ id: p.id, name: p.name, contact_email: p.contact_email }))
+    .map((p) => {
+      const c = p.contacts as { name: string; contact_email: string | null } | null
+      return { id: p.id, name: c?.name ?? '', contact_email: c?.contact_email ?? null }
+    })
+    .filter((p): p is { id: string; name: string; contact_email: string } => !!p.contact_email)
 
   return (
     <PageLayout maxWidth="max-w-3xl">

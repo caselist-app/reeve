@@ -36,9 +36,8 @@ export default async function PlannerPage({
       .single(),
     supabase
       .from('people')
-      .select('id, name, role, home_city')
-      .eq('tour_id', id)
-      .order('name'),
+      .select('id, role, contacts(name, home_city)')
+      .eq('tour_id', id),
     // All transport assignments for this tour so the TM can upload boarding passes.
     // Segments do not carry show_id; we show all tour segments and let the TM match by context.
     supabase
@@ -46,7 +45,7 @@ export default async function PlannerPage({
       .select(`
         id,
         boarding_pass_document_id,
-        people ( name ),
+        people ( contacts ( name ) ),
         transport_segments (
           mode, carrier_operator, vehicle_or_flight_no,
           origin, destination, depart_at
@@ -95,7 +94,7 @@ export default async function PlannerPage({
 
   // Shape assignment rows into a flat structure for the boarding pass uploader.
   const assignments: TransportAssignmentRow[] = (assignmentRows ?? []).map((a) => {
-    const person = a.people as { name: string } | null
+    const person = (a.people as { contacts: { name: string } | null } | null)?.contacts ?? null
     const seg = a.transport_segments as {
       mode: string
       carrier_operator: string | null
@@ -116,6 +115,14 @@ export default async function PlannerPage({
       has_boarding_pass: !!a.boarding_pass_document_id,
     }
   })
+
+  // Identity (name, home_city) lives on the contact; flatten to the planner's Person shape.
+  const peopleList = (people ?? [])
+    .map((p) => {
+      const c = p.contacts as { name: string; home_city: string | null } | null
+      return { id: p.id, role: p.role, name: c?.name ?? '', home_city: c?.home_city ?? null }
+    })
+    .sort((a, b) => a.name.localeCompare(b.name))
 
   const formattedDate = new Date(`${show.date}T00:00:00`).toLocaleDateString('en-GB', {
     weekday: 'long',
@@ -141,7 +148,7 @@ export default async function PlannerPage({
         </p>
       </div>
 
-      {!people || people.length === 0 ? (
+      {peopleList.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           Add people to this tour before planning travel.
         </p>
@@ -149,7 +156,7 @@ export default async function PlannerPage({
         <div className="space-y-10">
           <PlannerWorkspace
             show={show}
-            people={people}
+            people={peopleList}
             tourId={id}
             timezone={tour.timezone}
             priorShow={priorShow}

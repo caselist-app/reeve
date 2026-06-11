@@ -108,21 +108,23 @@ export async function getFromHub(
   }
 
   // No prior show - use the person's home city as the departure point.
-  const { data: person } = await admin
+  const { data: personRow } = await admin
     .from('people')
-    .select('home_city')
+    .select('contacts(home_city)')
     .eq('id', person_id)
     .single()
 
-  if (!person?.home_city) return null
+  // home_city is identity, on the contact.
+  const homeCity = (personRow?.contacts as { home_city: string | null } | null)?.home_city ?? null
+  if (!homeCity) return null
 
   // Geocode home_city to its nearest airport IATA. Falls back to returning
   // the city string as-is if Maps is unavailable (e.g. no API key in dev),
   // which at least surfaces the city name in the planner UI.
-  const resolved = await resolveViaGoogleMaps(person.home_city)
+  const resolved = await resolveViaGoogleMaps(homeCity)
   if (resolved?.iata) return resolved.iata
 
-  return person.home_city
+  return homeCity
 }
 
 export async function resolveHub(show_id: string): Promise<HubResolution> {

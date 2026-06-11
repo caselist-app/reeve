@@ -61,12 +61,23 @@ export async function sendRider(params: SendRiderParams): Promise<SendRiderResul
   if (!doc) return { error: 'Document not found.' }
 
   // Fetch recipient (must belong to this tour).
-  const { data: person } = await supabase
+  const { data: personRow } = await supabase
     .from('people')
-    .select('id, name, contact_email')
+    .select('id, contacts(name, contact_email)')
     .eq('id', recipientPersonId)
     .eq('tour_id', tourId)
     .single()
+
+  // Identity (name, email) lives on the contact.
+  const person = personRow
+    ? {
+        id: personRow.id,
+        ...((personRow.contacts as { name: string; contact_email: string | null } | null) ?? {
+          name: '',
+          contact_email: null,
+        }),
+      }
+    : null
 
   if (!person) return { error: 'Person not found.' }
   if (!person.contact_email) return { error: `${person.name} does not have an email address on file.` }

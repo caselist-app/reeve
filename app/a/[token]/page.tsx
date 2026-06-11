@@ -23,7 +23,7 @@ export default async function SharePage({
       opened_at,
       acknowledged_at,
       documents ( title, doc_type, storage_path ),
-      people ( name ),
+      people ( contacts ( name ) ),
       tours ( name, artist_act )
     `)
     .eq('share_token', token)
@@ -32,7 +32,7 @@ export default async function SharePage({
   if (!share) notFound()
 
   const doc = share.documents as { title: string; doc_type: string; storage_path: string } | null
-  const person = share.people as { name: string } | null
+  const person = (share.people as { contacts: { name: string } | null } | null)?.contacts ?? null
   const tour = share.tours as { name: string; artist_act: string | null } | null
 
   if (!doc) notFound()

@@ -32,7 +32,7 @@ export default async function HotelStayPage({
       .single(),
     supabase
       .from('hotel_stays')
-      .select('*, room_assignments(*, people!person_id(id, name, person_type))')
+      .select('*, room_assignments(*, people!person_id(id, person_type, contacts(name)))')
       .eq('id', stayId)
       .eq('tour_id', id)
       .single(),

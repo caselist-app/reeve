@@ -23,11 +23,18 @@ export default async function TransportPlannerPage({
 
   if (!tour) redirect('/')
 
-  const { data: people } = await supabase
+  const { data: peopleRows } = await supabase
     .from('people')
-    .select('id, name, home_city')
+    .select('id, contacts(name, home_city)')
     .eq('tour_id', id)
-    .order('name')
+
+  // Identity (name, home_city) lives on the contact; flatten for the planner.
+  const people = (peopleRows ?? [])
+    .map((p) => {
+      const c = p.contacts as { name: string; home_city: string | null } | null
+      return { id: p.id, name: c?.name ?? '', home_city: c?.home_city ?? null }
+    })
+    .sort((a, b) => a.name.localeCompare(b.name))
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-10">
@@ -49,7 +56,7 @@ export default async function TransportPlannerPage({
 
       <FreeformPlanner
         tourId={id}
-        people={people ?? []}
+        people={people}
         timezone={tour.timezone}
       />
     </div>

@@ -11,7 +11,7 @@ type RoomAssignment = {
   id: string
   room_tier: string
   room_type: string | null
-  people: { id: string; name: string; person_type: string } | null
+  people: { id: string; person_type: string; contacts: { name: string } | null } | null
 }
 
 interface Stay {
@@ -140,7 +140,7 @@ export function HotelStayDetail({ stay, tourId }: HotelStayDetailProps) {
             <ul className="space-y-1 text-sm">
               {artistRooms.map((r) => (
                 <li key={r.id} className="flex items-center justify-between">
-                  <span>{r.people?.name ?? 'Unknown'}</span>
+                  <span>{r.people?.contacts?.name ?? 'Unknown'}</span>
                   {r.room_type && (
                     <span className="text-xs text-muted-foreground">{r.room_type}</span>
                   )}
@@ -155,7 +155,7 @@ export function HotelStayDetail({ stay, tourId }: HotelStayDetailProps) {
             <ul className="space-y-1 text-sm">
               {crewRooms.map((r) => (
                 <li key={r.id} className="flex items-center justify-between">
-                  <span>{r.people?.name ?? 'Unknown'}</span>
+                  <span>{r.people?.contacts?.name ?? 'Unknown'}</span>
                   {r.room_type && (
                     <span className="text-xs text-muted-foreground">{r.room_type}</span>
                   )}

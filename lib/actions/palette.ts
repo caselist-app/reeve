@@ -30,10 +30,18 @@ export async function getPaletteData(tourId: string): Promise<PaletteData> {
       .order('date', { ascending: true }),
     supabase
       .from('people')
-      .select('id, name, person_type')
-      .eq('tour_id', tourId)
-      .order('name'),
+      .select('id, person_type, contacts(name)')
+      .eq('tour_id', tourId),
   ])
 
-  return { shows: shows ?? [], people: people ?? [] }
+  // Name lives on the contact. Flatten and order by name.
+  const peopleFlat = (people ?? [])
+    .map((r) => ({
+      id: r.id,
+      name: (r.contacts as { name: string } | null)?.name ?? '',
+      person_type: r.person_type,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+
+  return { shows: shows ?? [], people: peopleFlat }
 }

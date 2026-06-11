@@ -32,9 +32,8 @@ export default async function HotelsPage({
       .single(),
     supabase
       .from('people')
-      .select('id, name, person_type')
-      .eq('tour_id', id)
-      .order('name'),
+      .select('id, person_type, contacts(name)')
+      .eq('tour_id', id),
   ])
 
   if (!show) redirect(`/tours/${id}/shows`)
@@ -49,6 +48,15 @@ export default async function HotelsPage({
     .order('depart_at', { ascending: true })
     .limit(1)
     .maybeSingle()
+
+  // Name lives on the contact; flatten to the hotel workspace's Person shape.
+  const peopleList = (people ?? [])
+    .map((p) => ({
+      id: p.id,
+      name: (p.contacts as { name: string } | null)?.name ?? '',
+      person_type: p.person_type,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name))
 
   const formattedDate = new Date(`${show.date}T00:00:00`).toLocaleDateString('en-GB', {
     weekday: 'long',
@@ -77,7 +85,7 @@ export default async function HotelsPage({
       <HotelWorkspace
         show={show}
         tourId={id}
-        people={people ?? []}
+        people={peopleList}
         defaultArriveAt={segment?.arrive_at ?? null}
         defaultDepartAt={segment?.depart_at ?? null}
       />

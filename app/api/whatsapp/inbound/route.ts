@@ -104,14 +104,14 @@ export async function POST(request: NextRequest) {
         const fromNumber = message.from as string
         if (!fromNumber || !body) continue
 
-        // Map the sender number to a person across the TM's tours.
-        // A number can appear on at most one row per tour (unique index), but
-        // could theoretically appear on two tours. Pick the most recently
-        // created tour so the person gets the active tour context.
+        // Map the sender number to a person across the TM's tours. The number
+        // lives on the contact; a number maps to at most one person per tour
+        // (enforced by trigger), but could appear on two tours. Pick the most
+        // recently created tour so the person gets the active tour context.
         const { data: people } = await admin
           .from('people')
-          .select('id, tour_id, tours!inner(created_at)')
-          .eq('whatsapp_number', fromNumber)
+          .select('id, tour_id, tours!inner(created_at), contacts!inner(whatsapp_number)')
+          .eq('contacts.whatsapp_number', fromNumber)
           .order('tours.created_at', { ascending: false })
           .limit(1)
 
