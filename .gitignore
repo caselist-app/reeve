@@ -141,3 +141,9 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 .vite/
+
+# Trigger.dev local dev cache (build artifacts, not source)
+.trigger/
+
+# Cursor editor temp files
+_tmp_*
