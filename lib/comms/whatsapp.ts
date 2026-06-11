@@ -38,6 +38,87 @@ export async function sendInteractiveWhatsApp(params: SendInteractiveParams): Pr
   await sendInteractiveViaMetaCloudApi(params)
 }
 
+export type SendTemplateParams = {
+  to: string
+  templateName: string
+  // Meta language code, e.g. 'en' or 'en_US'. Must match the approved template.
+  languageCode: string
+  // Positional body variables {{1}}..{{n}}, in order. Omit for templates with
+  // no variables (e.g. hello_world).
+  bodyParams?: string[]
+  // Document header (e.g. a boarding-pass PDF) for templates with a media header.
+  headerDocument?: { link: string; filename: string }
+}
+
+// Send an approved WhatsApp template. Unlike free-form and interactive messages,
+// a template delivers outside the 24-hour customer-service window, which is what
+// every proactive notification needs. Returns the wamid for receipt tracking.
+export async function sendTemplate(params: SendTemplateParams): Promise<SendWhatsAppResult> {
+  const token = process.env.WHATSAPP_CLOUD_API_TOKEN
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
+
+  if (!token || !phoneNumberId) {
+    throw new Error('Meta WhatsApp env vars not configured')
+  }
+
+  const components: Array<Record<string, unknown>> = []
+
+  if (params.headerDocument) {
+    components.push({
+      type: 'header',
+      parameters: [
+        {
+          type: 'document',
+          document: {
+            link: params.headerDocument.link,
+            filename: params.headerDocument.filename,
+          },
+        },
+      ],
+    })
+  }
+
+  if (params.bodyParams && params.bodyParams.length > 0) {
+    components.push({
+      type: 'body',
+      parameters: params.bodyParams.map((text) => ({ type: 'text', text })),
+    })
+  }
+
+  const payload = {
+    messaging_product: 'whatsapp',
+    to: params.to,
+    type: 'template',
+    template: {
+      name: params.templateName,
+      language: { code: params.languageCode },
+      ...(components.length > 0 ? { components } : {}),
+    },
+  }
+
+  const res = await fetch(
+    `https://graph.facebook.com/v19.0/${phoneNumberId}/messages`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    }
+  )
+
+  if (!res.ok) {
+    const detail = await res.text()
+    throw new Error(`Meta template send error ${res.status}: ${detail}`)
+  }
+
+  const json = (await res.json()) as { messages?: Array<{ id: string }> }
+  const wamid = json.messages?.[0]?.id
+  if (!wamid) throw new Error('Meta API response missing message id')
+  return { wamid }
+}
+
 async function sendInteractiveViaMetaCloudApi(params: SendInteractiveParams): Promise<void> {
   const token = process.env.WHATSAPP_CLOUD_API_TOKEN
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
