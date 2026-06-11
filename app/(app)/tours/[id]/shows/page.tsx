@@ -15,28 +15,29 @@ export default async function SchedulePage({
   const user = await requireUser()
   const supabase = await createClient()
 
-  const { data: tour } = await supabase
-    .from('tours')
-    .select('id, name, artists(name), timezone')
-    .eq('id', id)
-    .eq('account_id', user.id)
-    .single()
+  const [{ data: tour }, { data: tourDates }] = await Promise.all([
+    supabase
+      .from('tours')
+      .select('id, name, artists(name), timezone')
+      .eq('id', id)
+      .eq('account_id', user.id)
+      .single(),
+    supabase
+      .from('tour_dates')
+      .select(`
+        id,
+        date,
+        day_type,
+        notes,
+        shows (id, venue_name, address, load_in_at),
+        rehearsals (id, location_name),
+        transport_segments (id, mode, origin, destination, depart_at)
+      `)
+      .eq('tour_id', id)
+      .order('date', { ascending: true }),
+  ])
 
   if (!tour) redirect('/')
-
-  const { data: tourDates } = await supabase
-    .from('tour_dates')
-    .select(`
-      id,
-      date,
-      day_type,
-      notes,
-      shows (id, venue_name, address, load_in_at),
-      rehearsals (id, location_name),
-      transport_segments (id, mode, origin, destination, depart_at)
-    `)
-    .eq('tour_id', id)
-    .order('date', { ascending: true })
 
   const dates: ScheduleDateRow[] = (tourDates ?? []).map((d) => ({
     id: d.id,

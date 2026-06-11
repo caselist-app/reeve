@@ -29,10 +29,21 @@ export async function confirmExtraction(
   if (forwarded.extraction_status === 'confirmed') return { error: 'Already confirmed.' }
 
   const tourId = forwarded.tour_id
+
+  // Optimistic lock: claim the row before inserting any spine data.
+  // A concurrent second click will hit the 'Already confirmed.' guard above.
+  // On failure below, reset to 'pending' so the TM can retry.
+  const { error: lockError } = await supabase
+    .from('forwarded_emails')
+    .update({ extraction_status: 'confirmed' })
+    .eq('id', forwardedEmailId)
+    .eq('extraction_status', 'pending')
+
+  if (lockError) return { error: lockError.message }
+
   const errors: string[] = []
 
-  // Insert shows via the RPC so tour_dates is upserted and tour_date_id is
-  // wired on the show row in the same transaction.
+  // Shows: one RPC call per show (they need the tour_dates upsert inside the RPC).
   for (const show of confirmed.shows) {
     if (!show.date || !show.venue_name) continue
     const { error } = await supabase.rpc('create_show_with_dependents', {
@@ -48,51 +59,56 @@ export async function confirmExtraction(
     if (error) errors.push(`Show (${show.venue_name}): ${error.message}`)
   }
 
-  // Insert transport segments.
-  for (const seg of confirmed.transport_segments) {
-    if (!seg.mode) continue
-    const { error } = await supabase.from('transport_segments').insert({
-      tour_id: tourId,
-      mode: seg.mode,
-      origin: seg.origin ?? null,
-      destination: seg.destination ?? null,
-      depart_at: seg.depart_at ?? null,
-      arrive_at: seg.arrive_at ?? null,
-      carrier_operator: seg.carrier_operator ?? null,
-      vehicle_or_flight_no: seg.vehicle_or_flight_no ?? null,
-      booking_reference: seg.booking_reference ?? null,
-      status: 'booked',   // TM has confirmed a real document, so treat as booked.
-    })
-    if (error) errors.push(`Segment (${seg.vehicle_or_flight_no ?? seg.mode}): ${error.message}`)
+  // Transport segments: batch insert in a single round trip.
+  // status='planned' is correct here: the TM confirmed the booking exists,
+  // but 'booked' is set only after they enter a reference number in the UI.
+  const segments = confirmed.transport_segments.filter((s) => !!s.mode)
+  if (segments.length > 0) {
+    const { error } = await supabase.from('transport_segments').insert(
+      segments.map((seg) => ({
+        tour_id: tourId,
+        mode: seg.mode!,
+        origin: seg.origin ?? null,
+        destination: seg.destination ?? null,
+        depart_at: seg.depart_at ?? null,
+        arrive_at: seg.arrive_at ?? null,
+        carrier_operator: seg.carrier_operator ?? null,
+        vehicle_or_flight_no: seg.vehicle_or_flight_no ?? null,
+        booking_reference: seg.booking_reference ?? null,
+        status: 'planned',
+      }))
+    )
+    if (error) errors.push(`Segments: ${error.message}`)
   }
 
-  // Insert hotel stays.
-  for (const hotel of confirmed.hotel_stays) {
-    if (!hotel.name && !hotel.city) continue
-    const { error } = await supabase.from('hotel_stays').insert({
-      tour_id: tourId,
-      name: hotel.name ?? null,
-      city: hotel.city ?? null,
-      address: hotel.address ?? null,
-      check_in_date: hotel.check_in_date ?? null,
-      check_out_date: hotel.check_out_date ?? null,
-      check_in_time: hotel.check_in_time ?? null,
-      check_out_time: hotel.check_out_time ?? null,
-      confirmation_number: hotel.confirmation_number ?? null,
-      status: 'booked',   // TM has confirmed a real document.
-    })
-    if (error) errors.push(`Hotel (${hotel.name ?? hotel.city}): ${error.message}`)
+  // Hotel stays: batch insert in a single round trip.
+  const hotels = confirmed.hotel_stays.filter((h) => !!(h.name || h.city))
+  if (hotels.length > 0) {
+    const { error } = await supabase.from('hotel_stays').insert(
+      hotels.map((hotel) => ({
+        tour_id: tourId,
+        name: hotel.name ?? null,
+        city: hotel.city ?? null,
+        address: hotel.address ?? null,
+        check_in_date: hotel.check_in_date ?? null,
+        check_out_date: hotel.check_out_date ?? null,
+        check_in_time: hotel.check_in_time ?? null,
+        check_out_time: hotel.check_out_time ?? null,
+        confirmation_number: hotel.confirmation_number ?? null,
+        status: 'planned',
+      }))
+    )
+    if (error) errors.push(`Hotels: ${error.message}`)
   }
 
   if (errors.length > 0) {
+    // Roll back the optimistic lock so the TM can retry.
+    await supabase
+      .from('forwarded_emails')
+      .update({ extraction_status: 'pending' })
+      .eq('id', forwardedEmailId)
     return { error: errors.join(' | ') }
   }
-
-  // Advance the status only after all rows are inserted successfully.
-  await supabase
-    .from('forwarded_emails')
-    .update({ extraction_status: 'confirmed' })
-    .eq('id', forwardedEmailId)
 
   void bustTourContextCache(tourId)
 

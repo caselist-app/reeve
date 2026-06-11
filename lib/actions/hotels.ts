@@ -1,5 +1,6 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import type { HotelOption } from '@/lib/logistics/types'
@@ -78,6 +79,7 @@ export async function recordHotelOption(
   }
 
   void bustTourContextCache(tourId)
+  revalidatePath(`/tours/${tourId}/hotels`)
 
   return { error: null, stayId: stay.id }
 }
@@ -110,7 +112,10 @@ export async function confirmHotelBooking(
 
   if (error) return { error: error.message }
 
-  if (stay) void bustTourContextCache(stay.tour_id)
+  if (stay) {
+    void bustTourContextCache(stay.tour_id)
+    revalidatePath(`/tours/${stay.tour_id}/hotels`)
+  }
 
   return { error: null, stayId }
 }

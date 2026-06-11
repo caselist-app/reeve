@@ -1,5 +1,6 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -70,6 +71,7 @@ export async function recordTransportOption(
   }
 
   void bustTourContextCache(tourId)
+  revalidatePath(`/tours/${tourId}/transport`)
 
   return { error: null, segmentId: segment.id }
 }

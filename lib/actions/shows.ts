@@ -1,5 +1,6 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { showSchema } from '@/lib/validators/show'
@@ -70,8 +71,8 @@ export async function createShow(
   // hub_ground_minutes, and hub_resolved_at once it completes.
   await resolveHubJob.trigger({ show_id: showId })
 
-  // Bust the crew Q&A context cache: the show roster has changed.
   void bustTourContextCache(tourId)
+  revalidatePath(`/tours/${tourId}/shows`)
 
   return { error: null, showId }
 }
@@ -134,7 +135,10 @@ export async function updateShow(
     .eq('id', showId)
     .single()
 
-  if (showRow) void bustTourContextCache(showRow.tour_id)
+  if (showRow) {
+    void bustTourContextCache(showRow.tour_id)
+    revalidatePath(`/tours/${showRow.tour_id}/shows`)
+  }
 
   return { error: null, showId }
 }

@@ -5,7 +5,6 @@ import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { PlannerWorkspace } from '@/components/planner/planner-workspace'
 import { BoardingPassUploader, type TransportAssignmentRow } from '@/components/planner/boarding-pass-uploader'
-import { resolveHub } from '@/lib/logistics/hub-resolver'
 
 export default async function PlannerPage({
   params,
@@ -16,16 +15,13 @@ export default async function PlannerPage({
   const user = await requireUser()
   const supabase = await createClient()
 
-  const { data: tour } = await supabase
-    .from('tours')
-    .select('id, name, artists(name), timezone')
-    .eq('id', id)
-    .eq('account_id', user.id)
-    .single()
-
-  if (!tour) redirect('/')
-
-  const [{ data: show }, { data: people }, { data: assignmentRows }] = await Promise.all([
+  const [{ data: tour }, { data: show }, { data: people }, { data: assignmentRows }] = await Promise.all([
+    supabase
+      .from('tours')
+      .select('id, name, artists(name), timezone')
+      .eq('id', id)
+      .eq('account_id', user.id)
+      .single(),
     supabase
       .from('shows')
       .select(
@@ -55,6 +51,7 @@ export default async function PlannerPage({
       .order('id'),
   ])
 
+  if (!tour) redirect('/')
   if (!show) redirect(`/tours/${id}/shows`)
 
   // Prior show — needs show.date, so fetched after the redirect guard.
@@ -76,21 +73,9 @@ export default async function PlannerPage({
       }
     : null
 
-  // If hub resolution hasn't run yet, or ran but yielded no usable hub code
-  // (null/null from a previous fallback run), resolve inline now. resolveHub
-  // caches the result on the show row so subsequent page loads skip this step.
-  const hubMissing = !show.hub_resolved_at || (!show.transport_hub_iata && !show.transport_hub_rail)
-  if (hubMissing) {
-    try {
-      const hub = await resolveHub(show.id)
-      show.hub_resolved_at = new Date().toISOString()
-      show.transport_hub_iata = hub.iata
-      show.transport_hub_rail = hub.rail
-      show.hub_ground_minutes = hub.ground_minutes
-    } catch {
-      // Non-fatal: the workspace will show the "resolving" state if this fails.
-    }
-  }
+  // Hub resolution is handled by the resolve-hub Trigger.dev job.
+  // The workspace renders a "Resolving venue location" holding state when
+  // hub_resolved_at is null; no inline geocoding call here.
 
   // Shape assignment rows into a flat structure for the boarding pass uploader.
   const assignments: TransportAssignmentRow[] = (assignmentRows ?? []).map((a) => {

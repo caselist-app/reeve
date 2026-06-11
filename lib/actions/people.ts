@@ -1,5 +1,6 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { personSchema, crewDetailSchema } from '@/lib/validators/person'
@@ -126,6 +127,7 @@ export async function addPerson(
   }
 
   void bustTourContextCache(tourId)
+  revalidatePath(`/tours/${tourId}/people`)
 
   return { error: null, personId: person.id }
 }
@@ -209,6 +211,7 @@ export async function updatePerson(
   }
 
   void bustTourContextCache(existing.tour_id)
+  revalidatePath(`/tours/${existing.tour_id}/people`)
 
   return { error: null }
 }
@@ -254,6 +257,7 @@ export async function removePerson(personId: string): Promise<PeopleActionState>
   }
 
   void bustTourContextCache(person.tour_id)
+  revalidatePath(`/tours/${person.tour_id}/people`)
 
   return { error: null }
 }

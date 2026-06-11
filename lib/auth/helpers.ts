@@ -1,9 +1,13 @@
+import { cache } from 'react'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
 // Use in any Server Component or server action that requires a signed-in user.
 // Redirects to /login if no valid session; returns the user if there is one.
-export async function requireUser() {
+// Wrapped in React.cache() so multiple Server Components in the same render
+// tree share a single supabase.auth.getUser() call instead of paying one
+// round trip each. Does NOT deduplicate across server actions.
+export const requireUser = cache(async function requireUser() {
   const supabase = await createClient()
   const {
     data: { user },
@@ -15,7 +19,7 @@ export async function requireUser() {
   }
 
   return user
-}
+})
 
 // Use when you want the user if present but can handle the unauthenticated case
 // yourself (e.g. public pages that show different content when signed in).
