@@ -14,7 +14,6 @@ export type AffectedPerson = {
   id: string
   name: string
   whatsapp_number: string | null
-  sms_number: string | null
 }
 
 // Returns the people who should receive a notification for this change.
@@ -31,7 +30,7 @@ export async function getAffectedPeople(
     case 'transport_segment': {
       const { data } = await db
         .from('transport_assignments')
-        .select('people(id, name, whatsapp_number, sms_number)')
+        .select('people(id, contacts(name, whatsapp_number))')
         .eq('segment_id', change.segmentId)
         .eq('tour_id', tourId)
 
@@ -41,7 +40,7 @@ export async function getAffectedPeople(
     case 'hotel_stay': {
       const { data } = await db
         .from('room_assignments')
-        .select('people(id, name, whatsapp_number, sms_number)')
+        .select('people(id, contacts(name, whatsapp_number))')
         .eq('hotel_stay_id', change.stayId)
         .eq('tour_id', tourId)
 
@@ -101,7 +100,7 @@ export async function getAffectedPeople(
         segIds.length > 0
           ? db
               .from('transport_assignments')
-              .select('people(id, name, whatsapp_number, sms_number)')
+              .select('people(id, contacts(name, whatsapp_number))')
               .eq('tour_id', tourId)
               .in('segment_id', segIds)
               .then((r) => extractPeople(r.data))
@@ -109,7 +108,7 @@ export async function getAffectedPeople(
         stayIds.length > 0
           ? db
               .from('room_assignments')
-              .select('people(id, name, whatsapp_number, sms_number)')
+              .select('people(id, contacts(name, whatsapp_number))')
               .eq('tour_id', tourId)
               .in('hotel_stay_id', stayIds)
               .then((r) => extractPeople(r.data))
@@ -124,25 +123,39 @@ export async function getAffectedPeople(
       // a contact channel. Not limited to people assigned to specific segments.
       const { data } = await db
         .from('people')
-        .select('id, name, whatsapp_number, sms_number')
+        .select('id, contacts!inner(name, whatsapp_number)')
         .eq('tour_id', tourId)
-        .or('whatsapp_number.not.is.null,sms_number.not.is.null')
+        .not('contacts.whatsapp_number', 'is', null)
 
-      return data ?? []
+      return (data ?? []).map((row) => {
+        // To-one embed: object at runtime (Supabase types it loosely under !inner).
+        const c = row.contacts as unknown as { name: string; whatsapp_number: string | null } | null
+        return { id: row.id, name: c?.name ?? '', whatsapp_number: c?.whatsapp_number ?? null }
+      })
     }
   }
 }
 
-// Safely extracts AffectedPerson[] from a joined Supabase result.
-// The join type is { people: {...} | null } because PostgREST cannot guarantee
-// FK integrity in the TypeScript types.
+// Safely extracts AffectedPerson[] from a joined Supabase result. Identity
+// (name, number) lives on the contact, so each person row nests a contact.
 function extractPeople(
   data: Array<{ people: unknown }> | null
 ): AffectedPerson[] {
   if (!data) return []
   return data
-    .map((row) => row.people as AffectedPerson | null)
-    .filter((p): p is AffectedPerson => p !== null && typeof p.id === 'string')
+    .map((row) => {
+      const p = row.people as {
+        id?: string
+        contacts?: { name?: string; whatsapp_number?: string | null } | null
+      } | null
+      if (!p || typeof p.id !== 'string') return null
+      return {
+        id: p.id,
+        name: p.contacts?.name ?? '',
+        whatsapp_number: p.contacts?.whatsapp_number ?? null,
+      }
+    })
+    .filter((p): p is AffectedPerson => p !== null)
 }
 
 function deduplicate(people: AffectedPerson[]): AffectedPerson[] {

@@ -1,5 +1,3 @@
-import { sendSms } from '@/lib/comms/sms'
-
 export type SendWhatsAppParams = {
   to: string           // E.164 format e.g. +447700900000
   body: string
@@ -20,87 +18,24 @@ export type SendInteractiveParams = {
 }
 
 export type SendWhatsAppResult = {
-  // Meta WhatsApp message ID. Present only when Meta Cloud API was used.
-  // Null when Twilio or SMS fallback was used.
-  // Used to match delivery/read receipt webhooks back to broadcast_log rows.
-  wamid: string | null
+  // Meta WhatsApp message ID, used to match delivery/read receipt webhooks
+  // back to broadcast_log rows. Always present: Meta is the only channel.
+  wamid: string
 }
 
-// Send via Meta WhatsApp Cloud API, Twilio WhatsApp fallback, then Twilio SMS.
-// Never call this synchronously from a webhook handler.
-// Always called from a Trigger.dev job after idempotency check.
-// Returns the wamid when Meta was used so callers can store it for receipt tracking.
+// Send via Meta WhatsApp Cloud API. Meta is the only channel: there is no
+// fallback. Never call this synchronously from a webhook handler. Always call
+// it from a Trigger.dev job after the idempotency check. Throws if Meta rejects
+// the send so job-level retry handles it. Returns the wamid for receipt tracking.
 export async function sendWhatsApp(params: SendWhatsAppParams): Promise<SendWhatsAppResult> {
-  try {
-    const wamid = await sendViaMetaCloudApi(params)
-    return { wamid }
-  } catch (err) {
-    console.error('Meta WhatsApp send failed, trying Twilio WhatsApp:', err)
-  }
-  try {
-    await sendViaTwilioWhatsApp({ to: params.to, body: params.body })
-    return { wamid: null }
-  } catch (err) {
-    console.error('Twilio WhatsApp send failed, falling back to Twilio SMS:', err)
-  }
-  await sendSms({ to: params.to, body: params.body })
-  return { wamid: null }
+  const wamid = await sendViaMetaCloudApi(params)
+  return { wamid }
 }
 
-// Send an interactive message with quick-reply buttons.
-// Interactive types are Meta-only. If Meta fails, fall through to Twilio
-// WhatsApp (plain text, no buttons), then Twilio SMS.
+// Send an interactive message with quick-reply buttons. Meta-only.
+// Throws if Meta rejects the send so job-level retry handles it.
 export async function sendInteractiveWhatsApp(params: SendInteractiveParams): Promise<void> {
-  try {
-    await sendInteractiveViaMetaCloudApi(params)
-    return
-  } catch (err) {
-    console.error('Meta interactive send failed, trying Twilio WhatsApp (no buttons):', err)
-  }
-  try {
-    await sendViaTwilioWhatsApp({ to: params.to, body: params.body })
-    return
-  } catch (err) {
-    console.error('Twilio WhatsApp send failed, falling back to Twilio SMS:', err)
-  }
-  await sendSms({ to: params.to, body: params.body })
-}
-
-// Twilio WhatsApp uses the same Messaging Service SID as SMS but with
-// a whatsapp: prefix on the To number. Plain text only - no interactive types.
-async function sendViaTwilioWhatsApp(params: { to: string; body: string }): Promise<void> {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID
-  const authToken = process.env.TWILIO_AUTH_TOKEN
-  const messagingServiceSid = process.env.TWILIO_MESSAGING_SERVICE_SID
-
-  if (!accountSid || !authToken || !messagingServiceSid) {
-    throw new Error('Twilio env vars not configured')
-  }
-
-  const formBody = new URLSearchParams({
-    To: `whatsapp:${params.to}`,
-    MessagingServiceSid: messagingServiceSid,
-    Body: params.body,
-  })
-
-  const credentials = Buffer.from(`${accountSid}:${authToken}`).toString('base64')
-
-  const res = await fetch(
-    `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${credentials}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: formBody.toString(),
-    }
-  )
-
-  if (!res.ok) {
-    const detail = await res.text()
-    throw new Error(`Twilio WhatsApp error ${res.status}: ${detail}`)
-  }
+  await sendInteractiveViaMetaCloudApi(params)
 }
 
 async function sendInteractiveViaMetaCloudApi(params: SendInteractiveParams): Promise<void> {

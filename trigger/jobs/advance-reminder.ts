@@ -37,7 +37,7 @@ export const advanceReminderJob = task({
         share_token,
         reminder_count,
         documents ( title, doc_type, tour_id ),
-        people ( name, contact_email )
+        people ( contacts ( name, contact_email ) )
       `)
       .eq('id', payload.document_share_id)
       .single()
@@ -45,7 +45,10 @@ export const advanceReminderJob = task({
     if (!share) return { skipped: true, reason: 'share_not_found' }
     if (share.acknowledged_at) return { skipped: true, reason: 'already_acknowledged' }
 
-    const person = share.people as { name: string; contact_email: string | null } | null
+    const personRow = share.people as {
+      contacts: { name: string; contact_email: string | null } | null
+    } | null
+    const person = personRow?.contacts ?? null
     const doc = share.documents as { title: string; doc_type: string; tour_id: string } | null
 
     if (!person?.contact_email || !doc) {

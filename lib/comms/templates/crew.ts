@@ -6,14 +6,30 @@ import { createAdminClient } from '@/lib/supabase/admin'
 export async function renderCrew(tour_id: string): Promise<string> {
   const admin = createAdminClient()
 
-  const { data: people } = await admin
+  const { data: rows } = await admin
     .from('people')
-    .select('name, role, person_type, whatsapp_number, contact_phone')
+    .select('role, person_type, contacts(name, whatsapp_number, contact_phone)')
     .eq('tour_id', tour_id)
-    .order('person_type', { ascending: true })
-    .order('name', { ascending: true })
 
-  if (!people || people.length === 0) return 'No crew on this tour yet.'
+  if (!rows || rows.length === 0) return 'No crew on this tour yet.'
+
+  // Identity lives on the contact. Flatten it, then order by type then name.
+  const people = rows
+    .map((r) => {
+      const c = r.contacts as {
+        name: string
+        whatsapp_number: string | null
+        contact_phone: string | null
+      } | null
+      return {
+        person_type: r.person_type,
+        role: r.role,
+        name: c?.name ?? '',
+        whatsapp_number: c?.whatsapp_number ?? null,
+        contact_phone: c?.contact_phone ?? null,
+      }
+    })
+    .sort((a, b) => a.person_type.localeCompare(b.person_type) || a.name.localeCompare(b.name))
 
   const grouped: Record<string, string[]> = {}
 

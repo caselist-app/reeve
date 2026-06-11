@@ -44,7 +44,7 @@ export const boardingPassJob = task({
         seat,
         ticket_reference,
         boarding_pass_document_id,
-        people ( name, whatsapp_number, sms_number, preferred_channel ),
+        people ( contacts ( name, whatsapp_number ) ),
         transport_segments (
           mode, origin, destination, depart_at, arrive_at,
           carrier_operator, vehicle_or_flight_no, tour_id
@@ -55,12 +55,10 @@ export const boardingPassJob = task({
 
     if (!assignment) return { skipped: true, reason: 'assignment_not_found' }
 
-    const person = assignment.people as {
-      name: string
-      whatsapp_number: string | null
-      sms_number: string | null
-      preferred_channel: string | null
+    const personRow = assignment.people as {
+      contacts: { name: string; whatsapp_number: string | null } | null
     } | null
+    const person = personRow?.contacts ?? null
 
     const seg = assignment.transport_segments as {
       mode: string
@@ -73,11 +71,11 @@ export const boardingPassJob = task({
       tour_id: string
     } | null
 
-    if (!person?.whatsapp_number && !person?.sms_number) {
+    if (!person?.whatsapp_number) {
       return { skipped: true, reason: 'no_contact_number' }
     }
 
-    const to = person.whatsapp_number ?? person.sms_number!
+    const to = person.whatsapp_number
 
     // Fetch the tour timezone for local time formatting.
     const { data: tour } = await admin

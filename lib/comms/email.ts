@@ -25,31 +25,48 @@ export async function provisionTourEmailDomain(artistSlug: string): Promise<void
 }
 
 // Resolves the from address for a tour.
-// Falls back to the shared advancing@reeve.me address when artist_slug is null.
-export function tourFromAddress(artistSlug: string | null | undefined): string {
-  if (!artistSlug) return 'advancing@reeve.me'
-  return `advancing@${artistSlug}.reeve.me`
+// localPart defaults to 'advancing' (formal documents); operational mail passes
+// 'crew'. Falls back to the shared {localPart}@reeve.me when artist_slug is null.
+export function tourFromAddress(
+  artistSlug: string | null | undefined,
+  localPart = 'advancing'
+): string {
+  if (!artistSlug) return `${localPart}@reeve.me`
+  return `${localPart}@${artistSlug}.reeve.me`
+}
+
+export type EmailAttachment = {
+  filename: string
+  content: Buffer | string // raw Buffer or base64 string
 }
 
 export type SendEmailParams = {
   to: string
   subject: string
   html: string
-  // The artist slug determines the from address: advancing@{slug}.reeve.me
-  // This is provisioned in Resend at tour creation.
+  // The artist slug determines the from domain: {local_part}@{slug}.reeve.me.
+  // Provisioned in Resend at tour creation.
   artist_slug: string | null | undefined
+  // From local-part. Defaults to 'advancing' (formal document stream).
+  // Operational notifications pass 'crew' so the two streams keep separate
+  // sending reputations on the same branded subdomain.
+  from_local_part?: string
+  attachments?: EmailAttachment[]
   // When provided, sent_at is written to document_shares for this token.
   share_token?: string
 }
 
-export async function sendEmail(params: SendEmailParams): Promise<void> {
-  const from = tourFromAddress(params.artist_slug)
+// Returns the Resend message id so callers (e.g. the notifications service) can
+// record it for delivery tracking.
+export async function sendEmail(params: SendEmailParams): Promise<{ id: string | null }> {
+  const from = tourFromAddress(params.artist_slug, params.from_local_part)
 
-  const { error } = await resend.emails.send({
+  const { data, error } = await resend.emails.send({
     from,
     to: params.to,
     subject: params.subject,
     html: params.html,
+    attachments: params.attachments,
   })
 
   if (error) throw new Error(`Resend error: ${error.message}`)
@@ -64,4 +81,6 @@ export async function sendEmail(params: SendEmailParams): Promise<void> {
       .update({ sent_at: new Date().toISOString() })
       .eq('share_token', params.share_token)
   }
+
+  return { id: data?.id ?? null }
 }

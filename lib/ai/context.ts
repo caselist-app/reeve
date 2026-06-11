@@ -137,7 +137,7 @@ export async function assembleTourContext(tour_id: string): Promise<TourContext>
         .order('date', { ascending: true }),
       admin
         .from('people')
-        .select('id, name, person_type, role, preferred_channel, whatsapp_number, home_city, dietary, allergies, passport_expiry, passport_country')
+        .select('id, person_type, role, contacts(name, preferred_channel, whatsapp_number, home_city, dietary, allergies, passport_expiry, passport_country)')
         .eq('tour_id', tour_id),
       admin
         .from('transport_segments')
@@ -180,7 +180,31 @@ export async function assembleTourContext(tour_id: string): Promise<TourContext>
       advance: Array.isArray(s.show_advance) ? (s.show_advance[0] ?? null) : (s.show_advance ?? null),
       day_sheet: Array.isArray(s.day_sheets) ? (s.day_sheets[0] ?? null) : (s.day_sheets ?? null),
     })),
-    people: peopleRes.data ?? [],
+    people: (peopleRes.data ?? []).map((p) => {
+      const c = p.contacts as {
+        name: string
+        preferred_channel: string | null
+        whatsapp_number: string | null
+        home_city: string | null
+        dietary: string | null
+        allergies: string | null
+        passport_expiry: string | null
+        passport_country: string | null
+      } | null
+      return {
+        id: p.id,
+        name: c?.name ?? '',
+        person_type: p.person_type,
+        role: p.role,
+        preferred_channel: c?.preferred_channel ?? null,
+        whatsapp_number: c?.whatsapp_number ?? null,
+        home_city: c?.home_city ?? null,
+        dietary: c?.dietary ?? null,
+        allergies: c?.allergies ?? null,
+        passport_expiry: c?.passport_expiry ?? null,
+        passport_country: c?.passport_country ?? null,
+      }
+    }),
     transport: (transportRes.data ?? []).map((t) => ({
       id: t.id,
       mode: t.mode,

@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 
 // Zero-AI morning message. Renders directly from the spine.
-// Sent on show days to each person via their preferred_channel.
+// Sent on show days to each person over WhatsApp.
 // Source of truth: day_sheet times, show venue, hotel check-out.
 
 export type MorningMessageData = {
@@ -75,7 +75,7 @@ export async function buildMorningMessageData(
     { data: daySheet },
     { data: roomAssignment },
   ] = await Promise.all([
-    admin.from('people').select('name').eq('id', person_id).single(),
+    admin.from('people').select('contacts(name)').eq('id', person_id).single(),
     admin.from('shows').select('venue_name, date').eq('id', show_id).single(),
     admin
       .from('day_sheets')
@@ -105,8 +105,9 @@ export async function buildMorningMessageData(
     ? hotel.check_out_time.slice(0, 5)
     : null
 
-  // First name only: everything before the first space.
-  const firstName = person.name.split(' ')[0]
+  // First name only: everything before the first space. Name lives on the contact.
+  const personName = (person.contacts as { name: string } | null)?.name ?? ''
+  const firstName = personName.split(' ')[0]
 
   return {
     person_first_name: firstName,

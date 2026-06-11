@@ -1,9 +1,7 @@
 import { schedules } from '@trigger.dev/sdk/v3'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { buildSendKey, checkAndSet } from '@/lib/comms/idempotency'
-import { buildMorningMessageData, renderMorningMessage } from '@/lib/comms/templates/morning-message'
-import { sendInteractiveWhatsApp } from '@/lib/comms/whatsapp'
-import { sendSms } from '@/lib/comms/sms'
+import { buildMorningMessageData } from '@/lib/comms/templates/morning-message'
+import { notify, type ChannelOutcome } from '@/lib/comms/notify'
 
 // Returns today's date as YYYY-MM-DD in the given IANA timezone.
 // en-CA locale produces ISO date format natively.
@@ -60,54 +58,45 @@ export const morningMessageSchedule = schedules.task({
 
     if (!show) return { skipped: true, reason: 'no_show_today', date: today }
 
-    // All people on this tour who have at least one contact number.
-    const { data: people } = await admin
+    // Everyone on the tour with at least one usable address (WhatsApp or email).
+    // The notifications service resolves the actual channel per person from
+    // their contact preference; the job just hands it the recipients.
+    const { data: peopleRows } = await admin
       .from('people')
-      .select('id, preferred_channel, whatsapp_number, sms_number')
+      .select('id, contacts(whatsapp_number, contact_email)')
       .eq('tour_id', tourId)
-      .or('whatsapp_number.not.is.null,sms_number.not.is.null')
 
-    if (!people || people.length === 0) {
+    const people = (peopleRows ?? []).filter((r) => {
+      const c = r.contacts as { whatsapp_number: string | null; contact_email: string | null } | null
+      return !!(c?.whatsapp_number || c?.contact_email)
+    })
+
+    if (people.length === 0) {
       return { skipped: true, reason: 'no_contactable_people' }
     }
 
-    const results: { person_id: string; outcome: string }[] = []
+    const results: { person_id: string; channels: ChannelOutcome[] }[] = []
 
     await runConcurrently(
       people,
       async (person) => {
-        const key = buildSendKey(tourId, person.id, 'morning_message', today)
-        const safe = await checkAndSet(key, 60 * 60 * 48) // 48h TTL
-        if (!safe) {
-          results.push({ person_id: person.id, outcome: 'already_sent' })
-          return
-        }
-
         const data = await buildMorningMessageData(person.id, show.id, timezone)
         if (!data) {
-          results.push({ person_id: person.id, outcome: 'data_unavailable' })
+          results.push({ person_id: person.id, channels: [] })
           return
         }
 
-        const message = renderMorningMessage(data)
-        const channel = person.preferred_channel ?? 'whatsapp'
+        // notify() owns channel selection and idempotency. dedupDimension is the
+        // show date, so a person gets one morning message per show day per channel.
+        const result = await notify({
+          tourId,
+          personId: person.id,
+          type: 'morning_message',
+          data,
+          dedupDimension: today,
+        })
 
-        if (channel === 'sms' && person.sms_number) {
-          await sendSms({ to: person.sms_number, body: message })
-        } else {
-          const to = person.whatsapp_number ?? person.sms_number!
-          await sendInteractiveWhatsApp({
-            to,
-            body: message,
-            buttons: [
-              { id: 'itinerary', title: '/itinerary' },
-              { id: 'travel', title: '/travel' },
-              { id: 'hotel', title: '/hotel' },
-            ],
-          })
-        }
-
-        results.push({ person_id: person.id, outcome: 'sent' })
+        results.push({ person_id: person.id, channels: result.channels })
       },
       5
     )

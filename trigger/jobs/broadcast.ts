@@ -2,7 +2,6 @@ import { task } from '@trigger.dev/sdk/v3'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { buildSendKey, checkAndSet } from '@/lib/comms/idempotency'
 import { sendWhatsApp } from '@/lib/comms/whatsapp'
-import { sendSms } from '@/lib/comms/sms'
 
 export type BroadcastPayload = {
   tour_id: string
@@ -37,31 +36,24 @@ export const broadcastJob = task({
         continue
       }
 
-      const { data: person } = await admin
+      const { data: personRow } = await admin
         .from('people')
-        .select('whatsapp_number, sms_number, preferred_channel, name')
+        .select('contacts(whatsapp_number)')
         .eq('id', person_id)
         .single()
 
-      if (!person?.whatsapp_number && !person?.sms_number) {
+      const person = personRow?.contacts as { whatsapp_number: string | null } | null
+
+      if (!person?.whatsapp_number) {
         results.push({ person_id, status: 'skipped_no_contact' })
         continue
       }
 
-      const channel = person.preferred_channel ?? 'whatsapp'
-      const to = channel === 'sms'
-        ? person.sms_number!
-        : (person.whatsapp_number ?? person.sms_number!)
-
       let wamid: string | null = null
 
       try {
-        if (channel === 'sms') {
-          await sendSms({ to, body: payload.message })
-        } else {
-          const result = await sendWhatsApp({ to, body: payload.message })
-          wamid = result.wamid
-        }
+        const result = await sendWhatsApp({ to: person.whatsapp_number, body: payload.message })
+        wamid = result.wamid
 
         // Log the send. Admin client bypasses RLS since jobs run outside user auth.
         await admin.from('broadcast_log').insert({
