@@ -1,10 +1,15 @@
 import { redirect } from 'next/navigation'
-import { requireUser } from '@/lib/auth/helpers'
+import { getCurrentUser } from '@/lib/auth/helpers'
 
-// App home. requireUser redirects to /login if not authenticated.
-export default async function Home() {
-  await requireUser()
+// Root. Logged-out visitors go to the marketing site at /home.
+// Logged-in users enter the app.
+export default async function Root() {
+  const user = await getCurrentUser()
 
-  // Placeholder until the tours list UI is built.
+  if (!user) {
+    redirect('/home')
+  }
+
+  // Placeholder app root until the tours list UI is built.
   redirect('/tours/new')
 }
