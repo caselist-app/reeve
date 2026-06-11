@@ -14,20 +14,25 @@ export default async function TourSettingsPage({
   const user = await requireUser()
   const supabase = await createClient()
 
-  const { data: tour } = await supabase
+  const { data: tourRaw } = await supabase
     .from('tours')
-    .select('*')
+    .select('*, artists(name)')
     .eq('id', id)
     .eq('account_id', user.id)
     .single()
 
-  if (!tour) {
-    redirect('/app')
+  if (!tourRaw) {
+    redirect('/')
   }
+
+  const artistName = (tourRaw.artists as unknown as { name: string } | null)?.name ?? ''
+  // Pass only the base tour fields (no joined artists) to the form which expects Tables<'tours'>.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { artists: _artists, ...tour } = tourRaw
 
   return (
     <PageLayout maxWidth="max-w-lg">
-      <PageHeader eyebrow={tour.artist_act} title="Settings" />
+      <PageHeader eyebrow={artistName} title="Settings" />
       <TourSettingsForm tour={tour} />
     </PageLayout>
   )

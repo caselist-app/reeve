@@ -30,13 +30,6 @@ import {
 
 const CURRENCIES = ['GBP', 'USD', 'EUR', 'AUD', 'CAD', 'CHF', 'DKK', 'NOK', 'SEK', 'JPY', 'NZD']
 
-function toSlug(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-}
-
 interface Props {
   tour: Tables<'tours'>
 }
@@ -48,9 +41,6 @@ export function TourSettingsForm({ tour }: Props) {
   const boundUpdate = updateTourAction.bind(null, tour.id)
   const [state, formAction, pending] = useActionState(boundUpdate, { error: null })
 
-  const [artistAct, setArtistAct] = useState(tour.artist_act)
-  const [slug, setSlug] = useState(tour.artist_slug ?? '')
-  const [slugTouched, setSlugTouched] = useState(false)
   const [currency, setCurrency] = useState(tour.base_currency)
   const [timezone, setTimezone] = useState(tour.timezone ?? '')
 
@@ -91,20 +81,6 @@ export function TourSettingsForm({ tour }: Props) {
           />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor={`${formId}-artist_act`}>Artist / act</Label>
-          <Input
-            id={`${formId}-artist_act`}
-            name="artist_act"
-            value={artistAct}
-            onChange={(e) => {
-              setArtistAct(e.target.value)
-              if (!slugTouched) setSlug(toSlug(e.target.value))
-            }}
-            required
-          />
-        </div>
-
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor={`${formId}-start_date`}>Start date</Label>
@@ -135,36 +111,18 @@ export function TourSettingsForm({ tour }: Props) {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
-          <div className="space-y-2">
-            <Label>Base currency</Label>
-            <Select name="base_currency" value={currency} onValueChange={setCurrency}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CURRENCIES.map((c) => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor={`${formId}-artist_slug`}>
-              Slug
-              <span className="ml-1 text-xs text-muted-foreground">for advancing@ email</span>
-            </Label>
-            <Input
-              id={`${formId}-artist_slug`}
-              name="artist_slug"
-              value={slug}
-              onChange={(e) => {
-                setSlug(e.target.value)
-                setSlugTouched(true)
-              }}
-            />
-          </div>
+        <div className="space-y-2">
+          <Label>Base currency</Label>
+          <Select name="base_currency" value={currency} onValueChange={setCurrency}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CURRENCIES.map((c) => (
+                <SelectItem key={c} value={c}>{c}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="space-y-2">

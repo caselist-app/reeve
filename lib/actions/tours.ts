@@ -5,7 +5,6 @@ import { schedules } from '@trigger.dev/sdk/v3'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { tourSchema } from '@/lib/validators/tour'
-import { provisionTourEmailDomain } from '@/lib/comms/email'
 
 export type TourActionState = { error: string | null }
 
@@ -17,12 +16,11 @@ async function canCreateTour(_accountId: string): Promise<boolean> {
 function parseTourFormData(formData: FormData) {
   return tourSchema.safeParse({
     name: formData.get('name'),
-    artist_act: formData.get('artist_act'),
+    artist_id: formData.get('artist_id'),
     start_date: formData.get('start_date') || undefined,
     end_date: formData.get('end_date') || undefined,
     territory: formData.get('territory') || undefined,
     base_currency: formData.get('base_currency') || 'GBP',
-    artist_slug: formData.get('artist_slug') || undefined,
     timezone: formData.get('timezone') || undefined,
   })
 }
@@ -51,20 +49,7 @@ export async function createTourAction(
     .single()
 
   if (error) {
-    if (error.code === '23505') {
-      return { error: 'This slug is already in use. Try a different artist slug.' }
-    }
     return { error: error.message }
-  }
-
-  // Provision the per-tour Resend sending domain (advancing@{slug}.reeve.me).
-  // Only possible when the TM has set an artist_slug. Failure is non-blocking.
-  if (parsed.data.artist_slug) {
-    try {
-      await provisionTourEmailDomain(parsed.data.artist_slug)
-    } catch (domainErr) {
-      console.error('[createTour] Failed to provision email domain:', domainErr)
-    }
   }
 
   // Register a daily morning-message schedule for this tour.
@@ -74,14 +59,14 @@ export async function createTourAction(
     await schedules.create({
       task: 'morning-message',
       cron: '0 7 * * *',
-      externalId: `morning-${data.id}`,
-      deduplicationKey: `morning-${data.id}`,
+      externalId: `morning-${data!.id}`,
+      deduplicationKey: `morning-${data!.id}`,
     })
   } catch (scheduleErr) {
     console.error('[createTour] Failed to register morning-message schedule:', scheduleErr)
   }
 
-  redirect(`/tours/${data.id}/people`)
+  redirect(`/tours/${data!.id}/people`)
 }
 
 // tourId is pre-bound via .bind(null, tourId) in the settings page component.
@@ -105,9 +90,6 @@ export async function updateTourAction(
     .eq('account_id', user.id)
 
   if (error) {
-    if (error.code === '23505') {
-      return { error: 'This slug is already in use. Try a different artist slug.' }
-    }
     return { error: error.message }
   }
 
@@ -138,5 +120,5 @@ export async function archiveTourAction(tourId: string): Promise<TourActionState
     console.error('[archiveTour] Failed to deactivate morning-message schedule:', scheduleErr)
   }
 
-  redirect('/app')
+  redirect('/')
 }
