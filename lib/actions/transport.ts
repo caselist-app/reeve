@@ -76,6 +76,47 @@ export async function recordTransportOption(
   return { error: null, segmentId: segment.id }
 }
 
+// Updates an existing transport segment. Used by the timeline edit panel.
+// Only fields the TM should edit directly are accepted; status promotion
+// to 'booked' must be done explicitly by the TM, never auto-set.
+export async function updateTransportSegment(
+  segmentId: string,
+  data: {
+    origin?: string | null
+    destination?: string | null
+    depart_at?: string | null
+    arrive_at?: string | null
+    carrier_operator?: string | null
+    vehicle_or_flight_no?: string | null
+    booking_reference?: string | null
+    status?: string
+  },
+): Promise<TransportActionState> {
+  await requireUser()
+
+  const supabase = await createClient()
+
+  // RLS on transport_segments enforces owns_tour(tour_id).
+  const { data: existing } = await supabase
+    .from('transport_segments')
+    .select('tour_id')
+    .eq('id', segmentId)
+    .single()
+
+  if (!existing) return { error: 'Segment not found.' }
+
+  const { error } = await supabase
+    .from('transport_segments')
+    .update(data)
+    .eq('id', segmentId)
+
+  if (error) return { error: error.message }
+
+  void bustTourContextCache(existing.tour_id)
+  revalidatePath(`/tours/${existing.tour_id}/schedule`)
+  return { error: null, segmentId }
+}
+
 // Called after the TM uploads a boarding pass against a transport_assignment.
 // Schedules the boarding pass send job 3 hours before the segment departs.
 // If departure is fewer than 3 hours away, triggers immediately.

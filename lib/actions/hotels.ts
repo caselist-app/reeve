@@ -84,6 +84,44 @@ export async function recordHotelOption(
   return { error: null, stayId: stay.id }
 }
 
+// Updates an existing hotel stay. Used by the timeline edit panel.
+export async function updateHotelStay(
+  stayId: string,
+  data: {
+    name?: string | null
+    address?: string | null
+    check_in_date?: string | null
+    check_in_time?: string | null
+    check_out_date?: string | null
+    check_out_time?: string | null
+    wifi_network?: string | null
+    wifi_password?: string | null
+  },
+): Promise<HotelActionState> {
+  await requireUser()
+
+  const supabase = await createClient()
+
+  const { data: existing } = await supabase
+    .from('hotel_stays')
+    .select('tour_id')
+    .eq('id', stayId)
+    .single()
+
+  if (!existing) return { error: 'Hotel stay not found.' }
+
+  const { error } = await supabase
+    .from('hotel_stays')
+    .update(data)
+    .eq('id', stayId)
+
+  if (error) return { error: error.message }
+
+  void bustTourContextCache(existing.tour_id)
+  revalidatePath(`/tours/${existing.tour_id}/schedule`)
+  return { error: null, stayId }
+}
+
 // Updates the confirmation number and promotes status to 'booked'.
 // This is the only place in the codebase that sets status='booked', 
 // and only after the TM has explicitly entered the reference.
