@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { NotifyPanel } from '@/components/broadcast/notify-panel'
+import { PlacesAddressInput } from '@/components/shows/places-address-input'
 import type { ChangeDescriptor } from '@/lib/comms/affected'
 
 // Fields that warrant a crew notification when changed.
@@ -62,6 +63,8 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
   // Set after a successful update if a notification-worthy field changed.
   const [notify, setNotify] = useState<NotifyState | null>(null)
 
+  const [address, setAddress] = useState(initialData?.address ?? '')
+  const [venueName, setVenueName] = useState(initialData?.venue_name ?? '')
   const [venueType, setVenueType] = useState(initialData?.venue_type ?? '')
   const [unionStage, setUnionStage] = useState(
     initialData?.union_stage == null ? '' : initialData.union_stage ? 'yes' : 'no'
@@ -81,8 +84,8 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
 
     const data: ShowData = {
       date: fd.get('date') as string,
-      venue_name: fd.get('venue_name') as string,
-      address: (fd.get('address') as string) || null,
+      venue_name: venueName || (fd.get('venue_name') as string),
+      address: address || null,
       venue_type: (venueType as ShowData['venue_type']) || null,
       capacity: fd.get('capacity') ? Number(fd.get('capacity')) : null,
       load_in_at: (fd.get('load_in_at') as string) || null,
@@ -150,7 +153,8 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
           <Input
             id={`${formId}-venue_name`}
             name="venue_name"
-            defaultValue={initialData?.venue_name ?? ''}
+            value={venueName}
+            onChange={(e) => setVenueName(e.target.value)}
             placeholder="O2 Academy Brixton"
             required
           />
@@ -159,10 +163,16 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
 
       <div className="space-y-2">
         <Label htmlFor={`${formId}-address`}>Address</Label>
-        <Input
+        <PlacesAddressInput
           id={`${formId}-address`}
           name="address"
-          defaultValue={initialData?.address ?? ''}
+          value={address}
+          onChange={setAddress}
+          onPlaceSelect={(addr, name) => {
+            setAddress(addr)
+            // Only fill venue name if it is empty — don't overwrite what the TM typed.
+            if (name && !venueName) setVenueName(name)
+          }}
           placeholder="211 Stockwell Rd, London SW9 9SL"
         />
       </div>
