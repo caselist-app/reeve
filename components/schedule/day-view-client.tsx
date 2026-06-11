@@ -1,11 +1,14 @@
 'use client'
 
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
+import { Plus } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { useSchedulePanel } from '@/stores/schedule-panel-store'
 import { ShowPanel } from '@/components/schedule/panels/show-panel'
 import { TransportPanel } from '@/components/schedule/panels/transport-panel'
 import { HotelPanel } from '@/components/schedule/panels/hotel-panel'
 import { EventPanel } from '@/components/schedule/panels/event-panel'
+import { AddFlow } from '@/components/schedule/add/add-flow'
 import type { Tables } from '@/lib/types/database'
 
 // Serializable panel data passed from the Server Component page.
@@ -44,13 +47,16 @@ interface DayViewClientProps {
   timeline: ReactNode
   dayInfoPanel: ReactNode
   panelData: DayPanelData
+  // Context needed for the add flow forms.
+  addContext: { tourId: string; tourDateId: string; date: string; timezone: string }
 }
 
 // State shell for the schedule day view. Holds which timeline card is active
 // and swaps the right column between the day info panel and the edit panel.
 // Only this component is a client component; the slots remain Server Components.
-export function DayViewClient({ timeline, dayInfoPanel, panelData }: DayViewClientProps) {
+export function DayViewClient({ timeline, dayInfoPanel, panelData, addContext }: DayViewClientProps) {
   const { activeCard, setActiveCard } = useSchedulePanel()
+  const [addOpen, setAddOpen] = useState(false)
 
   function renderEditPanel() {
     if (!activeCard) return null
@@ -89,16 +95,38 @@ export function DayViewClient({ timeline, dayInfoPanel, panelData }: DayViewClie
 
   const editPanel = renderEditPanel()
 
+  // Add flow takes over the right panel.
+  function handleAddOpen() {
+    setActiveCard(null)
+    setAddOpen(true)
+  }
+
   return (
     <div className="flex flex-1 min-w-0 min-h-0">
       {/* Timeline: flex-1 */}
-      <div className="flex-1 min-w-0 overflow-y-auto border-r border-border">
-        {timeline}
+      <div className="flex flex-col flex-1 min-w-0">
+        {/* Timeline header with Add button */}
+        <div className="flex items-center justify-end px-5 py-3 border-b border-border shrink-0">
+          <Button size="sm" onClick={handleAddOpen}>
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            Add
+          </Button>
+        </div>
+        <div className="flex-1 overflow-y-auto border-r border-border">
+          {timeline}
+        </div>
       </div>
 
       {/* Right panel: 260px fixed */}
       <div className="w-[260px] shrink-0 overflow-y-auto">
-        {editPanel ?? dayInfoPanel}
+        {addOpen ? (
+          <AddFlow
+            {...addContext}
+            onClose={() => setAddOpen(false)}
+          />
+        ) : (
+          editPanel ?? dayInfoPanel
+        )}
       </div>
     </div>
   )

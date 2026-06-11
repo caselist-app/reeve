@@ -150,6 +150,12 @@ export default async function SchedulePage({
 
       <DayViewClient
         panelData={panelData}
+        addContext={{
+          tourId: id,
+          tourDateId: tourDate?.id ?? '',
+          date: selectedDate,
+          timezone: tz,
+        }}
         timeline={
           tourDate ? (
             <DayTimeline

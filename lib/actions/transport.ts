@@ -76,6 +76,40 @@ export async function recordTransportOption(
   return { error: null, segmentId: segment.id }
 }
 
+// Creates a new transport segment directly (not via the planner).
+// Used by the add forms in the schedule day view.
+export async function createTransportSegment(
+  tourId: string,
+  data: {
+    tour_date_id?: string | null
+    mode: string
+    origin?: string | null
+    destination?: string | null
+    depart_at?: string | null
+    arrive_at?: string | null
+    carrier_operator?: string | null
+    vehicle_or_flight_no?: string | null
+    booking_reference?: string | null
+  },
+): Promise<TransportActionState> {
+  await requireUser()
+
+  const supabase = await createClient()
+
+  // Ownership check via RLS: owns_tour(tour_id) on insert.
+  const { data: row, error } = await supabase
+    .from('transport_segments')
+    .insert({ tour_id: tourId, status: 'planned', ...data })
+    .select('id')
+    .single()
+
+  if (error || !row) return { error: error?.message ?? 'Failed to create segment.' }
+
+  void bustTourContextCache(tourId)
+  revalidatePath(`/tours/${tourId}/schedule`)
+  return { error: null, segmentId: row.id }
+}
+
 // Updates an existing transport segment. Used by the timeline edit panel.
 // Only fields the TM should edit directly are accepted; status promotion
 // to 'booked' must be done explicitly by the TM, never auto-set.

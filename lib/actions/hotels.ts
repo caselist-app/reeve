@@ -84,6 +84,51 @@ export async function recordHotelOption(
   return { error: null, stayId: stay.id }
 }
 
+// Creates a new hotel stay directly (not via the planner).
+// Used by the add hotel form in the schedule day view.
+export async function createHotelStay(
+  tourId: string,
+  data: {
+    tour_date_id?: string | null
+    name?: string | null
+    address?: string | null
+    check_in_date?: string | null
+    check_in_time?: string | null
+    check_out_date?: string | null
+    check_out_time?: string | null
+    people?: string[]   // person ids for room_assignments
+  },
+): Promise<HotelActionState> {
+  await requireUser()
+
+  const supabase = await createClient()
+
+  const { people = [], ...stayData } = data
+
+  const { data: stay, error } = await supabase
+    .from('hotel_stays')
+    .insert({ tour_id: tourId, status: 'planned', ...stayData })
+    .select('id')
+    .single()
+
+  if (error || !stay) return { error: error?.message ?? 'Failed to create hotel stay.' }
+
+  if (people.length > 0) {
+    const assignments = people.map((person_id) => ({
+      tour_id: tourId,
+      hotel_stay_id: stay.id,
+      person_id,
+      room_tier: 'crew' as const,
+    }))
+    const { error: assignError } = await supabase.from('room_assignments').insert(assignments)
+    if (assignError) return { error: assignError.message }
+  }
+
+  void bustTourContextCache(tourId)
+  revalidatePath(`/tours/${tourId}/schedule`)
+  return { error: null, stayId: stay.id }
+}
+
 // Updates an existing hotel stay. Used by the timeline edit panel.
 export async function updateHotelStay(
   stayId: string,
