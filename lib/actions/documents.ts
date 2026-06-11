@@ -4,6 +4,7 @@ import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { generateShareToken } from '@/lib/comms/email'
 import { sendRiderEmailJob } from '@/trigger/jobs/send-rider-email'
+import { advanceReminderJob } from '@/trigger/jobs/advance-reminder'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://reeve.me'
 
@@ -87,7 +88,7 @@ export async function sendRider(params: SendRiderParams): Promise<SendRiderResul
 
   // Insert the share row before enqueuing so the job can write sent_at to it.
   // show_id is stored so the acknowledge API can locate the correct show_advance row.
-  const { error: insertError } = await supabase
+  const { data: newShare, error: insertError } = await supabase
     .from('document_shares')
     .insert({
       tour_id: tourId,
@@ -97,8 +98,10 @@ export async function sendRider(params: SendRiderParams): Promise<SendRiderResul
       channel: 'email',
       share_token: shareToken,
     })
+    .select('id')
+    .single()
 
-  if (insertError) return { error: insertError.message }
+  if (insertError || !newShare) return { error: insertError?.message ?? 'Failed to create share.' }
 
   // Enqueue the Trigger.dev job and return immediately.
   // The job writes sent_at to the share row after Resend confirms delivery.
@@ -112,6 +115,12 @@ export async function sendRider(params: SendRiderParams): Promise<SendRiderResul
     share_url: shareUrl,
     note: note ?? null,
   })
+
+  // Schedule advance reminders. The job re-checks acknowledged_at before
+  // sending, so these are safe to enqueue eagerly.
+  const reminderBase = { tour_id: tourId, document_share_id: newShare.id }
+  await advanceReminderJob.trigger({ ...reminderBase, reminder_index: 1 }, { delay: '3d' })
+  await advanceReminderJob.trigger({ ...reminderBase, reminder_index: 2 }, { delay: '7d' })
 
   return { error: null }
 }

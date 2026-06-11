@@ -4,11 +4,25 @@ import { extractEmailForward } from '@/lib/ai/extract'
 
 export type ExtractForwardPayload = {
   forwarded_email_id: string
+  // Resend email_id used to fetch the body from the receiving API.
+  // The webhook handler stores only metadata and passes the id here so the
+  // handler returns 200 fast and avoids Svix redelivery retries.
+  email_id: string
+}
+
+// Fetches the plain-text body of a received email from the Resend REST API.
+async function fetchEmailBody(emailId: string): Promise<string> {
+  const res = await fetch(`https://api.resend.com/emails/receiving/${emailId}`, {
+    headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
+  })
+  if (!res.ok) throw new Error(`Resend API ${res.status}`)
+  const json = await res.json() as { text?: string | null; html?: string | null }
+  return json.text ?? json.html ?? ''
 }
 
 // Sonnet extraction job. Triggered after the inbound webhook stores a
-// forwarded_emails row. Reads the raw body, runs extraction, and writes
-// proposed_rows back with extraction_status = 'extracted'.
+// forwarded_emails row. Fetches the email body from Resend, runs extraction,
+// and writes proposed_rows back with extraction_status = 'extracted'.
 // Never writes to the spine directly: that requires explicit TM confirmation.
 export const extractForwardJob = task({
   id: 'extract-forward',
@@ -17,7 +31,7 @@ export const extractForwardJob = task({
 
     const { data: forwarded } = await admin
       .from('forwarded_emails')
-      .select('id, tour_id, body_text, subject')
+      .select('id, tour_id, subject')
       .eq('id', payload.forwarded_email_id)
       .single()
 
@@ -26,11 +40,25 @@ export const extractForwardJob = task({
       return { skipped: true, reason: 'not_found' }
     }
 
+    // Fetch the email body here rather than in the webhook handler so the
+    // handler can return 200 fast (avoiding Svix retries).
+    let bodyText = ''
+    try {
+      bodyText = await fetchEmailBody(payload.email_id)
+      await admin
+        .from('forwarded_emails')
+        .update({ body_text: bodyText })
+        .eq('id', forwarded.id)
+    } catch (err) {
+      console.error('[extract-forward] failed to fetch email body:', err)
+      // Continue with empty body: extraction will fail and the TM can discard.
+    }
+
     // Build a labelled email string so the model has full context.
     const rawEmail = [
       `Subject: ${forwarded.subject ?? ''}`,
       ``,
-      forwarded.body_text ?? '',
+      bodyText,
     ].join('\n')
 
     let proposed

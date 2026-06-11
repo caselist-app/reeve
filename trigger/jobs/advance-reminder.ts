@@ -1,6 +1,5 @@
 import { task } from '@trigger.dev/sdk/v3'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { buildSendKey, checkAndSet } from '@/lib/comms/idempotency'
 import { sendEmail } from '@/lib/comms/email'
 import { renderAdvanceReminderEmail } from '@/lib/comms/templates/advance-reminder'
 
@@ -17,18 +16,9 @@ export type AdvanceReminderPayload = {
 export const advanceReminderJob = task({
   id: 'advance-reminder',
   run: async (payload: AdvanceReminderPayload) => {
-    const key = buildSendKey(
-      payload.tour_id,
-      payload.document_share_id,
-      'advance_reminder',
-      String(payload.reminder_index)
-    )
-
-    const safe = await checkAndSet(key, 60 * 60 * 24 * 30)
-    if (!safe) return { skipped: true, reason: 'already_sent' }
-
     const admin = createAdminClient()
 
+    // Fetch share first so we have person_id for the notification_log claim.
     const { data: share } = await admin
       .from('document_shares')
       .select(`
@@ -36,6 +26,7 @@ export const advanceReminderJob = task({
         acknowledged_at,
         share_token,
         reminder_count,
+        recipient_person_id,
         documents ( title, doc_type, tour_id ),
         people ( contacts ( name, contact_email ) )
       `)
@@ -45,6 +36,21 @@ export const advanceReminderJob = task({
     if (!share) return { skipped: true, reason: 'share_not_found' }
     if (share.acknowledged_at) return { skipped: true, reason: 'already_acknowledged' }
 
+    // Claim the send slot before doing any further work.
+    const claimKey = {
+      tour_id: payload.tour_id,
+      person_id: share.recipient_person_id,
+      notification_type: 'advance_reminder' as const,
+      channel: 'email' as const,
+      dedup_dimension: `${payload.document_share_id}:${payload.reminder_index}`,
+    }
+    const { error: claimError } = await admin
+      .from('notification_log')
+      .insert({ ...claimKey, status: 'queued' })
+
+    if (claimError?.code === '23505') return { skipped: true, reason: 'already_sent' }
+    if (claimError) throw new Error(`[advance-reminder] claim failed: ${claimError.message}`)
+
     const personRow = share.people as {
       contacts: { name: string; contact_email: string | null } | null
     } | null
@@ -52,6 +58,7 @@ export const advanceReminderJob = task({
     const doc = share.documents as { title: string; doc_type: string; tour_id: string } | null
 
     if (!person?.contact_email || !doc) {
+      await admin.from('notification_log').delete().match(claimKey)
       return { skipped: true, reason: 'missing_contact_or_document' }
     }
 
@@ -61,7 +68,10 @@ export const advanceReminderJob = task({
       .eq('id', doc.tour_id)
       .single()
 
-    if (!tour) return { skipped: true, reason: 'tour_not_found' }
+    if (!tour) {
+      await admin.from('notification_log').delete().match(claimKey)
+      return { skipped: true, reason: 'tour_not_found' }
+    }
 
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://reeve.me'
     const shareUrl = `${appUrl}/a/${share.share_token}`
@@ -71,28 +81,36 @@ export const advanceReminderJob = task({
       recipientName: person.name,
       artistName,
       documentTitle: doc.title,
-      // Show date and venue are not critical for the reminder nudge.
-      // The full context is in the linked document.
       showDate: '',
       venueName: '',
       shareUrl,
       reminderIndex: payload.reminder_index,
     })
 
-    await sendEmail({
-      to: person.contact_email,
-      subject: `Reminder: ${doc.title} — ${artistName}`,
-      html,
-      artist_slug: tour.artists?.slug ?? null,
-      share_token: share.share_token,
-    })
+    try {
+      const { id: resendId } = await sendEmail({
+        to: person.contact_email,
+        subject: `Reminder: ${doc.title} - ${artistName}`,
+        html,
+        artist_slug: tour.artists?.slug ?? null,
+        share_token: share.share_token,
+      })
 
-    // Increment reminder_count so subsequent reminders can key on the next index.
-    await admin
-      .from('document_shares')
-      .update({ reminder_count: (share.reminder_count ?? 0) + 1 })
-      .eq('id', payload.document_share_id)
+      await admin
+        .from('notification_log')
+        .update({ status: 'sent', sent_at: new Date().toISOString(), provider_message_id: resendId ?? null })
+        .match(claimKey)
 
-    return { sent: true, to: person.contact_email, reminder_index: payload.reminder_index }
+      await admin
+        .from('document_shares')
+        .update({ reminder_count: (share.reminder_count ?? 0) + 1 })
+        .eq('id', payload.document_share_id)
+
+      return { sent: true, to: person.contact_email, reminder_index: payload.reminder_index }
+    } catch (err) {
+      // Release the claim so a job retry can re-attempt.
+      await admin.from('notification_log').delete().match(claimKey)
+      throw err
+    }
   },
 })

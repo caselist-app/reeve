@@ -1,7 +1,10 @@
 import { task } from '@trigger.dev/sdk/v3'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { buildSendKey, checkAndSet } from '@/lib/comms/idempotency'
-import { sendWhatsApp } from '@/lib/comms/whatsapp'
+import { sendTemplate } from '@/lib/comms/whatsapp'
+
+// Template ID for the approved Meta broadcast template.
+// Set in env once Meta approves. Until then, proactive sends are skipped.
+const BROADCAST_TEMPLATE = process.env.WHATSAPP_TEMPLATE_BROADCAST
 
 export type BroadcastPayload = {
   tour_id: string
@@ -23,16 +26,24 @@ export const broadcastJob = task({
     const results: Array<{ person_id: string; status: string }> = []
 
     for (const person_id of payload.affected_person_ids) {
-      const key = buildSendKey(
-        payload.tour_id,
+      // Claim the send slot. A unique violation means already sent for this change+person.
+      const claimKey = {
+        tour_id: payload.tour_id,
         person_id,
-        'broadcast',
-        payload.change_id
-      )
+        notification_type: 'broadcast' as const,
+        channel: 'whatsapp' as const,
+        dedup_dimension: payload.change_id,
+      }
+      const { error: claimError } = await admin
+        .from('notification_log')
+        .insert({ ...claimKey, status: 'queued' })
 
-      const safe = await checkAndSet(key, 60 * 60 * 24 * 7)
-      if (!safe) {
+      if (claimError?.code === '23505') {
         results.push({ person_id, status: 'skipped_duplicate' })
+        continue
+      }
+      if (claimError) {
+        results.push({ person_id, status: 'failed' })
         continue
       }
 
@@ -45,31 +56,46 @@ export const broadcastJob = task({
       const person = personRow?.contacts as { whatsapp_number: string | null } | null
 
       if (!person?.whatsapp_number) {
+        await admin.from('notification_log').delete().match(claimKey)
         results.push({ person_id, status: 'skipped_no_contact' })
         continue
       }
 
-      let wamid: string | null = null
+      if (!BROADCAST_TEMPLATE) {
+        await admin.from('notification_log').delete().match(claimKey)
+        console.warn('[broadcast] WHATSAPP_TEMPLATE_BROADCAST not configured, skipping send')
+        results.push({ person_id, status: 'skipped_template_not_configured' })
+        continue
+      }
 
       try {
-        const result = await sendWhatsApp({ to: person.whatsapp_number, body: payload.message })
-        wamid = result.wamid
+        const result = await sendTemplate({
+          to: person.whatsapp_number,
+          templateName: BROADCAST_TEMPLATE,
+          languageCode: 'en',
+          bodyParams: [payload.message],
+        })
 
-        // Log the send. Admin client bypasses RLS since jobs run outside user auth.
+        await admin
+          .from('notification_log')
+          .update({ status: 'sent', sent_at: new Date().toISOString(), provider_message_id: result.wamid })
+          .match(claimKey)
+
+        // Keep broadcast_log for delivery receipt tracking (wamid -> delivered_at/read_at).
         await admin.from('broadcast_log').insert({
           tour_id: payload.tour_id,
           person_id,
           change_type: payload.change_type,
           message: payload.message,
-          wamid,
+          wamid: result.wamid,
           sent_at: new Date().toISOString(),
         })
 
         results.push({ person_id, status: 'sent' })
       } catch (err) {
-        // Log the failure but continue to the next person.
-        // Failed sends are not retried at this level - job-level retry handles that.
-        console.error(`Broadcast send failed for person ${person_id}:`, err)
+        // Release the claim so the job retry can re-attempt this person.
+        await admin.from('notification_log').delete().match(claimKey)
+        console.error(`[broadcast] send failed for person ${person_id}:`, err)
         results.push({ person_id, status: 'failed' })
       }
     }

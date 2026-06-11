@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { tasks } from '@trigger.dev/sdk/v3'
+import { redis } from '@/lib/redis'
 
 // GET: Meta webhook verification handshake.
 // Meta sends this when you first register the webhook URL.
@@ -104,7 +105,21 @@ export async function POST(request: NextRequest) {
         }
 
         const fromNumber = message.from as string
+        const wamid = message.id as string | undefined
         if (!fromNumber || !body) continue
+
+        // Deduplicate on the Meta message id (wamid) before enqueuing.
+        // Meta redelivers when it does not get a fast 200; SET NX is atomic.
+        // If Redis is down, proceed: dropping an inbound message is worse than
+        // a duplicate job enqueue (the router job has its own second guard).
+        if (wamid) {
+          try {
+            const claimed = await redis.set(`wamid:${wamid}`, '1', { nx: true, ex: 60 * 60 * 24 })
+            if (claimed === null) continue // Already processed this wamid.
+          } catch {
+            // Redis unavailable: proceed and rely on the router-job guard.
+          }
+        }
 
         // Map the sender number to a person across the TM's tours. The number
         // lives on the contact; a number maps to at most one person per tour
@@ -126,6 +141,7 @@ export async function POST(request: NextRequest) {
           person_id: person.id,
           from_number: fromNumber,
           body,
+          wamid: wamid ?? null,
         })
       }
     }

@@ -111,7 +111,15 @@ export async function notify<T extends ImplementedType>(
 
       if (channel === 'whatsapp') {
         const rendered = await def.whatsapp(input.data)
-        ;({ providerMessageId } = await sendWhatsAppRendered(recipient.whatsappNumber!, rendered))
+        const result = await sendWhatsAppRendered(recipient.whatsappNumber!, rendered)
+        if (result.skipped) {
+          // Template not yet configured: release the claim so this can be retried
+          // once the template env var is populated.
+          await admin.from('notification_log').delete().match(logKey)
+          outcomes.push({ channel, outcome: 'failed', error: 'template_not_configured' })
+          continue
+        }
+        providerMessageId = result.providerMessageId
       } else {
         const rendered = await def.email(input.data)
         ;({ providerMessageId } = await sendEmailRendered(recipient.email!, rendered, artistSlug))

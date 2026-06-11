@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { otpSchema } from '@/lib/validators/auth'
+import { otpRatelimit } from '@/lib/ratelimit'
 
 export type RequestOtpState = { error: string | null; sent: boolean; email: string }
 export type VerifyOtpState = { error: string | null }
@@ -16,6 +17,11 @@ export async function requestOtpAction(
   const parsed = z.string().email().safeParse(formData.get('email'))
   if (!parsed.success) {
     return { error: 'Enter a valid email address.', sent: false, email: '' }
+  }
+
+  const { success: allowed } = await otpRatelimit.limit(parsed.data)
+  if (!allowed) {
+    return { error: 'Too many requests. Please wait a few minutes and try again.', sent: false, email: '' }
   }
 
   const origin = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'

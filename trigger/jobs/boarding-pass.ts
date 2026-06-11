@@ -1,7 +1,6 @@
 import { task } from '@trigger.dev/sdk/v3'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { buildSendKey, checkAndSet } from '@/lib/comms/idempotency'
-import { sendWhatsApp } from '@/lib/comms/whatsapp'
+import { sendTemplate } from '@/lib/comms/whatsapp'
 import {
   buildLegLabel,
   formatDeparture,
@@ -9,6 +8,10 @@ import {
   renderBoardingPassMessage,
   type BoardingPassData,
 } from '@/lib/comms/templates/boarding-pass'
+
+// Template ID for the approved Meta boarding-pass template.
+// Set in env once Meta approves. Until then, proactive sends are skipped.
+const BOARDING_PASS_TEMPLATE = process.env.WHATSAPP_TEMPLATE_BOARDING_PASS
 
 export type BoardingPassPayload = {
   tour_id: string
@@ -24,19 +27,24 @@ const SEND_HOURS_BEFORE_DEPARTURE = 3
 export const boardingPassJob = task({
   id: 'boarding-pass',
   run: async (payload: BoardingPassPayload) => {
-    const key = buildSendKey(
-      payload.tour_id,
-      payload.person_id,
-      'boarding_pass',
-      payload.assignment_id
-    )
-
-    const safe = await checkAndSet(key, 60 * 60 * 24 * 7) // 7-day TTL
-    if (!safe) {
-      return { skipped: true, reason: 'already_sent' }
-    }
-
     const admin = createAdminClient()
+
+    // Claim the send slot atomically. A unique violation means already sent.
+    // On success, the row is in 'queued' state until the send completes.
+    // On send failure, the row is deleted so a job retry can re-attempt.
+    const claimKey = {
+      tour_id: payload.tour_id,
+      person_id: payload.person_id,
+      notification_type: 'boarding_pass' as const,
+      channel: 'whatsapp' as const,
+      dedup_dimension: payload.assignment_id,
+    }
+    const { error: claimError } = await admin
+      .from('notification_log')
+      .insert({ ...claimKey, status: 'queued' })
+
+    if (claimError?.code === '23505') return { skipped: true, reason: 'already_sent' }
+    if (claimError) throw new Error(`[boarding-pass] claim failed: ${claimError.message}`)
 
     const { data: assignment } = await admin
       .from('transport_assignments')
@@ -157,8 +165,16 @@ export const boardingPassJob = task({
 
     const body = renderBoardingPassMessage(bpData)
 
+    // Gate on the approved template. Proactive sends outside the 24-hour window
+    // silently fail on Meta's side unless sent as an approved template.
+    if (!BOARDING_PASS_TEMPLATE) {
+      await admin.from('notification_log').delete().match(claimKey)
+      console.warn('[boarding-pass] WHATSAPP_TEMPLATE_BOARDING_PASS not configured, skipping send')
+      return { skipped: true, reason: 'template_not_configured' }
+    }
+
     // Generate a short-lived signed URL for the boarding pass PDF.
-    let media_url: string | undefined
+    let documentLink: string | undefined
     if (assignment.boarding_pass_document_id) {
       const { data: doc } = await admin
         .from('documents')
@@ -170,12 +186,31 @@ export const boardingPassJob = task({
         const { data: signedUrl } = await admin.storage
           .from('documents')
           .createSignedUrl(doc.storage_path, 60 * 60 * SEND_HOURS_BEFORE_DEPARTURE)
-        media_url = signedUrl?.signedUrl
+        documentLink = signedUrl?.signedUrl
       }
     }
 
-    await sendWhatsApp({ to, body, media_url })
+    try {
+      const result = await sendTemplate({
+        to,
+        templateName: BOARDING_PASS_TEMPLATE,
+        languageCode: 'en',
+        bodyParams: [body],
+        ...(documentLink
+          ? { headerDocument: { link: documentLink, filename: 'boarding-pass.pdf' } }
+          : {}),
+      })
 
-    return { sent: true, to }
+      await admin
+        .from('notification_log')
+        .update({ status: 'sent', sent_at: new Date().toISOString(), provider_message_id: result.wamid })
+        .match(claimKey)
+
+      return { sent: true, to }
+    } catch (err) {
+      // Release the claim so a job retry can re-attempt.
+      await admin.from('notification_log').delete().match(claimKey)
+      throw err
+    }
   },
 })

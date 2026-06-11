@@ -1,5 +1,7 @@
 import { task } from '@trigger.dev/sdk/v3'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { redis } from '@/lib/redis'
+import { whatsappAiRatelimit } from '@/lib/ratelimit'
 import { routeInbound } from '@/lib/comms/router'
 import { sendWhatsApp, sendInteractiveWhatsApp } from '@/lib/comms/whatsapp'
 import { answerCrewQuestion } from '@/lib/ai/answer'
@@ -9,6 +11,7 @@ export type WhatsAppRouterPayload = {
   person_id: string
   from_number: string
   body: string
+  wamid: string | null
 }
 
 // Processes an inbound WhatsApp message after the webhook handler has verified
@@ -26,6 +29,17 @@ export const whatsappRouterJob = task({
     })
 
     if (result.action === 'template') {
+      // Second idempotency guard before the outbound send.
+      // The webhook guard covers most retries; this covers job-level retries.
+      if (payload.wamid) {
+        try {
+          const claimed = await redis.set(`router:sent:${payload.wamid}`, '1', { nx: true, ex: 60 * 60 * 24 })
+          if (claimed === null) return { action: 'template', sent: false, reason: 'duplicate' }
+        } catch {
+          // Redis unavailable: proceed rather than drop a command reply.
+        }
+      }
+
       // Attach quick-reply buttons so the crew member can tap common commands
       // without typing. Button taps arrive as interactive messages and are
       // routed identically to typed slash commands.
@@ -52,6 +66,22 @@ export const whatsappRouterJob = task({
 
     if (!tour?.inbound_qa_enabled) {
       return { action: 'ai_disabled', sent: false }
+    }
+
+    // Per-number rate limit on the AI path.
+    const { success: withinLimit } = await whatsappAiRatelimit.limit(payload.from_number)
+    if (!withinLimit) {
+      return { action: 'rate_limited', sent: false }
+    }
+
+    // Second idempotency guard before the outbound AI send.
+    if (payload.wamid) {
+      try {
+        const claimed = await redis.set(`router:sent:${payload.wamid}`, '1', { nx: true, ex: 60 * 60 * 24 })
+        if (claimed === null) return { action: 'ai', sent: false, reason: 'duplicate' }
+      } catch {
+        // Redis unavailable: proceed rather than drop the answer.
+      }
     }
 
     const { answer } = await answerCrewQuestion({

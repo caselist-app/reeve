@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { tasks } from '@trigger.dev/sdk/v3'
+import { redis } from '@/lib/redis'
 
 // Resend signs webhooks with Svix. The secret is base64-encoded with a
 // "whsec_" prefix. The signed content is "{svix-id}.{svix-timestamp}.{body}".
@@ -43,17 +44,6 @@ function verifySvixSignature(
     }
   }
   return false
-}
-
-// Fetches the plain-text body of a received email from the Resend REST API.
-// The webhook payload contains metadata only; body requires a separate call.
-async function fetchEmailBody(emailId: string): Promise<string> {
-  const res = await fetch(`https://api.resend.com/emails/receiving/${emailId}`, {
-    headers: { Authorization: `Bearer ${process.env.RESEND_API_KEY}` },
-  })
-  if (!res.ok) throw new Error(`Resend API ${res.status}`)
-  const json = await res.json() as { text?: string | null; html?: string | null }
-  return json.text ?? json.html ?? ''
 }
 
 // Receives forwarded emails from the TM.
@@ -103,6 +93,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Missing email_id' }, { status: 200 })
   }
 
+  // Deduplicate on the Svix delivery id. Svix retries on non-200 responses;
+  // a second delivery would otherwise produce a duplicate extraction job and row.
+  const svixId = request.headers.get('svix-id')
+  if (svixId) {
+    try {
+      const claimed = await redis.set(`email:dedup:${svixId}`, '1', { nx: true, ex: 60 * 60 * 24 })
+      if (claimed === null) {
+        return NextResponse.json({ status: 'duplicate' })
+      }
+    } catch {
+      // Redis unavailable: proceed. Worst case is a duplicate extraction job,
+      // which the TM can discard from the UI. Dropping a real email is worse.
+    }
+  }
+
   // The recipient address tells us which tour this is for.
   // advancing@{artist_slug}.yourreeve.com -> look up artist by slug, then route to most recent active tour.
   const toAddress = toAddresses[0] ?? ''
@@ -140,25 +145,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Tour not found' }, { status: 200 })
   }
 
-  // Fetch body from Resend's receiving API. Prefer plain text for extraction.
-  // Log and continue on failure: the row is stored with an empty body and the
-  // extraction job will mark it failed, which the TM can see and discard.
-  let bodyText = ''
-  try {
-    bodyText = await fetchEmailBody(emailId)
-  } catch (err) {
-    console.error('[email/inbound] failed to fetch received email body:', err)
-  }
-
-  // Store the raw email. The extraction job reads this row by ID and writes
-  // proposed_rows back. proposed_rows stays null until extraction completes.
+  // Store the raw email metadata. The extraction job fetches the body from
+  // Resend's API and writes proposed_rows back. Keeping this handler fast
+  // avoids Svix redelivery retries that would produce duplicate rows.
   const { data: forwarded, error: insertError } = await admin
     .from('forwarded_emails')
     .insert({
       tour_id: tour.id,
       from_address: fromAddress,
       subject,
-      body_text: bodyText,
+      body_text: '',
       attachments_json: [],
       extraction_status: 'pending',
     })
@@ -170,9 +166,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Storage failed' }, { status: 500 })
   }
 
-  // Enqueue the Sonnet extraction job. Return 200 immediately.
+  // Enqueue the Sonnet extraction job with the Resend email_id so it can
+  // fetch the body. Return 200 immediately.
   await tasks.trigger('extract-forward', {
     forwarded_email_id: forwarded.id,
+    email_id: emailId,
   })
 
   return NextResponse.json({ status: 'ok' })
