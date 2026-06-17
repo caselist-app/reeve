@@ -161,6 +161,11 @@ export default async function SchedulePage({
           date: selectedDate,
           timezone: tz,
         }}
+        dayMeta={tourDate ? {
+          tourDateId: tourDate.id,
+          dayType: tourDate.day_type as 'show' | 'rehearsal' | 'travel' | 'press' | 'day_off',
+          notes: tourDate.notes ?? null,
+        } : null}
         timeline={
           tourDate ? (
             <DayTimeline

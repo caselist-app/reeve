@@ -52,6 +52,14 @@ export type PanelDescriptor =
       tourId: string
     }
   | {
+      type: 'edit-day'
+      tourId: string
+      tourDateId: string
+      date: string
+      dayType: 'show' | 'rehearsal' | 'travel' | 'press' | 'day_off'
+      notes: string | null
+    }
+  | {
       type: 'contact-view'
       contactId: string
       onSuccess: () => void

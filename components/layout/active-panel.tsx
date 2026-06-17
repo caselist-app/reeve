@@ -63,6 +63,16 @@ export function ActivePanel() {
       return (
         <AddDayPanel tourId={panel.tourId} />
       )
+    case 'edit-day':
+      return (
+        <AddDayPanel
+          tourId={panel.tourId}
+          tourDateId={panel.tourDateId}
+          initialDayType={panel.dayType}
+          initialDate={panel.date}
+          initialNotes={panel.notes}
+        />
+      )
     case 'contact-view':
       return (
         <ContactPanel contactId={panel.contactId} onSuccess={panel.onSuccess} />
