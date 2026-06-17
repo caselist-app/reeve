@@ -7,7 +7,6 @@ import {
   Users,
   Calendar,
   Settings,
-  LayoutDashboard,
   Search,
   Contact,
 } from 'lucide-react'
@@ -69,11 +68,6 @@ export function Sidebar({ tours, lastTourId = null }: SidebarProps) {
     return pathname.startsWith(`/tours/${activeTourId}/${section}`)
   }
 
-  const homeHref = activeTourId ? `/tours/${activeTourId}` : '/'
-  const isHome = activeTourId
-    ? pathname === `/tours/${activeTourId}`
-    : pathname === '/'
-
   const isRoster = pathname.startsWith('/roster')
 
   return (
@@ -83,23 +77,9 @@ export function Sidebar({ tours, lastTourId = null }: SidebarProps) {
         <TourSelector tours={tours} activeTourId={activeTourId} />
       </div>
 
-      {/* Top nav: Home + Search + Roster */}
+      {/* Top nav: Search + Roster */}
       <div className="px-3 pb-2">
         <nav className="space-y-0.5">
-          <Link
-            href={homeHref}
-            className={cn(
-              'flex items-center gap-2.5 rounded-lg px-2 h-7 text-xs font-medium transition-colors',
-              isHome
-                ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                : 'hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
-            )}
-            style={isHome ? undefined : { color: 'var(--sidebar-muted-foreground)' }}
-          >
-            <LayoutDashboard className="h-3.5 w-3.5 shrink-0" />
-            Home
-          </Link>
-
           <button
             onClick={openPalette}
             className={cn(
@@ -136,12 +116,12 @@ export function Sidebar({ tours, lastTourId = null }: SidebarProps) {
 
       {/* Tour nav */}
       {activeTourId && (
-        <div className="px-3 pb-2 mt-4">
-          <p
-            className="mb-1 px-2 text-[10px] font-medium uppercase tracking-wider"
+        <div className="px-3 pb-2 mt-6">
+<p
+            className="mb-1 px-2 text-[10px] font-medium uppercase tracking-wider truncate"
             style={{ color: 'var(--sidebar-muted-foreground)' }}
           >
-            Tour
+            {tours.find(t => t.id === activeTourId)?.name ?? 'Tour'}
           </p>
           <nav className="space-y-0.5">
             {TOUR_NAV.map(({ section, label, icon: Icon }) => {
