@@ -3,9 +3,61 @@
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { contactSchema } from '@/lib/validators/contact'
+import type { Tables } from '@/lib/types/database'
 import type { z } from 'zod'
 
 export type ContactActionState = { error: string | null; contactId?: string }
+
+export type TourMembership = {
+  personId: string
+  tourId: string
+  tourName: string
+  artistAct: string
+  status: string
+  role: string | null
+  personType: string
+}
+
+export type ContactWithTours = {
+  contact: Tables<'contacts'>
+  tours: TourMembership[]
+}
+
+export async function getContact(
+  contactId: string
+): Promise<{ data: ContactWithTours | null; error: string | null }> {
+  const user = await requireUser()
+  const supabase = await createClient()
+
+  const { data: contact } = await supabase
+    .from('contacts')
+    .select('*')
+    .eq('id', contactId)
+    .eq('account_id', user.id)
+    .single()
+
+  if (!contact) return { data: null, error: 'Contact not found.' }
+
+  const { data: memberships } = await supabase
+    .from('people')
+    .select('id, person_type, role, tour_id, tours(name, artists(name), status)')
+    .eq('contact_id', contactId)
+
+  const tours: TourMembership[] = (memberships ?? []).map((m) => {
+    const t = m.tours as { name: string; artists: { name: string } | null; status: string } | null
+    return {
+      personId: m.id,
+      tourId: m.tour_id,
+      tourName: t?.name ?? 'Untitled tour',
+      artistAct: t?.artists?.name ?? '',
+      status: t?.status ?? '',
+      role: m.role,
+      personType: m.person_type,
+    }
+  })
+
+  return { data: { contact, tours }, error: null }
+}
 
 // Maps the contact form DTO to a contacts row. Empty strings become null so the
 // date column and optional fields are satisfied.
@@ -25,6 +77,8 @@ function toRow(c: z.infer<typeof contactSchema>) {
     passport_number: c.passport_number || null,
     passport_expiry: c.passport_expiry || null,
     passport_country: c.passport_country || null,
+    passport_first_names: c.passport_first_names || null,
+    passport_surname: c.passport_surname || null,
     tshirt_size: c.tshirt_size || null,
     default_person_type: c.default_person_type ?? 'crew',
     default_role: c.default_role || null,

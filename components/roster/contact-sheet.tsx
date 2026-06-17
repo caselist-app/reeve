@@ -70,6 +70,8 @@ export function ContactSheet({ contact, onSuccess }: Props) {
       passport_number: str('passport_number'),
       passport_expiry: str('passport_expiry'),
       passport_country: str('passport_country'),
+      passport_first_names: str('passport_first_names'),
+      passport_surname: str('passport_surname'),
       tshirt_size: str('tshirt_size'),
       default_person_type: defaultType,
       default_role: str('default_role'),
@@ -257,6 +259,26 @@ export function ContactSheet({ contact, onSuccess }: Props) {
             name="passport_country"
             defaultValue={contact?.passport_country ?? ''}
             placeholder="GBR"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor={`${formId}-passport_first_names`}>First names (as on passport)</Label>
+          <Input
+            id={`${formId}-passport_first_names`}
+            name="passport_first_names"
+            defaultValue={contact?.passport_first_names ?? ''}
+            placeholder="JAMES EDWARD"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor={`${formId}-passport_surname`}>Surname (as on passport)</Label>
+          <Input
+            id={`${formId}-passport_surname`}
+            name="passport_surname"
+            defaultValue={contact?.passport_surname ?? ''}
+            placeholder="SMITH"
           />
         </div>
 
