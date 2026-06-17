@@ -29,7 +29,12 @@ export default async function SchedulePage({
       .single(),
     supabase
       .from('tour_dates')
-      .select('id, date, day_type, notes')
+      .select(`
+        id, date, day_type, notes, custom_title,
+        shows ( venue_name, address ),
+        rehearsals ( location_name ),
+        transport_segments ( mode, origin, destination, depart_at )
+      `)
       .eq('tour_id', id)
       .order('date', { ascending: true }),
   ])
@@ -163,6 +168,10 @@ export default async function SchedulePage({
               tourDateId={tourDate.id}
               date={selectedDate}
               timezone={tz}
+              dayType={tourDate.day_type}
+              tourName={tour.name}
+              notes={tourDate.notes}
+              customTitle={tourDate.custom_title}
             />
           ) : (
             <div className="flex flex-1 items-center justify-center px-6 py-10">

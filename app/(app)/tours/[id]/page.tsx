@@ -35,7 +35,7 @@ export default async function TourHomePage({
     .single()
 
   if (next) {
-    redirect(`/tours/${id}/schedule/${next.date}`)
+    redirect(`/tours/${id}/schedule?date=${next.date}`)
   }
 
   // Tour is in the past — go to the most recent date.
