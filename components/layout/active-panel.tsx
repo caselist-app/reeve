@@ -61,7 +61,7 @@ export function ActivePanel() {
       )
     case 'add-day':
       return (
-        <AddDayPanel tourId={panel.tourId} />
+        <AddDayPanel tourId={panel.tourId} initialDayType={panel.initialDayType} />
       )
     case 'edit-day':
       return (

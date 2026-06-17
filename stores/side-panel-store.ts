@@ -50,6 +50,7 @@ export type PanelDescriptor =
   | {
       type: 'add-day'
       tourId: string
+      initialDayType?: 'show' | 'rehearsal' | 'travel' | 'press' | 'day_off'
     }
   | {
       type: 'edit-day'
