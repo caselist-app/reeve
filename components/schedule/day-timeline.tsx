@@ -1,11 +1,16 @@
 import { createClient } from '@/lib/supabase/server'
 import { TimelineCard } from '@/components/schedule/timeline-card'
+import { DayHeader } from '@/components/schedule/day-header'
 
 interface DayTimelineProps {
   tourId: string
   tourDateId: string
   date: string       // YYYY-MM-DD
   timezone: string
+  dayType: string
+  tourName: string
+  notes: string | null
+  customTitle: string | null
 }
 
 // ---- Helpers ----------------------------------------------------------------
@@ -47,7 +52,20 @@ const DAY_SHEET_FIELDS = [
 
 // ---- Component --------------------------------------------------------------
 
-export async function DayTimeline({ tourId, tourDateId, date, timezone }: DayTimelineProps) {
+export async function DayTimeline({ tourId, tourDateId, date, timezone, dayType, tourName, notes, customTitle }: DayTimelineProps) {
+  const header = (
+    <DayHeader
+      tourId={tourId}
+      tourDateId={tourDateId}
+      date={date}
+      dayType={dayType}
+      tourName={tourName}
+      timezone={timezone}
+      notes={notes}
+      customTitle={customTitle}
+    />
+  )
+
   const supabase = await createClient()
 
   // Date range for unlinked transport (segments created before tour_date_id was
@@ -283,7 +301,7 @@ export async function DayTimeline({ tourId, tourDateId, date, timezone }: DayTim
   if (items.length === 0) {
     return (
       <div className="flex flex-col h-full">
-        <TimelineHeader date={date} />
+        {header}
         <div className="flex-1 flex items-center justify-center px-6">
           <p className="text-sm text-muted-foreground text-center">
             Nothing added to this day yet.
@@ -295,24 +313,10 @@ export async function DayTimeline({ tourId, tourDateId, date, timezone }: DayTim
 
   return (
     <div className="flex flex-col h-full">
-      <TimelineHeader date={date} />
+      {header}
       <div className="flex-1 overflow-y-auto py-4">
         {items.map((item) => item.node)}
       </div>
-    </div>
-  )
-}
-
-function TimelineHeader({ date }: { date: string }) {
-  const formatted = new Date(`${date}T00:00:00`).toLocaleDateString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  })
-  return (
-    <div className="px-5 py-4 border-b border-border shrink-0">
-      <p className="text-sm font-semibold">{formatted}</p>
     </div>
   )
 }
