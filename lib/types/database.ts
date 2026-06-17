@@ -1206,6 +1206,7 @@ export type Database = {
       tour_dates: {
         Row: {
           created_at: string
+          custom_title: string | null
           date: string
           day_type: string
           id: string
@@ -1215,6 +1216,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          custom_title?: string | null
           date: string
           day_type?: string
           id?: string
@@ -1224,6 +1226,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          custom_title?: string | null
           date?: string
           day_type?: string
           id?: string

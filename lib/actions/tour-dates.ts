@@ -1,5 +1,6 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { z } from 'zod'
@@ -72,6 +73,33 @@ export async function updateTourDate(
     return { error: error.message }
   }
 
+  return { error: null, tourDateId }
+}
+
+// Sets or clears the per-day title override shown in the day header. A blank
+// title stores null, so the header falls back to the derived per-type default.
+// RLS on tour_dates (owns_tour) scopes the write to the caller's tours.
+export async function updateDayTitle(
+  tourDateId: string,
+  title: string | null
+): Promise<TourDateActionState> {
+  await requireUser()
+
+  const supabase = await createClient()
+  const value = title && title.trim() ? title.trim() : null
+
+  const { data, error } = await supabase
+    .from('tour_dates')
+    .update({ custom_title: value })
+    .eq('id', tourDateId)
+    .select('tour_id')
+    .single()
+
+  if (error) {
+    return { error: error.message }
+  }
+
+  revalidatePath(`/tours/${data.tour_id}/schedule`)
   return { error: null, tourDateId }
 }
 
