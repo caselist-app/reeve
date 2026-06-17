@@ -110,8 +110,13 @@ export function ContactSheet({ contact, onSuccess }: Props) {
           ? "Update this person's details. Changes apply on every tour they are on."
           : 'Add someone to your roster. You can add them to a tour later.'
       }
+      headerAction={
+        <Button type="submit" form={formId} size="sm" disabled={pending}>
+          {pending ? 'Saving...' : 'Save'}
+        </Button>
+      }
     >
-      <form onSubmit={handleSubmit} className="space-y-4 pb-8">
+      <form id={formId} onSubmit={handleSubmit} className="space-y-4 pb-8">
         <div className="space-y-2">
           <Label htmlFor={`${formId}-name`}>Name</Label>
           <Input id={`${formId}-name`} name="name" defaultValue={contact?.name} required />
@@ -388,10 +393,6 @@ export function ContactSheet({ contact, onSuccess }: Props) {
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}
-
-        <Button type="submit" disabled={pending} className="w-full">
-          {pending ? 'Saving...' : isEditing ? 'Save changes' : 'Create contact'}
-        </Button>
       </form>
     </PanelShell>
   )
