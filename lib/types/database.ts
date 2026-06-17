@@ -269,7 +269,9 @@ export type Database = {
           notes: string | null
           passport_country: string | null
           passport_expiry: string | null
+          passport_first_names: string | null
           passport_number: string | null
+          passport_surname: string | null
           photo_url: string | null
           preferred_channel: string
           sms_number: string | null
@@ -298,7 +300,9 @@ export type Database = {
           notes?: string | null
           passport_country?: string | null
           passport_expiry?: string | null
+          passport_first_names?: string | null
           passport_number?: string | null
+          passport_surname?: string | null
           photo_url?: string | null
           preferred_channel?: string
           sms_number?: string | null
@@ -327,7 +331,9 @@ export type Database = {
           notes?: string | null
           passport_country?: string | null
           passport_expiry?: string | null
+          passport_first_names?: string | null
           passport_number?: string | null
+          passport_surname?: string | null
           photo_url?: string | null
           preferred_channel?: string
           sms_number?: string | null

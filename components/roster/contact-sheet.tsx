@@ -223,12 +223,22 @@ export function ContactSheet({ contact, onSuccess }: Props) {
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Travel</p>
 
         <div className="space-y-2">
-          <Label htmlFor={`${formId}-home_city`}>Home city</Label>
+          <Label htmlFor={`${formId}-passport_first_names`}>First names (as on passport)</Label>
           <Input
-            id={`${formId}-home_city`}
-            name="home_city"
-            defaultValue={contact?.home_city ?? ''}
-            placeholder="London"
+            id={`${formId}-passport_first_names`}
+            name="passport_first_names"
+            defaultValue={contact?.passport_first_names ?? ''}
+            placeholder="JAMES EDWARD"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor={`${formId}-passport_surname`}>Surname (as on passport)</Label>
+          <Input
+            id={`${formId}-passport_surname`}
+            name="passport_surname"
+            defaultValue={contact?.passport_surname ?? ''}
+            placeholder="SMITH"
           />
         </div>
 
@@ -263,22 +273,12 @@ export function ContactSheet({ contact, onSuccess }: Props) {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor={`${formId}-passport_first_names`}>First names (as on passport)</Label>
+          <Label htmlFor={`${formId}-home_city`}>Home city</Label>
           <Input
-            id={`${formId}-passport_first_names`}
-            name="passport_first_names"
-            defaultValue={contact?.passport_first_names ?? ''}
-            placeholder="JAMES EDWARD"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor={`${formId}-passport_surname`}>Surname (as on passport)</Label>
-          <Input
-            id={`${formId}-passport_surname`}
-            name="passport_surname"
-            defaultValue={contact?.passport_surname ?? ''}
-            placeholder="SMITH"
+            id={`${formId}-home_city`}
+            name="home_city"
+            defaultValue={contact?.home_city ?? ''}
+            placeholder="London"
           />
         </div>
 
