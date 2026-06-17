@@ -2,7 +2,6 @@
 
 import { useState, type ReactNode } from 'react'
 import { Plus } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { useSchedulePanel } from '@/stores/schedule-panel-store'
 import { ShowPanel } from '@/components/schedule/panels/show-panel'
 import { TransportPanel } from '@/components/schedule/panels/transport-panel'
@@ -104,14 +103,18 @@ export function DayViewClient({ timeline, dayInfoPanel, panelData, addContext }:
   return (
     <div className="flex flex-1 min-w-0 min-h-0">
       {/* Timeline: flex-1 */}
-      <div className="flex flex-col flex-1 min-w-0">
-        {/* Timeline header with Add button */}
-        <div className="flex items-center justify-end px-5 py-3 border-b border-border shrink-0">
-          <Button size="sm" onClick={handleAddOpen}>
-            <Plus className="mr-1.5 h-3.5 w-3.5" />
-            Add
-          </Button>
-        </div>
+      <div className="relative flex flex-col flex-1 min-w-0">
+        {/* Add-to-day: subtle filled icon button, inline with the header. More
+            prominent than the spine's ghost add since it gets used more. */}
+        <button
+          type="button"
+          onClick={handleAddOpen}
+          aria-label="Add to day"
+          title="Add to day"
+          className="absolute right-5 top-5 z-10 flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-foreground transition-colors hover:bg-muted/70"
+        >
+          <Plus className="h-4 w-4" />
+        </button>
         <div className="flex-1 overflow-y-auto border-r border-border">
           {timeline}
         </div>

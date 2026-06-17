@@ -24,7 +24,7 @@ export function TimelineCard({ time, label, title, subtitle, accent, card }: Tim
     <button
       onClick={() => setActiveCard(isActive ? null : card)}
       className={cn(
-        'w-full text-left flex gap-3 px-5 py-3 transition-colors',
+        'w-full text-left flex gap-3 px-8 py-3 transition-colors',
         isActive ? 'bg-muted/60' : 'hover:bg-muted/30',
       )}
     >
