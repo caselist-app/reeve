@@ -3,9 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { cn } from '@/lib/utils'
 import type { Tables } from '@/lib/types/database'
-import { passportStatus, formatExpiry, PASSPORT_CLASS } from '@/lib/roster/passport'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -45,9 +43,10 @@ export function RosterView({ contacts }: Props) {
     open({
       type: 'contact',
       contact: null,
+      // After creating, open the view panel so the user sees the new contact.
       onSuccess: (contactId) => {
         if (contactId) {
-          router.push(`/roster/${contactId}`)
+          open({ type: 'contact-view', contactId, onSuccess: () => router.refresh() })
         } else {
           router.refresh()
         }
@@ -83,55 +82,32 @@ export function RosterView({ contacts }: Props) {
       ) : filtered.length === 0 ? (
         <p className="text-sm text-muted-foreground">No contacts match that search.</p>
       ) : (
-        <div className="rounded-md border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/50 text-left text-muted-foreground">
-                <th className="px-4 py-2.5 font-medium">Name</th>
-                <th className="px-4 py-2.5 font-medium">Role</th>
-                <th className="px-4 py-2.5 font-medium">Home city</th>
-                <th className="px-4 py-2.5 font-medium">Passport expiry</th>
-                <th className="px-4 py-2.5 font-medium">Dietary</th>
-                <th className="px-4 py-2.5 font-medium text-right">Tours</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((c) => {
-                const status = passportStatus(c.passport_expiry)
-                const flags = [c.dietary, c.allergies].filter(Boolean).join(', ')
-                return (
-                  <tr
-                    key={c.id}
-                    className="border-b last:border-0 cursor-pointer transition-colors hover:bg-muted/30"
-                    onClick={() => router.push(`/roster/${c.id}`)}
-                  >
-                    <td className="px-4 py-2.5 font-medium">
-                      <Link
-                        href={`/roster/${c.id}`}
-                        className="hover:underline"
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {c.name}
-                      </Link>
-                    </td>
-                    <td className="px-4 py-2.5 text-muted-foreground">{c.default_role ?? '-'}</td>
-                    <td className="px-4 py-2.5 text-muted-foreground">{c.home_city ?? '-'}</td>
-                    <td className={cn('px-4 py-2.5', PASSPORT_CLASS[status])}>
-                      {formatExpiry(c.passport_expiry)}
-                      {status === 'expired' && ' (expired)'}
-                      {status === 'soon' && ' (soon)'}
-                    </td>
-                    <td className="px-4 py-2.5 text-muted-foreground truncate max-w-[12rem]">
-                      {flags || '-'}
-                    </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-muted-foreground">
-                      {c.tourCount}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {filtered.map((c) => {
+            const subtitle = [c.default_role, c.home_city].filter(Boolean).join(' · ')
+            return (
+              <div
+                key={c.id}
+                className="relative flex flex-col justify-end min-h-[120px] rounded-xl border border-border px-5 py-4 cursor-pointer transition-colors hover:bg-muted/50"
+                onClick={() => open({ type: 'contact-view', contactId: c.id, onSuccess: () => router.refresh() })}
+              >
+                <p className="font-medium">{c.name}</p>
+                {subtitle && (
+                  <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>
+                )}
+                {/* Name link kept for right-click / open-in-new-tab access */}
+                <Link
+                  href={`/roster/${c.id}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="sr-only"
+                  tabIndex={-1}
+                  aria-label={`Open ${c.name} detail page`}
+                >
+                  {c.name}
+                </Link>
+              </div>
+            )
+          })}
         </div>
       )}
     </>

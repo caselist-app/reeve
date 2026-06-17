@@ -51,6 +51,11 @@ export type PanelDescriptor =
       type: 'add-day'
       tourId: string
     }
+  | {
+      type: 'contact-view'
+      contactId: string
+      onSuccess: () => void
+    }
 
 interface SidePanelState {
   panel: PanelDescriptor | null

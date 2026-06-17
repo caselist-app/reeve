@@ -4,6 +4,7 @@ import { useSidePanel } from '@/stores/side-panel-store'
 import { PersonSheet } from '@/components/people/person-sheet'
 import { BulkAdd } from '@/components/people/bulk-add'
 import { ContactSheet } from '@/components/roster/contact-sheet'
+import { ContactPanel } from '@/components/roster/contact-panel'
 import { AddShowPanel } from '@/components/shows/add-show-panel'
 import { SendRiderSheet } from '@/components/shows/send-rider-sheet'
 import { AddDayPanel } from '@/components/schedule/add-day-panel'
@@ -61,6 +62,10 @@ export function ActivePanel() {
     case 'add-day':
       return (
         <AddDayPanel tourId={panel.tourId} />
+      )
+    case 'contact-view':
+      return (
+        <ContactPanel contactId={panel.contactId} onSuccess={panel.onSuccess} />
       )
     default:
       return null
