@@ -8,6 +8,8 @@ import { TransportPanel } from '@/components/schedule/panels/transport-panel'
 import { HotelPanel } from '@/components/schedule/panels/hotel-panel'
 import { EventPanel } from '@/components/schedule/panels/event-panel'
 import { AddFlow } from '@/components/schedule/add/add-flow'
+import { AddPicker, type AddCategory } from '@/components/schedule/add/add-picker'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { Tables } from '@/lib/types/database'
 
 // Serializable panel data passed from the Server Component page.
@@ -55,7 +57,8 @@ interface DayViewClientProps {
 // Only this component is a client component; the slots remain Server Components.
 export function DayViewClient({ timeline, dayInfoPanel, panelData, addContext }: DayViewClientProps) {
   const { activeCard, setActiveCard } = useSchedulePanel()
-  const [addOpen, setAddOpen] = useState(false)
+  const [popoverOpen, setPopoverOpen] = useState(false)
+  const [selectedCategory, setSelectedCategory] = useState<AddCategory | null>(null)
 
   function renderEditPanel() {
     if (!activeCard) return null
@@ -94,27 +97,45 @@ export function DayViewClient({ timeline, dayInfoPanel, panelData, addContext }:
 
   const editPanel = renderEditPanel()
 
-  // Add flow takes over the right panel.
-  function handleAddOpen() {
+  function handleCategorySelect(category: AddCategory) {
+    setPopoverOpen(false)
     setActiveCard(null)
-    setAddOpen(true)
+    setSelectedCategory(category)
+  }
+
+  // Back from the form re-opens the popover so the user can pick a different type.
+  function handleAddBack() {
+    setSelectedCategory(null)
+    setPopoverOpen(true)
+  }
+
+  function handleAddClose() {
+    setSelectedCategory(null)
   }
 
   return (
     <div className="flex flex-1 min-w-0 min-h-0">
       {/* Timeline: flex-1 */}
       <div className="relative flex flex-col flex-1 min-w-0">
-        {/* Add-to-day: subtle filled icon button, inline with the header. More
-            prominent than the spine's ghost add since it gets used more. */}
-        <button
-          type="button"
-          onClick={handleAddOpen}
-          aria-label="Add to day"
-          title="Add to day"
-          className="absolute right-5 top-5 z-10 flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-foreground transition-colors hover:bg-muted/70"
-        >
-          <Plus className="h-4 w-4" />
-        </button>
+        {/* Add-to-day: opens a popover picker rather than taking over the right panel. */}
+        <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              aria-label="Add to day"
+              title="Add to day"
+              className="absolute right-5 top-5 z-10 flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-foreground transition-colors hover:bg-muted/70"
+            >
+              <Plus className="h-4 w-4" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-56 p-2">
+            <p className="px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Add to day
+            </p>
+            <AddPicker onSelect={handleCategorySelect} />
+          </PopoverContent>
+        </Popover>
         <div className="flex-1 overflow-y-auto border-r border-border">
           {timeline}
         </div>
@@ -122,10 +143,12 @@ export function DayViewClient({ timeline, dayInfoPanel, panelData, addContext }:
 
       {/* Right panel: 260px fixed */}
       <div className="w-[260px] shrink-0 overflow-y-auto">
-        {addOpen ? (
+        {selectedCategory ? (
           <AddFlow
             {...addContext}
-            onClose={() => setAddOpen(false)}
+            category={selectedCategory}
+            onBack={handleAddBack}
+            onClose={handleAddClose}
           />
         ) : (
           editPanel ?? dayInfoPanel
