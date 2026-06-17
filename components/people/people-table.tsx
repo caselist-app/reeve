@@ -3,6 +3,7 @@
 import type { Tables } from '@/lib/types/database'
 import type { PersonWithContact } from '@/components/people/people-view'
 import { Button } from '@/components/ui/button'
+import { StatusBadge, PASSPORT_VARIANT } from '@/components/ui/status-badge'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,47 +23,73 @@ interface Props {
   onRemove: (personId: string) => void
 }
 
+function passportStatus(expiry: string | null): 'ok' | 'soon' | 'expired' {
+  if (!expiry) return 'ok'
+  const exp = new Date(expiry + 'T00:00:00')
+  const now = new Date()
+  if (exp < now) return 'expired'
+  const days = (exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
+  return days < 90 ? 'soon' : 'ok'
+}
+
 function formatExpiry(expiry: string | null): string {
-  if (!expiry) return '-'
-  // expiry is YYYY-MM-DD; append time to avoid timezone shifting the date
-  const d = new Date(expiry + 'T00:00:00')
-  return d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })
+  if (!expiry) return ''
+  return new Date(expiry + 'T00:00:00').toLocaleDateString('en-GB', {
+    month: 'short',
+    year: 'numeric',
+  })
 }
 
 export function PeopleTable({ people, onEdit, onRemove }: Props) {
   if (people.length === 0) return null
 
   return (
-    <div className="rounded-md border">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b bg-muted/50">
-            <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Name</th>
-            <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Role</th>
-            <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">WhatsApp</th>
-            <th className="px-4 py-2.5 text-left font-medium text-muted-foreground">Passport expiry</th>
-            <th className="px-4 py-2.5" />
-          </tr>
-        </thead>
-        <tbody>
-          {people.map((person) => (
-            <tr key={person.id} className="border-b last:border-0 transition-colors hover:bg-muted/30">
-              <td className="px-4 py-2.5 font-medium">{person.contacts.name}</td>
-              <td className="px-4 py-2.5 text-muted-foreground">{person.role ?? '-'}</td>
-              <td className="px-4 py-2.5 font-mono text-xs">{person.contacts.whatsapp_number ?? '-'}</td>
-              <td className="px-4 py-2.5">{formatExpiry(person.contacts.passport_expiry)}</td>
-              <td className="px-4 py-2.5">
-                <div className="flex justify-end gap-1">
-                  <Button variant="ghost" size="sm" onClick={() => onEdit(person)}>
-                    Edit
-                  </Button>
-                  <RemoveButton name={person.contacts.name} onConfirm={() => onRemove(person.id)} />
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-2">
+      {people.map((person) => {
+        const status = passportStatus(person.contacts.passport_expiry)
+        const subtitle = [
+          person.role,
+          person.contacts.whatsapp_number,
+        ].filter(Boolean)
+
+        return (
+          <div
+            key={person.id}
+            className="flex items-center gap-4 rounded-xl border border-border px-4 py-3 transition-colors hover:bg-muted/50"
+          >
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium">{person.contacts.name}</p>
+              {subtitle.length > 0 && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {person.role && <span>{person.role}</span>}
+                  {person.role && person.contacts.whatsapp_number && (
+                    <span className="mx-1">·</span>
+                  )}
+                  {person.contacts.whatsapp_number && (
+                    <span className="font-mono">{person.contacts.whatsapp_number}</span>
+                  )}
+                </p>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              {(status === 'expired' || status === 'soon') && (
+                <StatusBadge
+                  label={`${formatExpiry(person.contacts.passport_expiry)} (${status})`}
+                  variant={PASSPORT_VARIANT[status]}
+                />
+              )}
+              <Button variant="ghost" size="sm" onClick={() => onEdit(person)}>
+                Edit
+              </Button>
+              <RemoveButton
+                name={person.contacts.name}
+                onConfirm={() => onRemove(person.id)}
+              />
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }

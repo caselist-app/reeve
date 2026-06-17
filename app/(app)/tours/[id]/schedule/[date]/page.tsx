@@ -4,6 +4,8 @@ import { ChevronLeft, MapPin, ExternalLink, Plane, Train, Bus, Truck, Car } from
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { PageLayout } from '@/components/layout/page-layout'
+import { SectionHeader } from '@/components/ui/section-header'
+import { StatusBadge, TRANSPORT_VARIANT } from '@/components/ui/status-badge'
 
 const MODE_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   flight: Plane,
@@ -73,14 +75,6 @@ const MODE_LABELS: Record<string, string> = {
 }
 
 // ---- Sections ---------------------------------------------------------------
-
-function SectionHeader({ title }: { title: string }) {
-  return (
-    <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-      {title}
-    </h2>
-  )
-}
 
 function Row({ label, value }: { label: string; value: string }) {
   if (!value || value === 'TBC') return null
@@ -223,7 +217,7 @@ export default async function DayViewPage({
         {/* Show section */}
         {show && (
           <div>
-            <SectionHeader title="Show" />
+            <SectionHeader>Show</SectionHeader>
             <div className="rounded-lg border p-4 space-y-1">
               <div className="flex items-start justify-between gap-2 mb-3">
                 <div>
@@ -271,7 +265,7 @@ export default async function DayViewPage({
         {/* Rehearsal section */}
         {rehearsal && (
           <div>
-            <SectionHeader title="Rehearsal" />
+            <SectionHeader>Rehearsal</SectionHeader>
             <div className="rounded-lg border p-4">
               <div className="flex items-start justify-between gap-2 mb-3">
                 <div>
@@ -313,7 +307,7 @@ export default async function DayViewPage({
         {/* Transport section */}
         {segments.length > 0 && (
           <div>
-            <SectionHeader title="Transport" />
+            <SectionHeader>Transport</SectionHeader>
             <div className="space-y-3">
               {segments.map((seg) => (
                 <div key={seg.id} className="rounded-lg border p-4">
@@ -326,13 +320,11 @@ export default async function DayViewPage({
                     {seg.vehicle_or_flight_no && (
                       <span className="text-sm text-muted-foreground">{seg.vehicle_or_flight_no}</span>
                     )}
-                    <span className={`ml-auto text-xs px-2 py-0.5 rounded-full font-medium ${
-                      seg.status === 'booked' || seg.status === 'ticketed'
-                        ? 'bg-green-500/10 text-green-600'
-                        : 'bg-amber-500/10 text-amber-600'
-                    }`}>
-                      {seg.status}
-                    </span>
+                    <StatusBadge
+                      label={seg.status}
+                      variant={TRANSPORT_VARIANT[seg.status] ?? 'default'}
+                      className="ml-auto"
+                    />
                   </div>
                   <Row label="From" value={seg.origin ?? ''} />
                   <Row label="To" value={seg.destination ?? ''} />
@@ -350,7 +342,7 @@ export default async function DayViewPage({
         {/* Hotel section */}
         {hotels.length > 0 && (
           <div>
-            <SectionHeader title="Lodging" />
+            <SectionHeader>Lodging</SectionHeader>
             <div className="space-y-3">
               {hotels.map((hotel) => (
                 <div key={hotel.id} className="rounded-lg border p-4">
@@ -382,7 +374,7 @@ export default async function DayViewPage({
         {/* Notes */}
         {tourDate.notes && (
           <div>
-            <SectionHeader title="Notes" />
+            <SectionHeader>Notes</SectionHeader>
             <p className="text-sm text-muted-foreground">{tourDate.notes}</p>
           </div>
         )}

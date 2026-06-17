@@ -7,6 +7,7 @@ import { AttentionFeed } from '@/components/tours/attention-feed'
 import { AdvanceDots } from '@/components/shows/advance-dots'
 import { PageLayout } from '@/components/layout/page-layout'
 import { PageHeader } from '@/components/layout/page-header'
+import { SectionHeader } from '@/components/ui/section-header'
 import type { Tables } from '@/lib/types/database'
 
 type ShowRow = { id: string; date: string; venue_name: string; load_in_at: string | null }
@@ -92,9 +93,7 @@ export default async function TourHomePage({
 
       {/* Attention feed */}
       <section className="mb-10">
-        <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-          Needs attention
-        </h2>
+        <SectionHeader>Needs attention</SectionHeader>
         <AttentionFeed items={attentionItems ?? []} tourId={id} />
       </section>
 
@@ -102,9 +101,7 @@ export default async function TourHomePage({
       {upcomingShows.length > 0 && (
         <section className="mb-10">
           <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Coming up
-            </h2>
+            <SectionHeader className="mb-0">Coming up</SectionHeader>
             <Link
               href={`/tours/${id}/shows`}
               className="flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors"

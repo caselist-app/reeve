@@ -6,11 +6,14 @@ import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Tables } from '@/lib/types/database'
-import { passportStatus, formatExpiry, PASSPORT_CLASS } from '@/lib/roster/passport'
+import { passportStatus, formatExpiry } from '@/lib/roster/passport'
 import { deleteContact } from '@/lib/actions/contacts'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
+import { DataField } from '@/components/ui/data-field'
+import { SectionHeader } from '@/components/ui/section-header'
+import { StatusBadge, PASSPORT_VARIANT } from '@/components/ui/status-badge'
 import { useSidePanel } from '@/stores/side-panel-store'
 import {
   AlertDialog,
@@ -37,15 +40,6 @@ type TourMembership = {
 interface Props {
   contact: Tables<'contacts'>
   tours: TourMembership[]
-}
-
-function Field({ label, value }: { label: string; value: string | null }) {
-  return (
-    <div className="space-y-0.5">
-      <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
-      <p className="text-sm">{value || '-'}</p>
-    </div>
-  )
 }
 
 export function ContactDetail({ contact, tours }: Props) {
@@ -126,43 +120,46 @@ export function ContactDetail({ contact, tours }: Props) {
 
       {error && <p className="mb-4 text-sm text-destructive">{error}</p>}
 
-      {contact.passport_expiry && (
-        <div className="mb-6 rounded-md border px-4 py-3">
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">Passport expiry</p>
-          <p className={cn('text-sm', PASSPORT_CLASS[status])}>
-            {formatExpiry(contact.passport_expiry)}
-            {status === 'expired' && ', expired'}
-            {status === 'soon' && ', within 90 days'}
-          </p>
+      {/* Passport expiry alert — only shown when flagged */}
+      {(status === 'expired' || status === 'soon') && contact.passport_expiry && (
+        <div className={cn(
+          'mb-6 flex items-center justify-between rounded-lg border px-4 py-3',
+          status === 'expired' ? 'border-red-200 bg-red-500/5' : 'border-amber-200 bg-amber-500/5'
+        )}>
+          <p className="text-xs font-medium text-muted-foreground">Passport expiry</p>
+          <StatusBadge
+            label={`${formatExpiry(contact.passport_expiry)}${status === 'expired' ? ' (expired)' : ' (soon)'}`}
+            variant={PASSPORT_VARIANT[status]}
+          />
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3">
-        <Field label="Email" value={contact.contact_email} />
-        <Field label="Phone" value={contact.contact_phone} />
-        <Field label="WhatsApp" value={contact.whatsapp_number} />
-        <Field label="Preferred channel" value={contact.preferred_channel} />
-        <Field label="Home city" value={contact.home_city} />
-        <Field label="T-shirt" value={contact.tshirt_size} />
-        <Field label="Passport number" value={contact.passport_number} />
-        <Field label="Passport country" value={contact.passport_country} />
-        <Field label="Dietary" value={contact.dietary} />
-        <Field label="Allergies" value={contact.allergies} />
-        <Field label="Emergency contact" value={contact.emergency_contact_name} />
-        <Field label="Emergency phone" value={contact.emergency_contact_phone} />
+      <div className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3">
+        <DataField label="Email" value={contact.contact_email} />
+        <DataField label="Phone" value={contact.contact_phone} mono />
+        <DataField label="WhatsApp" value={contact.whatsapp_number} mono />
+        <DataField label="Preferred channel" value={contact.preferred_channel} />
+        <DataField label="Home city" value={contact.home_city} />
+        <DataField label="T-shirt" value={contact.tshirt_size} />
+        <DataField label="Passport number" value={contact.passport_number} mono />
+        <DataField label="Passport country" value={contact.passport_country} />
+        <DataField label="Dietary" value={contact.dietary} />
+        <DataField label="Allergies" value={contact.allergies} />
+        <DataField label="Emergency contact" value={contact.emergency_contact_name} />
+        <DataField label="Emergency phone" value={contact.emergency_contact_phone} mono />
       </div>
 
       {contact.notes && (
         <>
           <Separator className="my-6" />
-          <p className="text-xs uppercase tracking-wider text-muted-foreground">Notes</p>
-          <p className="mt-1 whitespace-pre-wrap text-sm">{contact.notes}</p>
+          <SectionHeader>Notes</SectionHeader>
+          <p className="whitespace-pre-wrap text-sm text-muted-foreground">{contact.notes}</p>
         </>
       )}
 
       <Separator className="my-6" />
 
-      <h2 className="mb-3 text-sm font-semibold">On tours</h2>
+      <SectionHeader>On tours</SectionHeader>
       {tours.length === 0 ? (
         <p className="text-sm text-muted-foreground">Not on any tours yet.</p>
       ) : (
@@ -171,15 +168,13 @@ export function ContactDetail({ contact, tours }: Props) {
             <Link
               key={t.personId}
               href={`/tours/${t.tourId}/people`}
-              className="flex items-center justify-between rounded-md border px-4 py-2.5 text-sm transition-colors hover:bg-muted/30"
+              className="flex items-center justify-between rounded-xl border border-border px-4 py-2.5 text-sm transition-colors hover:bg-muted/50"
             >
               <span className="min-w-0">
                 <span className="font-medium">{t.tourName}</span>
                 {t.role && <span className="text-muted-foreground"> · {t.role}</span>}
               </span>
-              <span className="shrink-0 text-xs uppercase tracking-wider text-muted-foreground">
-                {t.status}
-              </span>
+              <StatusBadge label={t.status} />
             </Link>
           ))}
         </div>
