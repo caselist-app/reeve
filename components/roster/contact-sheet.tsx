@@ -262,58 +262,6 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
               </div>
             </div>
 
-            {isCrewInTourContext && (
-              <>
-                <Separator />
-                <SectionHeader>Pay and per diems</SectionHeader>
-                <p className="text-xs text-muted-foreground">
-                  All optional. Used for settlement and per diem calculations on this tour.
-                </p>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label htmlFor={`${formId}-per_diem_rate`}>Per diem</Label>
-                    <Input
-                      id={`${formId}-per_diem_rate`}
-                      name="per_diem_rate"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      defaultValue={tourContext.mode === 'edit' ? (tourContext.crewDetail?.per_diem_rate ?? '') : ''}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Currency</Label>
-                    <Select value={perDiemCurrency} onValueChange={setPerDiemCurrency}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {CURRENCIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor={`${formId}-daily_wage_rate`}>Daily wage</Label>
-                    <Input
-                      id={`${formId}-daily_wage_rate`}
-                      name="daily_wage_rate"
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      defaultValue={tourContext.mode === 'edit' ? (tourContext.crewDetail?.daily_wage_rate ?? '') : ''}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Wage currency</Label>
-                    <Select value={wageCurrency} onValueChange={setWageCurrency}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {CURRENCIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </>
-            )}
             <Separator />
           </>
         )}
@@ -527,25 +475,39 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
           />
         </div>
 
-        {/* Default pay — only shown in roster context (no tourContext) */}
-        {!hasTourContext && (
+        {/* Pay section — tour rates when in tour context (crew only), default rates in roster context */}
+        {(isCrewInTourContext || !hasTourContext) && (
           <>
             <Separator />
-            <SectionHeader>Default pay</SectionHeader>
-            <p className="text-xs text-muted-foreground">
-              Used to pre-fill per diem and wage when this contact is added to a tour. Optional.
-            </p>
+            {isCrewInTourContext ? (
+              <>
+                <SectionHeader>Pay and per diems</SectionHeader>
+                <p className="text-xs text-muted-foreground">
+                  All optional. Used for settlement and per diem calculations on this tour.
+                </p>
+              </>
+            ) : (
+              <>
+                <SectionHeader>Default pay</SectionHeader>
+                <p className="text-xs text-muted-foreground">
+                  Used to pre-fill per diem and wage when this contact is added to a tour. Optional.
+                </p>
+              </>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
-                <Label htmlFor={`${formId}-default_per_diem_rate`}>Per diem</Label>
+                <Label htmlFor={`${formId}-${isCrewInTourContext ? 'per_diem_rate' : 'default_per_diem_rate'}`}>Per diem</Label>
                 <Input
-                  id={`${formId}-default_per_diem_rate`}
-                  name="default_per_diem_rate"
+                  id={`${formId}-${isCrewInTourContext ? 'per_diem_rate' : 'default_per_diem_rate'}`}
+                  name={isCrewInTourContext ? 'per_diem_rate' : 'default_per_diem_rate'}
                   type="number"
                   step="0.01"
                   min="0"
-                  defaultValue={contact?.default_per_diem_rate ?? ''}
+                  defaultValue={isCrewInTourContext
+                    ? (tourContext?.mode === 'edit' ? (tourContext.crewDetail?.per_diem_rate ?? '') : '')
+                    : (contact?.default_per_diem_rate ?? '')
+                  }
                 />
               </div>
               <div className="space-y-2">
@@ -558,14 +520,17 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor={`${formId}-default_daily_wage_rate`}>Daily wage</Label>
+                <Label htmlFor={`${formId}-${isCrewInTourContext ? 'daily_wage_rate' : 'default_daily_wage_rate'}`}>Daily wage</Label>
                 <Input
-                  id={`${formId}-default_daily_wage_rate`}
-                  name="default_daily_wage_rate"
+                  id={`${formId}-${isCrewInTourContext ? 'daily_wage_rate' : 'default_daily_wage_rate'}`}
+                  name={isCrewInTourContext ? 'daily_wage_rate' : 'default_daily_wage_rate'}
                   type="number"
                   step="0.01"
                   min="0"
-                  defaultValue={contact?.default_daily_wage_rate ?? ''}
+                  defaultValue={isCrewInTourContext
+                    ? (tourContext?.mode === 'edit' ? (tourContext.crewDetail?.daily_wage_rate ?? '') : '')
+                    : (contact?.default_daily_wage_rate ?? '')
+                  }
                 />
               </div>
               <div className="space-y-2">
