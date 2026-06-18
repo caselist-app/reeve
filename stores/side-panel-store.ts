@@ -73,6 +73,12 @@ export type PanelDescriptor =
       tourContext?: ContactTourContext & { mode: 'edit' }
       onSuccess: () => void
     }
+  | {
+      type: 'add-person'
+      tourId: string
+      personType: PersonType
+      onSuccess: () => void
+    }
 
 interface SidePanelState {
   panel: PanelDescriptor | null

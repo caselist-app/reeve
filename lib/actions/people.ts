@@ -219,6 +219,39 @@ export async function updatePerson(
   return { error: null }
 }
 
+// Adds an existing roster contact to a tour via the add_contact_to_tour RPC.
+// personType overrides the contact's default_person_type (e.g. when the TM
+// clicked "Add Crew" specifically). The RPC seeds per-tour rates from the
+// contact's defaults and enforces ownership of both the tour and the contact.
+export async function addContactToTour(
+  tourId: string,
+  contactId: string,
+  personType: string
+): Promise<PeopleActionState> {
+  await requireUser()
+
+  const supabase = await createClient()
+
+  const { data: personId, error } = await supabase.rpc('add_contact_to_tour', {
+    p_tour_id: tourId,
+    p_contact_id: contactId,
+    p_person_type: personType,
+    p_role: null,
+  })
+
+  if (error) {
+    if (error.code === '23505') {
+      return { error: 'This person is already on the tour.' }
+    }
+    return { error: error.message }
+  }
+
+  void bustTourContextCache(tourId)
+  revalidatePath(`/tours/${tourId}/people`)
+
+  return { error: null, personId: personId ?? undefined }
+}
+
 // Updates only the tour-membership fields (type, role, per-tour rates) for an
 // existing person. Identity is handled separately by updateContact. Used when
 // the ContactSheet is opened in tour-edit context from the people page.

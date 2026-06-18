@@ -23,6 +23,39 @@ export type ContactWithTours = {
   tours: TourMembership[]
 }
 
+// Returns roster contacts that are not yet on the given tour, ordered by name.
+// Used to populate the add-person picker on the people page.
+export async function getAvailableContacts(
+  tourId: string
+): Promise<{ data: Pick<Tables<'contacts'>, 'id' | 'name' | 'default_role' | 'default_person_type'>[] | null; error: string | null }> {
+  const user = await requireUser()
+  const supabase = await createClient()
+
+  // Fetch the contact IDs already on this tour so we can exclude them.
+  const { data: existing } = await supabase
+    .from('people')
+    .select('contact_id')
+    .eq('tour_id', tourId)
+
+  const existingIds = (existing ?? []).map((r) => r.contact_id)
+
+  let query = supabase
+    .from('contacts')
+    .select('id, name, default_role, default_person_type')
+    .eq('account_id', user.id)
+    .order('name')
+
+  // Supabase .not('id', 'in', ...) requires a non-empty array.
+  if (existingIds.length > 0) {
+    query = query.not('id', 'in', `(${existingIds.join(',')})`)
+  }
+
+  const { data, error } = await query
+
+  if (error) return { data: null, error: error.message }
+  return { data: data ?? [], error: null }
+}
+
 export async function getContact(
   contactId: string
 ): Promise<{ data: ContactWithTours | null; error: string | null }> {

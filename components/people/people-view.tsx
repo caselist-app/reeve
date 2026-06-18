@@ -36,9 +36,9 @@ export function PeopleView({ tourId, people, crewDetails }: Props) {
 
   function handleAdd(type: PersonType) {
     open({
-      type: 'contact',
-      contact: null,
-      tourContext: { mode: 'add', tourId, defaultType: type },
+      type: 'add-person',
+      tourId,
+      personType: type,
       onSuccess: () => router.refresh(),
     })
   }

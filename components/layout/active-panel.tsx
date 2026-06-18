@@ -7,6 +7,7 @@ import { useSidePanel } from '@/stores/side-panel-store'
 // in the initial bundle on every page. They only ever render after a user
 // action, so client-only loading (ssr: false) costs nothing in UX.
 const BulkAdd = dynamic(() => import('@/components/people/bulk-add').then((m) => m.BulkAdd), { ssr: false })
+const AddPersonPanel = dynamic(() => import('@/components/people/add-person-panel').then((m) => m.AddPersonPanel), { ssr: false })
 const ContactSheet = dynamic(() => import('@/components/roster/contact-sheet').then((m) => m.ContactSheet), { ssr: false })
 const ContactPanel = dynamic(() => import('@/components/roster/contact-panel').then((m) => m.ContactPanel), { ssr: false })
 const AddShowPanel = dynamic(() => import('@/components/shows/add-show-panel').then((m) => m.AddShowPanel), { ssr: false })
@@ -21,6 +22,14 @@ export function ActivePanel() {
   if (!panel) return null
 
   switch (panel.type) {
+    case 'add-person':
+      return (
+        <AddPersonPanel
+          tourId={panel.tourId}
+          personType={panel.personType}
+          onSuccess={panel.onSuccess}
+        />
+      )
     case 'bulk-add':
       return (
         <BulkAdd
