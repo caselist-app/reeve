@@ -76,7 +76,7 @@ export function DepartureSelector({
         </button>
       </PopoverTrigger>
 
-      <PopoverContent className="w-72 p-2" align="start">
+      <PopoverContent className="w-72 max-w-[calc(100vw-2rem)] p-2" align="start">
         <p className="px-2 pb-1 pt-0.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
           Departing from
         </p>

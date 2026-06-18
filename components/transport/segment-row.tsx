@@ -98,8 +98,8 @@ export function SegmentRow({ segment, tourId, timezone }: SegmentRowProps) {
         </span>
       </td>
 
-      {/* Date + times */}
-      <td className="py-3 pr-4 whitespace-nowrap">
+      {/* Date + times: wrap on mobile so the narrow table does not overflow. */}
+      <td className="py-3 pr-4 whitespace-normal sm:whitespace-nowrap">
         <span className="text-sm text-muted-foreground">
           {dateLabel && `${dateLabel} · `}{timeRange}
         </span>

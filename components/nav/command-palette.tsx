@@ -206,8 +206,8 @@ export function CommandPalette() {
             )}
           </div>
 
-          {/* Footer */}
-          <div className="flex items-center gap-4 border-t border-border px-4 py-2 text-[10px] text-muted-foreground">
+          {/* Footer: keyboard legend, irrelevant on touch so hidden below md. */}
+          <div className="hidden items-center gap-4 border-t border-border px-4 py-2 text-[10px] text-muted-foreground md:flex">
             <span><kbd className="rounded border border-border bg-muted px-1 py-0.5">↑↓</kbd> navigate</span>
             <span><kbd className="rounded border border-border bg-muted px-1 py-0.5">↵</kbd> open</span>
             <span><kbd className="rounded border border-border bg-muted px-1 py-0.5">⌘K</kbd> toggle</span>

@@ -135,7 +135,7 @@ export function ContactDetail({ contact, tours }: Props) {
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-3">
         <DataField label="Email" value={contact.contact_email} />
         <DataField label="Phone" value={contact.contact_phone} mono />
         <DataField label="WhatsApp" value={contact.whatsapp_number} mono />

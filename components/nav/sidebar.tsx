@@ -91,7 +91,7 @@ export function Sidebar({ tours, lastTourId = null }: SidebarProps) {
             <Search className="h-3.5 w-3.5 shrink-0" />
             Search
             <kbd
-              className="ml-auto rounded border px-1 py-0.5 text-[10px] leading-none"
+              className="ml-auto hidden rounded border px-1 py-0.5 text-[10px] leading-none md:inline-block"
               style={{ borderColor: 'var(--sidebar-border)', color: 'var(--sidebar-muted-foreground)' }}
             >
               ⌘K

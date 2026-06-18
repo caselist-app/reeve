@@ -84,7 +84,7 @@ export function HotelWorkspace({
     <div className="space-y-6">
       {/* Context summary */}
       <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
-        <div className="grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4 sm:gap-x-6 sm:gap-y-2">
           <div>
             <p className="text-xs text-muted-foreground">Venue</p>
             <p className="font-medium">{show.venue_name}</p>

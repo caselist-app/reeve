@@ -43,7 +43,7 @@ export function DataField({ label, value, mono = false, copyable = false, classN
           {copied ? (
             <Check className="h-3 w-3 shrink-0 text-primary" />
           ) : (
-            <Copy className="h-3 w-3 shrink-0 opacity-0 group-hover:opacity-40 transition-opacity" />
+            <Copy className="h-3 w-3 shrink-0 opacity-40 transition-opacity lg:opacity-0 lg:group-hover:opacity-40" />
           )}
         </button>
       ) : (
