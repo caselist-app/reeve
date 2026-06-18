@@ -71,7 +71,7 @@ export function Sidebar({ tours, lastTourId = null }: SidebarProps) {
   const isRoster = pathname.startsWith('/roster')
 
   return (
-    <aside className="flex h-screen flex-col bg-sidebar sticky top-0 relative" style={{ width: '100%' }}>
+    <aside className="flex h-full flex-col bg-sidebar sticky top-0 relative overflow-hidden" style={{ width: '100%' }}>
       {/* Tour selector */}
       <div className="px-3 pt-5 pb-4">
         <TourSelector tours={tours} activeTourId={activeTourId} />
