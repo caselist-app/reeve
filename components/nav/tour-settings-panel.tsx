@@ -1,9 +1,10 @@
 'use client'
 
 import Link from 'next/link'
-import { useEffect, useRef } from 'react'
+import { useRef } from 'react'
 import { X, Users, Plane, Building2, FileText, MessageCircle, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useDismiss } from '@/hooks/use-dismiss'
 
 interface TourSettingsPanelProps {
   tourId: string
@@ -23,25 +24,7 @@ const SETTINGS_NAV = [
 export function TourSettingsPanel({ tourId, isOpen, onClose }: TourSettingsPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null)
 
-  // Close on Escape.
-  useEffect(() => {
-    function handleKey(e: KeyboardEvent) {
-      if (e.key === 'Escape' && isOpen) onClose()
-    }
-    window.addEventListener('keydown', handleKey)
-    return () => window.removeEventListener('keydown', handleKey)
-  }, [isOpen, onClose])
-
-  // Close on outside click.
-  useEffect(() => {
-    function handleClick(e: MouseEvent) {
-      if (isOpen && panelRef.current && !panelRef.current.contains(e.target as Node)) {
-        onClose()
-      }
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [isOpen, onClose])
+  useDismiss({ isOpen, onClose, ref: panelRef })
 
   return (
     <div

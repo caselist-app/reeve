@@ -1,8 +1,7 @@
 'use client'
 
-import Link from 'next/link'
 import { AlertTriangle, Info, CheckCircle2 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { ListRow } from '@/components/ui/list-row'
 import type { Tables } from '@/lib/types/database'
 
 type AttentionItem = Tables<'attention_items'>
@@ -42,20 +41,13 @@ export function AttentionFeed({ items, tourId }: AttentionFeedProps) {
     <ul className="space-y-2">
       {sorted.map((item) => {
         const href = itemHref(item, tourId)
-        const Wrapper = href ? Link : 'div'
 
         return (
           <li key={item.id}>
-            <Wrapper
-              href={href ?? '#'}
-              className={cn(
-                'flex items-start gap-3 rounded-xl border border-border px-4 py-3 text-sm transition-colors',
-                href
-                  ? 'hover:bg-muted/50 cursor-pointer'
-                  : 'cursor-default',
-                item.severity >= 8 && 'border-destructive/30 bg-destructive/5',
-                item.severity >= 5 && item.severity < 8 && 'border-amber-500/20 bg-amber-50/50 dark:bg-amber-950/20',
-              )}
+            <ListRow
+              href={href ?? undefined}
+              severity={item.severity >= 8 ? 'danger' : item.severity >= 5 ? 'warning' : undefined}
+              className="flex items-start gap-3 text-sm"
             >
               {severityIcon(item.severity)}
               <div className="min-w-0">
@@ -64,7 +56,7 @@ export function AttentionFeed({ items, tourId }: AttentionFeedProps) {
                   <p className="mt-0.5 text-muted-foreground">{item.detail}</p>
                 )}
               </div>
-            </Wrapper>
+            </ListRow>
           </li>
         )
       })}

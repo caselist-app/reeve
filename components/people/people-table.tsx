@@ -3,6 +3,7 @@
 import type { Tables } from '@/lib/types/database'
 import type { PersonWithContact } from '@/components/people/people-view'
 import { Button } from '@/components/ui/button'
+import { ListRow } from '@/components/ui/list-row'
 import { StatusBadge, PASSPORT_VARIANT } from '@/components/ui/status-badge'
 import {
   AlertDialog,
@@ -53,10 +54,7 @@ export function PeopleTable({ people, onEdit, onRemove }: Props) {
         ].filter(Boolean)
 
         return (
-          <div
-            key={person.id}
-            className="flex items-center gap-4 rounded-xl border border-border px-4 py-3 transition-colors hover:bg-muted/50"
-          >
+          <ListRow key={person.id} interactive className="flex items-center gap-4">
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium">{person.contacts.name}</p>
               {subtitle.length > 0 && (
@@ -87,7 +85,7 @@ export function PeopleTable({ people, onEdit, onRemove }: Props) {
                 onConfirm={() => onRemove(person.id)}
               />
             </div>
-          </div>
+          </ListRow>
         )
       })}
     </div>

@@ -1,15 +1,16 @@
 'use client'
 
 import { useState, useTransition, useEffect } from 'react'
-import Link from 'next/link'
-import { X, MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Tables } from '@/lib/types/database'
 import { passportStatus, formatExpiry } from '@/lib/roster/passport'
 import { getContact, deleteContact } from '@/lib/actions/contacts'
 import type { TourMembership } from '@/lib/actions/contacts'
 import { useSidePanel } from '@/stores/side-panel-store'
+import { PanelShell } from '@/components/layout/panel-shell'
 import { Button } from '@/components/ui/button'
+import { ListRow } from '@/components/ui/list-row'
 import { Separator } from '@/components/ui/separator'
 import { DataField } from '@/components/ui/data-field'
 import { SectionHeader } from '@/components/ui/section-header'
@@ -87,83 +88,64 @@ export function ContactPanel({ contactId, onSuccess }: Props) {
 
   const status = contact?.passport_expiry ? passportStatus(contact.passport_expiry) : null
 
-  return (
-    <div className="flex h-full flex-col">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-3 px-5 py-4 shrink-0 border-b border-border">
-        <div className="min-w-0">
-          {contact?.default_role && (
-            <p className="text-xs text-muted-foreground">{contact.default_role}</p>
-          )}
-          <h2 className="text-sm font-semibold truncate">
-            {loading ? 'Loading...' : (contact?.name ?? 'Contact')}
-          </h2>
-        </div>
-        <div className="flex items-center gap-1 shrink-0 mt-0.5">
-          {contact && (
-            <>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground">
-                    <MoreHorizontal className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={handleEdit}>
-                    <Pencil className="mr-2 h-4 w-4" />
-                    Edit
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="text-destructive focus:text-destructive"
-                    onSelect={() => setDeleteOpen(true)}
-                  >
-                    <Trash2 className="mr-2 h-4 w-4" />
-                    Delete
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-
-              <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete {contact.name}?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This removes them from your roster. A contact on a tour cannot be deleted;
-                      remove them from their tours first. This cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={handleDelete}
-                      disabled={pending}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                    >
-                      Delete
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </>
-          )}
-          <button
-            type="button"
-            onClick={close}
-            className="shrink-0 text-muted-foreground hover:text-foreground transition-colors ml-1"
-            aria-label="Close panel"
+  const headerAction = contact ? (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground">
+            <MoreHorizontal className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={handleEdit}>
+            <Pencil className="mr-2 h-4 w-4" />
+            Edit
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className="text-destructive focus:text-destructive"
+            onSelect={() => setDeleteOpen(true)}
           >
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
+            <Trash2 className="mr-2 h-4 w-4" />
+            Delete
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
-      {/* Body */}
-      <div className="flex-1 overflow-y-auto px-5 py-5">
-        {loading && <p className="text-sm text-muted-foreground">Loading...</p>}
-        {fetchError && <p className="text-sm text-destructive">{fetchError}</p>}
-        {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {contact.name}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes them from your roster. A contact on a tour cannot be deleted;
+              remove them from their tours first. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={pending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  ) : undefined
 
-        {contact && (
+  return (
+    <PanelShell
+      title={loading ? 'Loading...' : (contact?.name ?? 'Contact')}
+      description={contact?.default_role ?? undefined}
+      headerAction={headerAction}
+    >
+      {loading && <p className="text-sm text-muted-foreground">Loading...</p>}
+      {fetchError && <p className="text-sm text-destructive">{fetchError}</p>}
+      {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
+
+      {contact && (
           <>
             {/* Passport expiry alert — only shown when flagged */}
             {(status === 'expired' || status === 'soon') && contact.passport_expiry && (
@@ -188,7 +170,8 @@ export function ContactPanel({ contactId, onSuccess }: Props) {
                 { label: 'Home city', value: contact.home_city, mono: false, copyable: false },
                 { label: 'T-shirt', value: contact.tshirt_size, mono: false, copyable: false },
                 { label: 'Passport number', value: contact.passport_number, mono: true, copyable: true },
-                { label: 'Passport country', value: contact.passport_country, mono: false, copyable: false },
+                { label: 'Issuing country', value: contact.passport_country, mono: false, copyable: false },
+                { label: 'Passport expiry', value: contact.passport_expiry ? formatExpiry(contact.passport_expiry) : null, mono: false, copyable: false },
                 { label: 'First names (passport)', value: contact.passport_first_names, mono: false, copyable: true },
                 { label: 'Surname (passport)', value: contact.passport_surname, mono: false, copyable: true },
                 { label: 'Dietary', value: contact.dietary, mono: false, copyable: false },
@@ -224,11 +207,11 @@ export function ContactPanel({ contactId, onSuccess }: Props) {
             ) : (
               <div className="space-y-1.5">
                 {tours.map((t) => (
-                  <Link
+                  <ListRow
                     key={t.personId}
                     href={`/tours/${t.tourId}/people`}
-                    className="flex items-center justify-between rounded-xl border border-border px-4 py-2.5 text-sm transition-colors hover:bg-muted/50"
                     onClick={close}
+                    className="flex items-center justify-between py-2.5 text-sm"
                   >
                     <span className="min-w-0">
                       <span className="font-medium">{t.tourName}</span>
@@ -237,13 +220,12 @@ export function ContactPanel({ contactId, onSuccess }: Props) {
                       )}
                     </span>
                     <StatusBadge label={t.status} />
-                  </Link>
+                  </ListRow>
                 ))}
               </div>
             )}
           </>
         )}
-      </div>
-    </div>
+    </PanelShell>
   )
 }
