@@ -1,77 +1,34 @@
 import { createClient } from '@/lib/supabase/server'
 import { NotesTextarea } from '@/components/schedule/notes-textarea'
+import type { DayShow } from '@/lib/schedule/day-records'
 
 interface DayInfoPanelProps {
   tourId: string
   date: string
-  tourDateId: string | null
-  timezone: string
+  show: DayShow | null
+  dayNotes: string | null
+  // Tour_date-linked segment and hotel ids, already resolved by fetchDayRecords.
+  segmentIds: string[]
+  hotelStayIds: string[]
 }
 
-function formatCheckTime(timeStr: string | null): string {
-  if (!timeStr) return ''
-  return String(timeStr).slice(0, 5)
-}
-
-export async function DayInfoPanel({ tourId, date, tourDateId, timezone }: DayInfoPanelProps) {
+export async function DayInfoPanel({ tourId, date, show, dayNotes, segmentIds, hotelStayIds }: DayInfoPanelProps) {
   const supabase = await createClient()
 
-  // Fetch show for this date (if any).
-  const { data: shows } = tourDateId
-    ? await supabase
-        .from('shows')
-        .select('id, venue_name, address, capacity, venue_type, notes')
-        .eq('tour_id', tourId)
-        .eq('tour_date_id', tourDateId)
-    : { data: [] as Array<{ id: string; venue_name: string; address: string | null; capacity: number | null; venue_type: string | null; notes: string | null }> }
-
-  const show = shows?.[0] ?? null
-
-  // For non-show days, fetch the __day_notes__ sentinel row.
-  const { data: dayNotesRow } = !show
-    ? await supabase
-        .from('day_events')
-        .select('notes')
-        .eq('tour_id', tourId)
-        .eq('date', date)
-        .eq('title', '__day_notes__')
-        .maybeSingle()
-    : { data: null }
-
-  // Roster: people assigned via transport or hotel on this date.
+  // Roster: people assigned via transport or hotel on this date. The segment and
+  // hotel ids are passed in, so these two queries run in parallel rather than
+  // each blocking on its own id lookup first.
   const [{ data: transportPeople }, { data: hotelPeople }] = await Promise.all([
     supabase
       .from('transport_assignments')
       .select('people(id, name, person_type)')
       .eq('tour_id', tourId)
-      .in(
-        'segment_id',
-        tourDateId
-          ? (await supabase
-              .from('transport_segments')
-              .select('id')
-              .eq('tour_id', tourId)
-              .eq('tour_date_id', tourDateId)
-              .then((r) => (r.data ?? []).map((s) => s.id))
-            )
-          : [],
-      ),
+      .in('segment_id', segmentIds),
     supabase
       .from('room_assignments')
       .select('people(id, name, person_type)')
       .eq('tour_id', tourId)
-      .in(
-        'hotel_stay_id',
-        tourDateId
-          ? (await supabase
-              .from('hotel_stays')
-              .select('id')
-              .eq('tour_id', tourId)
-              .eq('tour_date_id', tourDateId)
-              .then((r) => (r.data ?? []).map((s) => s.id))
-            )
-          : [],
-      ),
+      .in('hotel_stay_id', hotelStayIds),
   ])
 
   // Deduplicate roster by person id.
@@ -148,7 +105,7 @@ export async function DayInfoPanel({ tourId, date, tourDateId, timezone }: DayIn
           <NotesTextarea
             tourId={tourId}
             date={date}
-            initialValue={dayNotesRow?.notes ?? ''}
+            initialValue={dayNotes ?? ''}
           />
         )}
       </section>

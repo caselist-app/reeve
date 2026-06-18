@@ -1,4 +1,7 @@
+'use client'
+
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { parseLocation } from '@/lib/schedule/format'
 import { AddDayButton } from './add-day-button'
@@ -32,7 +35,8 @@ interface TourDate {
 interface DateSidebarProps {
   tourId: string
   dates: TourDate[]
-  selectedDate: string
+  // The day to highlight when no ?date= is present yet.
+  defaultDate: string
 }
 
 const DAY_TYPE_LABELS: Record<string, string> = {
@@ -88,7 +92,11 @@ function deriveLabel(d: TourDate): { title: string; subtitle: string } {
   return { title: DAY_TYPE_LABELS[d.day_type] ?? '', subtitle: d.notes ?? '' }
 }
 
-export function DateSidebar({ tourId, dates, selectedDate }: DateSidebarProps) {
+export function DateSidebar({ tourId, dates, defaultDate }: DateSidebarProps) {
+  // Read the active date from the URL client-side so the highlight updates on
+  // date clicks without re-rendering the (persistent) layout.
+  const selectedDate = useSearchParams().get('date') ?? defaultDate
+
   return (
     <div className="w-[230px] shrink-0 border-r border-border flex flex-col overflow-hidden">
       {/* Spine header: quiet label plus a secondary control to add a day. */}

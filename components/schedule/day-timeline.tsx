@@ -1,8 +1,9 @@
-import { createClient } from '@/lib/supabase/server'
 import { TimelineCard } from '@/components/schedule/timeline-card'
 import { DayHeader } from '@/components/schedule/day-header'
+import type { DayRecords } from '@/lib/schedule/day-records'
 
 interface DayTimelineProps {
+  records: DayRecords
   tourId: string
   tourDateId: string
   date: string       // YYYY-MM-DD
@@ -52,7 +53,7 @@ const DAY_SHEET_FIELDS = [
 
 // ---- Component --------------------------------------------------------------
 
-export async function DayTimeline({ tourId, tourDateId, date, timezone, dayType, tourName, notes, customTitle }: DayTimelineProps) {
+export async function DayTimeline({ records, tourId, tourDateId, date, timezone, dayType, tourName, notes, customTitle }: DayTimelineProps) {
   const header = (
     <DayHeader
       tourId={tourId}
@@ -66,90 +67,11 @@ export async function DayTimeline({ tourId, tourDateId, date, timezone, dayType,
     />
   )
 
-  const supabase = await createClient()
-
-  // Date range for unlinked transport (segments created before tour_date_id was
-  // backfilled, or via the planner where show_id was the link instead).
-  const nextDate = new Date(new Date(`${date}T00:00:00Z`).getTime() + 86_400_000)
-    .toISOString()
-    .slice(0, 10)
-
-  const [
-    { data: shows },
-    { data: linkedSegments },
-    { data: datedSegments },
-    { data: linkedHotels },
-    { data: checkinHotels },
-    { data: checkoutHotels },
-    { data: events },
-  ] = await Promise.all([
-    supabase
-      .from('shows')
-      .select(`
-        id, venue_name,
-        day_sheets (
-          lobby_call_at, venue_access, load_in, line_check, soundcheck, vip,
-          doors, support_on, support_off, changeover, headliner_on, headliner_off,
-          curfew, load_out, hotel_departure
-        )
-      `)
-      .eq('tour_id', tourId)
-      .eq('tour_date_id', tourDateId),
-
-    supabase
-      .from('transport_segments')
-      .select('id, mode, origin, destination, depart_at, carrier_operator, vehicle_or_flight_no')
-      .eq('tour_id', tourId)
-      .eq('tour_date_id', tourDateId),
-
-    supabase
-      .from('transport_segments')
-      .select('id, mode, origin, destination, depart_at, carrier_operator, vehicle_or_flight_no')
-      .eq('tour_id', tourId)
-      .is('tour_date_id', null)
-      .gte('depart_at', `${date}T00:00:00Z`)
-      .lt('depart_at', `${nextDate}T00:00:00Z`),
-
-    supabase
-      .from('hotel_stays')
-      .select('id, name, check_in_date, check_in_time, check_out_date, check_out_time')
-      .eq('tour_id', tourId)
-      .eq('tour_date_id', tourDateId),
-
-    supabase
-      .from('hotel_stays')
-      .select('id, name, check_in_date, check_in_time, check_out_date, check_out_time')
-      .eq('tour_id', tourId)
-      .is('tour_date_id', null)
-      .eq('check_in_date', date),
-
-    supabase
-      .from('hotel_stays')
-      .select('id, name, check_in_date, check_in_time, check_out_date, check_out_time')
-      .eq('tour_id', tourId)
-      .is('tour_date_id', null)
-      .eq('check_out_date', date)
-      .neq('check_in_date', date), // avoid duplicating same-day check-in/out
-
-    supabase
-      .from('day_events')
-      .select('id, title, starts_at, ends_at, location')
-      .eq('tour_id', tourId)
-      .eq('date', date)
-      .neq('title', '__day_notes__')
-      .order('starts_at', { ascending: true }),
-  ])
-
-  // Deduplicate transport segments by id (linked + unlinked fallback).
-  const segmentMap = new Map<string, NonNullable<typeof linkedSegments>[number]>()
-  for (const s of [...(linkedSegments ?? []), ...(datedSegments ?? [])]) {
-    segmentMap.set(s.id, s)
-  }
-  const segments = Array.from(segmentMap.values())
+  const { shows, segments, hotelsLinked, hotelsCheckin, hotelsCheckout, events } = records
 
   // Deduplicate hotels: tour_date_id-linked take precedence over date-matched.
   const hotelMap = new Map<string, { id: string; name: string | null; check_in_date: string | null; check_in_time: string | null; check_out_date: string | null; check_out_time: string | null; isCheckout: boolean }>()
-  for (const h of (linkedHotels ?? [])) {
+  for (const h of hotelsLinked) {
     // A linked stay shows both check-in and check-out if applicable.
     if (h.check_in_date === date) {
       hotelMap.set(`checkin:${h.id}`, { ...h, isCheckout: false })
@@ -158,12 +80,12 @@ export async function DayTimeline({ tourId, tourDateId, date, timezone, dayType,
       hotelMap.set(`checkout:${h.id}`, { ...h, isCheckout: true })
     }
   }
-  for (const h of [...(checkinHotels ?? [])]) {
+  for (const h of hotelsCheckin) {
     if (!hotelMap.has(`checkin:${h.id}`)) {
       hotelMap.set(`checkin:${h.id}`, { ...h, isCheckout: false })
     }
   }
-  for (const h of [...(checkoutHotels ?? [])]) {
+  for (const h of hotelsCheckout) {
     if (!hotelMap.has(`checkout:${h.id}`)) {
       hotelMap.set(`checkout:${h.id}`, { ...h, isCheckout: true })
     }
