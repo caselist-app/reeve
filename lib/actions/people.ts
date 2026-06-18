@@ -24,9 +24,12 @@ function contactIdentityFields(p: z.infer<typeof personSchema>) {
     dietary: p.dietary || null,
     allergies: p.allergies || null,
     home_city: p.home_city || null,
+    passport_first_names: p.passport_first_names || null,
+    passport_surname: p.passport_surname || null,
     passport_number: p.passport_number || null,
     passport_expiry: p.passport_expiry || null,
     passport_country: p.passport_country || null,
+    date_of_birth: p.date_of_birth || null,
     tshirt_size: p.tshirt_size || null,
   }
 }
@@ -205,6 +208,61 @@ export async function updatePerson(
       ...detail,
     })
 
+    if (detailError) {
+      return { error: 'Could not save pay details. Please try again.' }
+    }
+  }
+
+  void bustTourContextCache(existing.tour_id)
+  revalidatePath(`/tours/${existing.tour_id}/people`)
+
+  return { error: null }
+}
+
+// Updates only the tour-membership fields (type, role, per-tour rates) for an
+// existing person. Identity is handled separately by updateContact. Used when
+// the ContactSheet is opened in tour-edit context from the people page.
+export async function updatePersonTerms(
+  personId: string,
+  personType: string,
+  role: string | null,
+  crewDetail?: z.infer<typeof crewDetailSchema>
+): Promise<PeopleActionState> {
+  await requireUser()
+
+  const supabase = await createClient()
+
+  // RLS on people enforces owns_tour(tour_id), so this returns null if the
+  // caller does not own the person's tour.
+  const { data: existing } = await supabase
+    .from('people')
+    .select('tour_id')
+    .eq('id', personId)
+    .single()
+
+  if (!existing) {
+    return { error: 'Person not found.' }
+  }
+
+  const { error: personError } = await supabase
+    .from('people')
+    .update({ person_type: personType, role: role || null })
+    .eq('id', personId)
+
+  if (personError) {
+    return { error: personError.message }
+  }
+
+  if (personType === 'crew' && crewDetail) {
+    const parsed = crewDetailSchema.safeParse(crewDetail)
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0].message }
+    }
+    const { error: detailError } = await supabase.from('crew_detail').upsert({
+      person_id: personId,
+      tour_id: existing.tour_id,
+      ...parsed.data,
+    })
     if (detailError) {
       return { error: 'Could not save pay details. Please try again.' }
     }
