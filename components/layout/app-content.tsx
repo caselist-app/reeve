@@ -58,7 +58,7 @@ export function AppContent({ children }: AppContentProps) {
       <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
         <MobileTopBar />
 
-        <div className="flex flex-1 min-h-0 overflow-hidden p-2">
+        <div className="flex flex-1 min-h-0 overflow-hidden px-2 pt-2 pb-[max(0.5rem,var(--safe-bottom))]">
           <main className="flex-1 min-w-0 bg-background border border-border rounded-3xl overflow-y-auto overflow-x-hidden">
             {children}
           </main>
@@ -69,8 +69,9 @@ export function AppContent({ children }: AppContentProps) {
             <SheetPrimitive.Overlay className="fixed inset-0 z-50 bg-black/60 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
             <SheetPrimitive.Content
               className={cn(
-                'fixed inset-y-0 right-0 z-50 w-full max-w-sm',
+                'fixed inset-y-0 right-0 z-50 w-full max-w-sm flex flex-col',
                 'bg-background border-l border-border',
+                'pt-[var(--safe-top)] pb-[var(--safe-bottom)]',
                 'data-[state=open]:animate-in data-[state=closed]:animate-out',
                 'data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right',
                 'duration-200',

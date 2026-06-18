@@ -72,8 +72,8 @@ export function Sidebar({ tours, lastTourId = null }: SidebarProps) {
 
   return (
     <aside className="flex h-full flex-col bg-sidebar sticky top-0 relative overflow-hidden" style={{ width: '100%' }}>
-      {/* Tour selector */}
-      <div className="px-3 pt-5 pb-4">
+      {/* Tour selector: top padding grows to cover the notch in the mobile drawer */}
+      <div className="px-3 pt-[max(1.25rem,var(--safe-top))] pb-4">
         <TourSelector tours={tours} activeTourId={activeTourId} />
       </div>
 

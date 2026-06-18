@@ -10,7 +10,7 @@ export function MobileTopBar() {
   const { open } = useMobileNav()
 
   return (
-    <div className="flex h-12 shrink-0 items-center gap-3 border-b border-border px-4 md:hidden">
+    <div className="flex h-[calc(3rem+var(--safe-top))] shrink-0 items-center gap-3 border-b border-border px-4 pt-[var(--safe-top)] md:hidden">
       <button
         type="button"
         onClick={open}
