@@ -2,6 +2,7 @@ import { cookies } from 'next/headers'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { ResizableSidebar } from '@/components/layout/resizable-sidebar'
+import { MobileNavDrawer } from '@/components/layout/mobile-nav-drawer'
 import { AppContent } from '@/components/layout/app-content'
 import { CommandPalette } from '@/components/nav/command-palette'
 
@@ -44,7 +45,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex h-screen overflow-hidden bg-sidebar">
-      <ResizableSidebar tours={tours ?? []} initialWidth={sidebarWidth} lastTourId={lastTourId} />
+      {/* Desktop: always-visible resizable sidebar. Hidden on mobile. */}
+      <div className="hidden md:contents">
+        <ResizableSidebar tours={tours ?? []} initialWidth={sidebarWidth} lastTourId={lastTourId} />
+      </div>
+
+      {/* Mobile: sidebar rendered inside a drawer opened by the hamburger. */}
+      <MobileNavDrawer tours={tours ?? []} lastTourId={lastTourId} />
 
       {/* AppContent owns the main card and the side panel, both animated. */}
       <AppContent>{children}</AppContent>
