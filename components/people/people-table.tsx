@@ -54,7 +54,7 @@ export function PeopleTable({ people, onEdit, onRemove }: Props) {
         ].filter(Boolean)
 
         return (
-          <ListRow key={person.id} interactive className="flex items-center gap-4">
+          <ListRow key={person.id} interactive className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-4">
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium">{person.contacts.name}</p>
               {subtitle.length > 0 && (
