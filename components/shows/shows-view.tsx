@@ -83,14 +83,14 @@ export function ShowsView({ tourId, shows, timezone }: ShowsViewProps) {
       {shows.length === 0 ? (
         <p className="text-sm text-muted-foreground">No shows yet. Add the first one.</p>
       ) : (
-        <div className="rounded-md border">
+        <div className="overflow-x-auto rounded-md border">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/40">
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Date</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Venue</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">City</th>
-                <th className="px-4 py-3 text-left font-medium text-muted-foreground">Load-in</th>
+                <th className="hidden sm:table-cell px-4 py-3 text-left font-medium text-muted-foreground">City</th>
+                <th className="hidden sm:table-cell px-4 py-3 text-left font-medium text-muted-foreground">Load-in</th>
                 <th className="px-4 py-3 text-left font-medium text-muted-foreground">Advance</th>
               </tr>
             </thead>
@@ -105,7 +105,7 @@ export function ShowsView({ tourId, shows, timezone }: ShowsViewProps) {
                   >
                     <td
                       className={cn(
-                        'px-4 py-3 font-medium',
+                        'px-4 py-3 font-medium whitespace-nowrap',
                         isNext && 'border-l-2 border-primary'
                       )}
                     >
@@ -119,10 +119,10 @@ export function ShowsView({ tourId, shows, timezone }: ShowsViewProps) {
                         {show.venue_name}
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">
+                    <td className="hidden sm:table-cell px-4 py-3 text-muted-foreground">
                       {parseCity(show.address)}
                     </td>
-                    <td className="px-4 py-3 tabular-nums text-muted-foreground">
+                    <td className="hidden sm:table-cell px-4 py-3 tabular-nums text-muted-foreground">
                       {formatLoadIn(show.load_in_at, timezone)}
                     </td>
                     <td className="px-4 py-3">
