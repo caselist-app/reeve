@@ -30,7 +30,7 @@ export function DayContentSkeleton() {
   return (
     <div className="flex flex-1 min-w-0 min-h-0 animate-pulse">
       {/* Timeline */}
-      <div className="relative flex flex-col flex-1 min-w-0 border-r border-border">
+      <div className="relative flex flex-col flex-1 min-w-0 lg:border-r lg:border-border">
         {/* Header bar */}
         <div className="flex items-center justify-between px-8 py-4 border-b border-border">
           <div className="space-y-2">
@@ -61,8 +61,8 @@ export function DayContentSkeleton() {
           ))}
         </div>
       </div>
-      {/* Info panel */}
-      <div className="w-[260px] shrink-0 px-4 py-4 space-y-5">
+      {/* Info panel — hidden on mobile, matches the live right panel */}
+      <div className="hidden lg:block w-[260px] shrink-0 px-4 py-4 space-y-5">
         <div className="space-y-2">
           <div className="h-2.5 w-12 rounded bg-muted" />
           <div className="h-4 w-32 rounded bg-muted" />

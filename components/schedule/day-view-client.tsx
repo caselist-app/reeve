@@ -217,13 +217,13 @@ export function DayViewClient({ timeline, dayInfoPanel, panelData, addContext, d
             </Popover>
           </div>
 
-          <div className="flex-1 overflow-y-auto border-r border-border">
+          <div className="flex-1 overflow-y-auto lg:border-r lg:border-border">
             {timeline}
           </div>
         </div>
 
-        {/* Right panel: 260px fixed */}
-        <div className="w-[260px] shrink-0 overflow-y-auto">
+        {/* Right panel: 260px fixed. Hidden on mobile — replaced by the bottom-sheet in C15. */}
+        <div className="hidden lg:block w-[260px] shrink-0 overflow-y-auto">
           {selectedCategory ? (
             <AddFlow
               {...addContext}
