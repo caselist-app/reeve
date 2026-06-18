@@ -141,7 +141,7 @@ export function NewTourForm({ artists }: Props) {
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor={`${formId}-start_date`}>Start date</Label>
           <Input id={`${formId}-start_date`} name="start_date" type="date" />
@@ -157,7 +157,7 @@ export function NewTourForm({ artists }: Props) {
         <Input id={`${formId}-territory`} name="territory" placeholder="Europe, UK" />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Base currency</Label>
           <Select name="base_currency" value={currency} onValueChange={setCurrency}>
