@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, type ReactNode } from 'react'
-import { Plus, MoreHorizontal } from 'lucide-react'
+import { Plus, MoreHorizontal, Info, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import * as SheetPrimitive from '@radix-ui/react-dialog'
 import { useSchedulePanel } from '@/stores/schedule-panel-store'
@@ -94,6 +94,7 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, panelData, ad
   const [selectedCategory, setSelectedCategory] = useState<AddCategory | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [dayInfoOpen, setDayInfoOpen] = useState(false)
 
   function renderEditPanel() {
     if (!activeCard) return null
@@ -203,6 +204,19 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, panelData, ad
               </DropdownMenu>
             )}
 
+            {/* Day-info trigger: only visible on mobile where the right column is hidden. */}
+            {isMobile && (
+              <button
+                type="button"
+                aria-label="Day info"
+                title="Day info"
+                onClick={() => setDayInfoOpen(true)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+              >
+                <Info className="h-4 w-4" />
+              </button>
+            )}
+
             <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
               <PopoverTrigger asChild>
                 <button
@@ -280,6 +294,30 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, panelData, ad
               {/* EditPanel already has its own header + X that calls setActiveCard(null) */}
               <div className="flex-1 overflow-y-auto">
                 {editPanel}
+              </div>
+            </SheetPrimitive.Content>
+          </SheetPrimitive.Portal>
+        </SheetPrimitive.Root>
+      )}
+
+      {/* Bottom-sheet for the day-info panel on mobile (venue, roster, notes). */}
+      {isMobile && (
+        <SheetPrimitive.Root open={dayInfoOpen} onOpenChange={setDayInfoOpen}>
+          <SheetPrimitive.Portal>
+            <SheetPrimitive.Overlay className="fixed inset-0 z-50 bg-black/60 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+            <SheetPrimitive.Content className="fixed inset-x-0 bottom-0 z-50 flex flex-col max-h-[80dvh] rounded-t-xl border-t border-border bg-background pb-[env(safe-area-inset-bottom)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom duration-300">
+              <SheetPrimitive.Title className="sr-only">Day info</SheetPrimitive.Title>
+              <div className="flex shrink-0 items-center justify-between px-4 py-3 border-b border-border">
+                <span className="text-sm font-semibold">Day info</span>
+                <SheetPrimitive.Close
+                  className="text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label="Close"
+                >
+                  <X className="h-4 w-4" />
+                </SheetPrimitive.Close>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {dayInfoPanel}
               </div>
             </SheetPrimitive.Content>
           </SheetPrimitive.Portal>
