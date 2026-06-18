@@ -96,26 +96,29 @@ function StepRow({ step, timezone }: { step: TransitStep; timezone: string | nul
   // Transit step, mirrors the flight card: icon · depart ── duration ── arrive · line name
   const { Icon, colour } = transitIcon(step.vehicle_type)
   return (
-    <div className="flex items-center gap-4 py-3">
-      <div className={cn('flex w-8 shrink-0 items-center justify-center', colour)}>
-        <Icon className="h-5 w-5" />
-      </div>
-
-      <div className="flex flex-1 items-center gap-3 min-w-0">
-        <span className="text-xl font-semibold tabular-nums tracking-tight">
-          {step.depart_at ? fmt(step.depart_at, timezone) : '--:--'}
-        </span>
-        <div className="flex min-w-0 flex-1 items-center gap-2 text-muted-foreground">
-          <div className="h-px flex-1 bg-border" />
-          <span className="shrink-0 text-xs tabular-nums">
-            {fmtDuration(step.duration_min)}
-            {step.num_stops ? ` · ${step.num_stops} stop${step.num_stops > 1 ? 's' : ''}` : ''}
-          </span>
-          <div className="h-px flex-1 bg-border" />
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 py-3">
+      {/* Icon + times: takes full width first, then line info wraps below on mobile */}
+      <div className="flex flex-1 items-center gap-4 min-w-0">
+        <div className={cn('flex w-8 shrink-0 items-center justify-center', colour)}>
+          <Icon className="h-5 w-5" />
         </div>
-        <span className="text-xl font-semibold tabular-nums tracking-tight">
-          {step.arrive_at ? fmt(step.arrive_at, timezone) : '--:--'}
-        </span>
+
+        <div className="flex flex-1 items-center gap-3 min-w-0">
+          <span className="text-xl font-semibold tabular-nums tracking-tight">
+            {step.depart_at ? fmt(step.depart_at, timezone) : '--:--'}
+          </span>
+          <div className="flex min-w-0 flex-1 items-center gap-2 text-muted-foreground">
+            <div className="h-px flex-1 bg-border" />
+            <span className="shrink-0 text-xs tabular-nums">
+              {fmtDuration(step.duration_min)}
+              {step.num_stops ? ` · ${step.num_stops} stop${step.num_stops > 1 ? 's' : ''}` : ''}
+            </span>
+            <div className="h-px flex-1 bg-border" />
+          </div>
+          <span className="text-xl font-semibold tabular-nums tracking-tight">
+            {step.arrive_at ? fmt(step.arrive_at, timezone) : '--:--'}
+          </span>
+        </div>
       </div>
 
       <div className="shrink-0 text-right">
@@ -159,37 +162,40 @@ export function OptionRow({
       )}
     >
       {/* ── Leg 1: Flight / rail ─────────────────────────────────────────── */}
-      <div className="flex items-center gap-4 px-5 py-4">
-        {/* Carrier logo or mode icon */}
-        <div className="flex w-8 shrink-0 items-center justify-center">
-          {option.carrier_logo_url ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={option.carrier_logo_url}
-              alt={option.carrier}
-              className="h-8 w-8 rounded object-contain"
-              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
-            />
-          ) : (
-            <Icon className="h-5 w-5 text-muted-foreground" />
-          )}
-        </div>
-
-        {/* Depart → Arrive with duration */}
+      {/* flex-wrap: on mobile the carrier+actions section drops below the times */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-5 py-4">
+        {/* Icon + times as one unit so they stay together on wrap */}
         <div className="flex flex-1 items-center gap-3 min-w-0">
-          <span className="text-xl font-semibold tabular-nums tracking-tight">
-            {fmt(option.depart_at, timezone)}
-          </span>
-          <div className="flex min-w-0 flex-1 items-center gap-2 text-muted-foreground">
-            <div className="h-px flex-1 bg-border" />
-            <span className="shrink-0 text-xs tabular-nums">
-              {flightDuration(option.depart_at, option.arrive_at)}
-            </span>
-            <div className="h-px flex-1 bg-border" />
+          <div className="flex w-8 shrink-0 items-center justify-center">
+            {option.carrier_logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={option.carrier_logo_url}
+                alt={option.carrier}
+                className="h-8 w-8 rounded object-contain"
+                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+              />
+            ) : (
+              <Icon className="h-5 w-5 text-muted-foreground" />
+            )}
           </div>
-          <span className="text-xl font-semibold tabular-nums tracking-tight">
-            {fmt(option.arrive_at, timezone)}
-          </span>
+
+          {/* Depart → Arrive with duration */}
+          <div className="flex flex-1 items-center gap-3 min-w-0">
+            <span className="text-xl font-semibold tabular-nums tracking-tight">
+              {fmt(option.depart_at, timezone)}
+            </span>
+            <div className="flex min-w-0 flex-1 items-center gap-2 text-muted-foreground">
+              <div className="h-px flex-1 bg-border" />
+              <span className="shrink-0 text-xs tabular-nums">
+                {flightDuration(option.depart_at, option.arrive_at)}
+              </span>
+              <div className="h-px flex-1 bg-border" />
+            </div>
+            <span className="text-xl font-semibold tabular-nums tracking-tight">
+              {fmt(option.arrive_at, timezone)}
+            </span>
+          </div>
         </div>
 
         {/* Carrier name + flight ref + inline actions */}
