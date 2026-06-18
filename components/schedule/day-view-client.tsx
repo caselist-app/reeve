@@ -3,8 +3,10 @@
 import { useState, type ReactNode } from 'react'
 import { Plus, MoreHorizontal } from 'lucide-react'
 import { useRouter } from 'next/navigation'
+import * as SheetPrimitive from '@radix-ui/react-dialog'
 import { useSchedulePanel } from '@/stores/schedule-panel-store'
 import { useSidePanel } from '@/stores/side-panel-store'
+import { useIsMobile } from '@/hooks/use-is-mobile'
 import { ShowPanel } from '@/components/schedule/panels/show-panel'
 import { TransportPanel } from '@/components/schedule/panels/transport-panel'
 import { HotelPanel } from '@/components/schedule/panels/hotel-panel'
@@ -87,6 +89,7 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, panelData, ad
   const { activeCard, setActiveCard } = useSchedulePanel()
   const { open: openSidePanel } = useSidePanel()
   const router = useRouter()
+  const isMobile = useIsMobile()
   const [popoverOpen, setPopoverOpen] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<AddCategory | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
@@ -262,6 +265,26 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, panelData, ad
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Bottom-sheet for the edit panel on mobile. Only mounted below lg so
+          Radix focus-trapping never fires on desktop where the panel is inline. */}
+      {isMobile && (
+        <SheetPrimitive.Root
+          open={editPanel !== null}
+          onOpenChange={(open) => { if (!open) setActiveCard(null) }}
+        >
+          <SheetPrimitive.Portal>
+            <SheetPrimitive.Overlay className="fixed inset-0 z-50 bg-black/60 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+            <SheetPrimitive.Content className="fixed inset-x-0 bottom-0 z-50 flex flex-col max-h-[80dvh] rounded-t-xl border-t border-border bg-background pb-[env(safe-area-inset-bottom)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom duration-300">
+              <SheetPrimitive.Title className="sr-only">Edit panel</SheetPrimitive.Title>
+              {/* EditPanel already has its own header + X that calls setActiveCard(null) */}
+              <div className="flex-1 overflow-y-auto">
+                {editPanel}
+              </div>
+            </SheetPrimitive.Content>
+          </SheetPrimitive.Portal>
+        </SheetPrimitive.Root>
+      )}
     </>
   )
 }
