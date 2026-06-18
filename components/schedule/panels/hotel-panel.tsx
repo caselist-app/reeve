@@ -60,7 +60,7 @@ export function HotelPanel({ stay }: HotelPanelProps) {
           <Input name="address" defaultValue={stay.address ?? ''} className="h-7 text-xs" />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label className="text-xs">Check-in date</Label>
             <Input name="check_in_date" type="date" defaultValue={stay.check_in_date ?? ''} className="h-7 text-xs" />
@@ -76,7 +76,7 @@ export function HotelPanel({ stay }: HotelPanelProps) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label className="text-xs">Check-out date</Label>
             <Input name="check_out_date" type="date" defaultValue={stay.check_out_date ?? ''} className="h-7 text-xs" />
@@ -92,7 +92,7 @@ export function HotelPanel({ stay }: HotelPanelProps) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label className="text-xs">WiFi network</Label>
             <Input name="wifi_network" defaultValue={stay.wifi_network ?? ''} className="h-7 text-xs" />

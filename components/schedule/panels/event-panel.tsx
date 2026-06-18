@@ -65,7 +65,7 @@ export function EventPanel({ event, timezone }: EventPanelProps) {
           <Input name="title" defaultValue={event.title} required className="h-7 text-xs" />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label className="text-xs">Starts</Label>
             <Input

@@ -47,7 +47,7 @@ export function AddShowForm({ tourId, date, onBack, onSuccess }: AddShowFormProp
         <Label className="text-xs">Address</Label>
         <Input name="address" placeholder="Chalk Farm Rd, London NW1 8EH" className="h-7 text-xs" />
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">Load-in</Label>
           <Input name="load_in_at" type="datetime-local" defaultValue={`${date}T10:00`} className="h-7 text-xs" />

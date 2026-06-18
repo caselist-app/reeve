@@ -82,7 +82,7 @@ export function TransportPanel({ segment, timezone }: TransportPanelProps) {
   return (
     <EditPanel title={modeLabel} subtitle={[segment.origin, segment.destination].filter(Boolean).join(' to ') || undefined}>
       <form onSubmit={handleSubmit} className="space-y-3">
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label className="text-xs">From</Label>
             <Input name="origin" defaultValue={segment.origin ?? ''} className="h-7 text-xs" />
@@ -93,7 +93,7 @@ export function TransportPanel({ segment, timezone }: TransportPanelProps) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label className="text-xs">Departs</Label>
             <Input
@@ -114,7 +114,7 @@ export function TransportPanel({ segment, timezone }: TransportPanelProps) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label className="text-xs">Carrier</Label>
             <Input name="carrier_operator" defaultValue={segment.carrier_operator ?? ''} className="h-7 text-xs" />

@@ -11,8 +11,8 @@ export default async function NewTourPage() {
     .eq('account_id', user.id)
     .order('name')
   return (
-    <div className="mx-auto max-w-lg px-4 py-12">
-      <h1 className="mb-8 text-2xl font-semibold">New tour</h1>
+    <div className="mx-auto max-w-lg px-4 py-8 md:py-12">
+      <h1 className="mb-6 text-2xl font-semibold md:mb-8">New tour</h1>
       <NewTourForm artists={data ?? []} />
     </div>
   )

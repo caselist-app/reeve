@@ -24,11 +24,11 @@ export function ResizableSidebar({ tours, initialWidth, lastTourId = null }: Res
     <div className="relative flex-shrink-0" style={{ width }}>
       <Sidebar tours={tours} lastTourId={lastTourId} />
 
-      {/* Drag handle on the right edge */}
+      {/* Drag handle on the right edge. Mouse-only; hidden on touch. */}
       <div
         onMouseDown={onDragStart}
         className={cn(
-          'absolute top-0 right-0 h-full w-1 cursor-col-resize z-50 transition-colors',
+          'absolute top-0 right-0 h-full w-1 cursor-col-resize z-50 transition-colors hidden md:block',
           isDragging ? 'bg-sidebar-border/60' : 'hover:bg-sidebar-border/40',
         )}
         aria-hidden

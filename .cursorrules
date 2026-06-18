@@ -109,7 +109,7 @@ Commit all three together (migration, code using it, regenerated types) in one c
 - Comments explain WHY when non-obvious, never WHAT.
 
 ## File organisation
-- app/ for Next.js routes (desktop primary; mobile routes are trimmed companions, not a responsive shrink)
+- app/ for Next.js routes (desktop primary; mobile is the same codebase made responsive, not a separate route tree; on small screens, secondary columns collapse into drawers and bottom-sheets via progressive disclosure; mobile-first defaults are restored to the desktop arrangement with md: and lg: classes)
 - components/ui/ for shadcn components, components/ for feature components (people/, shows/, logistics/, comms/)
 - lib/ for shared utilities, clients, types
 - lib/supabase/ for client wrappers (server, admin, middleware)

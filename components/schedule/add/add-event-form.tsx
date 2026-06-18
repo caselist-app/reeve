@@ -59,7 +59,7 @@ export function AddEventForm({ tourId, date, timezone, onBack, onSuccess }: AddE
         <Label className="text-xs">Title</Label>
         <Input name="title" placeholder="After show, press call..." required className="h-7 text-xs" />
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">Starts</Label>
           <Input name="starts_at" type="datetime-local" defaultValue={`${date}T20:00`} className="h-7 text-xs" />

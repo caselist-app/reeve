@@ -91,6 +91,7 @@ export function PeopleView({ tourId, people, crewDetails }: Props) {
       )}
 
       <Tabs defaultValue="crew">
+        <div className="overflow-x-auto">
         <TabsList>
           {TABS.map((tab) => {
             const count = byType(tab.value).length
@@ -104,12 +105,13 @@ export function PeopleView({ tourId, people, crewDetails }: Props) {
             )
           })}
         </TabsList>
+        </div>
 
         {TABS.map((tab) => {
           const tabPeople = byType(tab.value)
           return (
             <TabsContent key={tab.value} value={tab.value} className="mt-4">
-              <div className="mb-3 flex items-center justify-between">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                 <span className="text-sm text-muted-foreground">
                   {tabPeople.length === 0 ? 'No one added yet.' : ''}
                 </span>

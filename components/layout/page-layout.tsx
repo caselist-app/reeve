@@ -10,7 +10,7 @@ interface PageLayoutProps {
 
 export function PageLayout({ children, maxWidth = 'max-w-5xl', className }: PageLayoutProps) {
   return (
-    <div className={cn('mx-auto px-6 py-10', maxWidth, className)}>
+    <div className={cn('mx-auto px-4 py-6 md:px-6 md:py-10', maxWidth, className)}>
       {children}
     </div>
   )

@@ -35,6 +35,7 @@ export default async function SchedulePage({
         timezone={tz}
         selectedDate={selectedDate}
         tourDate={tourDate}
+        dates={dates}
       />
     </Suspense>
   )

@@ -184,7 +184,7 @@ export function ContactPanel({ contactId, tourContext, onSuccess }: Props) {
           {tourTermsFields.length > 0 && (
             <>
               <SectionHeader>On this tour</SectionHeader>
-              <div className="mb-5 grid grid-cols-2 gap-x-6 gap-y-5">
+              <div className="mb-5 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
                 {tourTermsFields.map((f) => (
                   <DataField key={f.label} label={f.label} value={f.value!} mono={f.mono} copyable={f.copyable} />
                 ))}
@@ -213,7 +213,7 @@ export function ContactPanel({ contactId, tourContext, onSuccess }: Props) {
             ].filter((f) => f.value)
 
             return fields.length > 0 ? (
-              <div className="grid grid-cols-2 gap-x-6 gap-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-5">
                 {fields.map((f) => (
                   <DataField key={f.label} label={f.label} value={f.value} mono={f.mono} copyable={f.copyable} />
                 ))}

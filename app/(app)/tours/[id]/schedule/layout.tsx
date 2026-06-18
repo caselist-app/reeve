@@ -21,9 +21,12 @@ export default async function ScheduleLayout({
 
   return (
     <div className="flex h-full overflow-hidden">
-      <Suspense fallback={<SidebarSkeleton />}>
-        <DateSidebar tourId={id} dates={dates} defaultDate={defaultScheduleDate(dates)} />
-      </Suspense>
+      {/* DateSidebar hidden below lg; replaced by DateStrip in the page on mobile. */}
+      <div className="hidden lg:contents">
+        <Suspense fallback={<SidebarSkeleton />}>
+          <DateSidebar tourId={id} dates={dates} defaultDate={defaultScheduleDate(dates)} />
+        </Suspense>
+      </div>
       {children}
     </div>
   )

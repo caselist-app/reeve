@@ -58,7 +58,7 @@ export function AddFlightForm({ tourId, tourDateId, date, timezone, onBack, onSu
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">Airline</Label>
           <Input name="carrier_operator" placeholder="BA" className="h-7 text-xs" />
@@ -68,7 +68,7 @@ export function AddFlightForm({ tourId, tourDateId, date, timezone, onBack, onSu
           <Input name="vehicle_or_flight_no" placeholder="BA0123" className="h-7 text-xs" />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">From</Label>
           <Input name="origin" placeholder="LHR" className="h-7 text-xs" />
@@ -78,7 +78,7 @@ export function AddFlightForm({ tourId, tourDateId, date, timezone, onBack, onSu
           <Input name="destination" placeholder="CDG" className="h-7 text-xs" />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">Departs</Label>
           <Input name="depart_at" type="datetime-local" defaultValue={`${date}T07:00`} className="h-7 text-xs" />

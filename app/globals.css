@@ -96,6 +96,13 @@
 }
 
 @layer base {
+  :root {
+    --safe-top: env(safe-area-inset-top);
+    --safe-right: env(safe-area-inset-right);
+    --safe-bottom: env(safe-area-inset-bottom);
+    --safe-left: env(safe-area-inset-left);
+  }
+
   * {
     border-color: var(--border);
     outline-color: var(--ring);
@@ -113,5 +120,16 @@
   button:not([disabled]),
   [role="button"]:not([disabled]) {
     cursor: pointer !important;
+  }
+
+  /* Prevent iOS from zooming on input focus. iOS zooms when an input's
+     computed font-size is below 16px. This rule enforces 16px on mobile
+     without touching the desktop compact styles. */
+  @media (max-width: 767px) {
+    input,
+    select,
+    textarea {
+      font-size: 16px;
+    }
   }
 }

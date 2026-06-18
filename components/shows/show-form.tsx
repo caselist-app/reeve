@@ -137,7 +137,7 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
 
   return (
     <form onSubmit={handleSubmit} className={cn('space-y-5', className)}>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor={`${formId}-date`}>Date</Label>
           <Input
@@ -177,7 +177,7 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label>Venue type</Label>
           <Select
@@ -210,7 +210,7 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor={`${formId}-load_in_at`}>Load-in</Label>
           <Input
@@ -245,7 +245,7 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor={`${formId}-parking`}>Parking</Label>
           <Input
@@ -301,7 +301,7 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor={`${formId}-dressing_rooms`}>Dressing rooms</Label>
           <Input

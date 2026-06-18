@@ -116,7 +116,7 @@ export function AddPersonPanel({ tourId, personType, onSuccess }: Props) {
                     onClick={() => handleAdd(contact)}
                     disabled={isAdded || pending}
                     className={cn(
-                      'flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm transition-colors',
+                      'flex w-full items-center justify-between rounded-lg px-3 py-3 text-left text-sm transition-colors',
                       isAdded
                         ? 'opacity-50 cursor-default'
                         : 'hover:bg-muted cursor-pointer'

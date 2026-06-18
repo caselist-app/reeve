@@ -11,7 +11,7 @@ interface PageHeaderProps {
 
 export function PageHeader({ eyebrow, title, description, actions }: PageHeaderProps) {
   return (
-    <div className="flex items-start justify-between gap-4 mb-8">
+    <div className="flex flex-col gap-3 mb-6 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:mb-8">
       <div className="min-w-0">
         {eyebrow && (
           <p className="text-sm text-muted-foreground truncate">{eyebrow}</p>

@@ -53,7 +53,7 @@ export function AddRailForm({ tourId, tourDateId, date, timezone, onBack, onSucc
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">From station</Label>
           <Input name="origin" placeholder="London St Pancras" className="h-7 text-xs" />
@@ -63,7 +63,7 @@ export function AddRailForm({ tourId, tourDateId, date, timezone, onBack, onSucc
           <Input name="destination" placeholder="Paris Gare du Nord" className="h-7 text-xs" />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">Departs</Label>
           <Input name="depart_at" type="datetime-local" defaultValue={`${date}T09:00`} className="h-7 text-xs" />
@@ -73,7 +73,7 @@ export function AddRailForm({ tourId, tourDateId, date, timezone, onBack, onSucc
           <Input name="arrive_at" type="datetime-local" className="h-7 text-xs" />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">Operator</Label>
           <Input name="carrier_operator" placeholder="Eurostar" className="h-7 text-xs" />

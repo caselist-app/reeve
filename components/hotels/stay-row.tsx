@@ -63,7 +63,7 @@ export function StayRow({ stay, tourId }: StayRowProps) {
       </td>
 
       {/* City */}
-      <td className="py-3 pr-4">
+      <td className="hidden sm:table-cell py-3 pr-4">
         <span className="text-sm text-muted-foreground">{city || '-'}</span>
       </td>
 
@@ -73,12 +73,12 @@ export function StayRow({ stay, tourId }: StayRowProps) {
       </td>
 
       {/* Check-out */}
-      <td className="py-3 pr-4 whitespace-nowrap">
+      <td className="hidden sm:table-cell py-3 pr-4 whitespace-nowrap">
         <span className="text-sm text-muted-foreground">{formatDate(stay.check_out_date)}</span>
       </td>
 
       {/* Rooms */}
-      <td className="py-3 pr-4 whitespace-nowrap">
+      <td className="hidden sm:table-cell py-3 pr-4 whitespace-nowrap">
         {stay.room_count > 0 ? (
           <span className="text-sm text-muted-foreground">
             {stay.room_count} {stay.room_count === 1 ? 'room' : 'rooms'}
@@ -89,7 +89,7 @@ export function StayRow({ stay, tourId }: StayRowProps) {
       </td>
 
       {/* Parking indicator */}
-      <td className="py-3 pr-4 w-8">
+      <td className="hidden sm:table-cell py-3 pr-4 w-8">
         {parking && (
           <Truck className="h-3.5 w-3.5 text-muted-foreground" aria-label="Parking available" />
         )}
