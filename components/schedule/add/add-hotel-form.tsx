@@ -50,7 +50,7 @@ export function AddHotelForm({ tourId, tourDateId, date, onBack, onSuccess }: Ad
         <Label className="text-xs">Address</Label>
         <Input name="address" placeholder="100 Shoreditch High St" className="h-7 text-xs" />
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">Check-in date</Label>
           <Input name="check_in_date" type="date" defaultValue={date} className="h-7 text-xs" />
@@ -60,7 +60,7 @@ export function AddHotelForm({ tourId, tourDateId, date, onBack, onSuccess }: Ad
           <Input name="check_in_time" type="time" defaultValue="15:00" className="h-7 text-xs" />
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">Check-out date</Label>
           <Input name="check_out_date" type="date" className="h-7 text-xs" />
