@@ -12,7 +12,7 @@ The visible change for the TM: a new top-level "Roster" section (outside any tou
 
 ---
 
-## The model in one line
+## The model in one linew
 
 A `contact` is the person. A `person` row is "this contact is on this tour, in this role, on these terms." Identity lives on the contact and is read live. Per-tour terms live on the person. Rates live on `crew_detail` per tour, unchanged.
 
