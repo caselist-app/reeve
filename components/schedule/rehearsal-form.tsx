@@ -92,7 +92,7 @@ export function RehearsalForm({ rehearsalId, initialData, className }: Rehearsal
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor={`${formId}-start_at`}>Start</Label>
           <Input

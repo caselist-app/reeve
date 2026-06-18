@@ -158,13 +158,15 @@ export default async function ShowDetailPage({
       />
 
       <Tabs defaultValue="venue">
-        <TabsList className="mb-6">
-          <TabsTrigger value="venue">Venue</TabsTrigger>
-          <TabsTrigger value="schedule">Schedule</TabsTrigger>
-          <TabsTrigger value="advance">Advance</TabsTrigger>
-          <TabsTrigger value="travel">Travel</TabsTrigger>
-          <TabsTrigger value="hotels">Hotels</TabsTrigger>
-        </TabsList>
+        <div className="mb-6 overflow-x-auto">
+          <TabsList>
+            <TabsTrigger value="venue">Venue</TabsTrigger>
+            <TabsTrigger value="schedule">Schedule</TabsTrigger>
+            <TabsTrigger value="advance">Advance</TabsTrigger>
+            <TabsTrigger value="travel">Travel</TabsTrigger>
+            <TabsTrigger value="hotels">Hotels</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="venue">
           <ShowForm

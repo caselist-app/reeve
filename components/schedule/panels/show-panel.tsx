@@ -102,7 +102,7 @@ export function ShowPanel({ showId, venueName, timezone, daySheet }: ShowPanelPr
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
               {section.title}
             </p>
-            <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-2">
               {section.fields.map(({ key, label }) => (
                 <div key={key} className="space-y-1">
                   <Label className="text-xs">{label}</Label>
