@@ -1,46 +1,17 @@
-import { createClient } from '@/lib/supabase/server'
 import { NotesTextarea } from '@/components/schedule/notes-textarea'
 import type { DayShow } from '@/lib/schedule/day-records'
+import type { RosterPerson } from '@/lib/schedule/day-roster'
 
 interface DayInfoPanelProps {
   tourId: string
   date: string
   show: DayShow | null
   dayNotes: string | null
-  // Tour_date-linked segment and hotel ids, already resolved by fetchDayRecords.
-  segmentIds: string[]
-  hotelStayIds: string[]
+  // Resolved once in DayContent (fetchDayRoster) and shared with the bottom dock.
+  roster: RosterPerson[]
 }
 
-export async function DayInfoPanel({ tourId, date, show, dayNotes, segmentIds, hotelStayIds }: DayInfoPanelProps) {
-  const supabase = await createClient()
-
-  // Roster: people assigned via transport or hotel on this date. The segment and
-  // hotel ids are passed in, so these two queries run in parallel rather than
-  // each blocking on its own id lookup first.
-  const [{ data: transportPeople }, { data: hotelPeople }] = await Promise.all([
-    supabase
-      .from('transport_assignments')
-      .select('people(id, name, person_type)')
-      .eq('tour_id', tourId)
-      .in('segment_id', segmentIds),
-    supabase
-      .from('room_assignments')
-      .select('people(id, name, person_type)')
-      .eq('tour_id', tourId)
-      .in('hotel_stay_id', hotelStayIds),
-  ])
-
-  // Deduplicate roster by person id.
-  type RosterPerson = { id: string; name: string; person_type: string }
-  const rosterMap = new Map<string, RosterPerson>()
-  for (const row of [...(transportPeople ?? []), ...(hotelPeople ?? [])]) {
-    const p = Array.isArray(row.people) ? row.people[0] : row.people
-    if (p && !rosterMap.has(p.id)) {
-      rosterMap.set(p.id, { id: p.id, name: p.name, person_type: p.person_type })
-    }
-  }
-  const roster = Array.from(rosterMap.values())
+export function DayInfoPanel({ tourId, date, show, dayNotes, roster }: DayInfoPanelProps) {
   const rosterPreview = roster.slice(0, 4)
   const rosterOverflow = roster.length - rosterPreview.length
 

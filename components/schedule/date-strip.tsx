@@ -3,7 +3,9 @@
 import Link from 'next/link'
 import { useEffect, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
+import { CalendarPlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { AddDayButton } from '@/components/schedule/add-day-button'
 
 interface TourDate {
   id: string
@@ -51,31 +53,42 @@ export function DateStrip({ tourId, dates, defaultDate }: DateStripProps) {
     selectedRef.current?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' })
   }, [selectedDate])
 
-  if (dates.length === 0) return null
-
   return (
-    <div className="lg:hidden flex shrink-0 overflow-x-auto gap-1.5 border-b border-border px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      {dates.map((d) => {
-        const isSelected = d.date === selectedDate
-        const chip = chipClass(d.day_type)
-        const { day, month } = chipDate(d.date)
+    <div className="lg:hidden flex shrink-0 items-center border-b border-border">
+      <div className="flex flex-1 overflow-x-auto gap-1.5 px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        {dates.map((d) => {
+          const isSelected = d.date === selectedDate
+          const chip = chipClass(d.day_type)
+          const { day, month } = chipDate(d.date)
 
-        return (
-          <Link
-            key={d.id}
-            href={`/tours/${tourId}/schedule?date=${d.date}`}
-            ref={isSelected ? selectedRef : undefined}
-            className={cn(
-              'flex shrink-0 flex-col items-center justify-center rounded-md px-2 py-1.5 transition-colors min-w-[2.5rem]',
-              chip.box,
-              isSelected && 'ring-2 ring-foreground/30',
-            )}
-          >
-            <span className={cn('text-sm font-semibold tabular-nums leading-none', chip.day)}>{day}</span>
-            <span className={cn('mt-0.5 text-[9px] font-medium uppercase tracking-wide leading-none', chip.month)}>{month}</span>
-          </Link>
-        )
-      })}
+          return (
+            <Link
+              key={d.id}
+              href={`/tours/${tourId}/schedule?date=${d.date}`}
+              ref={isSelected ? selectedRef : undefined}
+              className={cn(
+                'flex shrink-0 flex-col items-center justify-center rounded-md px-2 py-1.5 transition-colors min-w-[2.5rem]',
+                chip.box,
+                isSelected && 'ring-2 ring-foreground/30',
+              )}
+            >
+              <span className={cn('text-sm font-semibold tabular-nums leading-none', chip.day)}>{day}</span>
+              <span className={cn('mt-0.5 text-[9px] font-medium uppercase tracking-wide leading-none', chip.month)}>{month}</span>
+            </Link>
+          )
+        })}
+      </div>
+
+      {/* Add a new day. Calendar-plus (not the timeline's plain plus) so adding a
+          date reads differently from adding an item to the current day. */}
+      <div className="shrink-0 border-l border-border px-1.5">
+        <AddDayButton
+          tourId={tourId}
+          icon={CalendarPlus}
+          align="end"
+          triggerClassName="h-10 w-10 rounded-lg"
+        />
+      </div>
     </div>
   )
 }

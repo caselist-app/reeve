@@ -62,7 +62,7 @@ function DateBadge({ date }: { date: string }) {
   const day = String(d.getDate())
   const month = d.toLocaleDateString('en-GB', { month: 'short' }).toUpperCase()
   return (
-    <div className="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-xl bg-foreground leading-none text-background">
+    <div className="hidden h-14 w-14 shrink-0 flex-col items-center justify-center rounded-xl bg-foreground leading-none text-background lg:flex">
       <span className="text-xl font-semibold tabular-nums leading-none">{day}</span>
       <span className="mt-0.5 text-[10px] font-medium uppercase tracking-wide leading-none">{month}</span>
     </div>
@@ -177,18 +177,18 @@ export async function DayHeader(props: DayHeaderProps) {
   const { title, subtitle, meta } = await derive(props)
 
   return (
-    <div className="shrink-0 px-8 pt-6 pb-4">
+    <div className="shrink-0 px-4 pt-3 pb-3 lg:px-8 lg:pt-6 lg:pb-4">
       {/* Badge is vertically centred against the eyebrow + title head. */}
       <div className="flex items-center gap-4">
         <DateBadge date={date} />
 
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           {/* Eyebrow: day type + weekday + tour */}
-          <div className="flex items-center gap-2 min-w-0">
+          <div className="flex flex-wrap items-center gap-2 min-w-0">
             <span className={cn('shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide', pill.cls)}>
               {pill.label}
             </span>
-            <span className="truncate text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+            <span className="whitespace-normal text-[11px] font-medium uppercase tracking-wider text-muted-foreground lg:truncate">
               {weekdayName(date)} · {tourName}
             </span>
           </div>
@@ -204,7 +204,7 @@ export async function DayHeader(props: DayHeaderProps) {
 
       {/* Subtitle and meta sit below, indented to line up under the title. */}
       {(subtitle || meta.length > 0) && (
-        <div className="mt-2 pl-[72px]">
+        <div className="mt-2 pl-0 lg:pl-[72px]">
           {subtitle && (
             <p className="text-sm text-muted-foreground">{subtitle}</p>
           )}

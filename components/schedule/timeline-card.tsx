@@ -28,15 +28,14 @@ export function TimelineCard({ time, label, title, subtitle, accent, card }: Tim
         isActive ? 'bg-muted/60' : 'hover:bg-muted/30',
       )}
     >
-      {/* Time column */}
-      <div className="w-12 shrink-0 text-right">
+      {/* Time column + connecting rail: desktop only. On mobile the time moves
+          into the card header so the card uses the full width. */}
+      <div className="hidden lg:block w-12 shrink-0 text-right">
         <span className="text-xs font-medium tabular-nums text-muted-foreground leading-none">
           {time}
         </span>
       </div>
-
-      {/* Connecting line + card */}
-      <div className="flex flex-col items-center shrink-0 mt-1">
+      <div className="hidden lg:flex flex-col items-center shrink-0 mt-1">
         <span className="h-2 w-2 rounded-full bg-border" />
         <span className="w-px flex-1 bg-border mt-1" />
       </div>
@@ -48,9 +47,15 @@ export function TimelineCard({ time, label, title, subtitle, accent, card }: Tim
           accent,
         )}
       >
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-0.5">
-          {label}
-        </p>
+        <div className="flex items-baseline justify-between gap-2 mb-0.5">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+            {label}
+          </p>
+          {/* Time inside the card on mobile only. */}
+          <span className="lg:hidden shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
+            {time}
+          </span>
+        </div>
         <p className="text-sm font-medium truncate">{title}</p>
         {subtitle && (
           <p className="text-xs text-muted-foreground truncate mt-0.5">{subtitle}</p>

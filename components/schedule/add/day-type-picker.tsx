@@ -61,7 +61,7 @@ export function DayTypePicker({ onSelect }: DayTypePickerProps) {
             <span className="text-sm font-medium">{label}</span>
             <span className="truncate text-[11px] text-muted-foreground">{description}</span>
           </div>
-          <kbd className="shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
+          <kbd className="hidden shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground md:inline-block">
             {shortcut}
           </kbd>
         </button>

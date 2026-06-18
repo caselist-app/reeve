@@ -32,7 +32,7 @@ export function DayContentSkeleton() {
       {/* Timeline */}
       <div className="relative flex flex-col flex-1 min-w-0 lg:border-r lg:border-border">
         {/* Header bar */}
-        <div className="flex items-center justify-between px-8 py-4 border-b border-border">
+        <div className="flex items-center justify-between px-4 py-3 lg:px-8 lg:py-4 border-b border-border">
           <div className="space-y-2">
             <div className="h-5 w-40 rounded bg-muted" />
             <div className="h-3 w-24 rounded bg-muted" />
@@ -46,10 +46,10 @@ export function DayContentSkeleton() {
         <div className="flex-1 overflow-hidden py-4">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="flex gap-3 px-8 py-3">
-              <div className="w-12 shrink-0 pt-1">
+              <div className="hidden lg:block w-12 shrink-0 pt-1">
                 <div className="ml-auto h-3 w-9 rounded bg-muted" />
               </div>
-              <div className="flex flex-col items-center shrink-0 mt-1">
+              <div className="hidden lg:flex flex-col items-center shrink-0 mt-1">
                 <span className="h-2 w-2 rounded-full bg-muted" />
                 <span className="w-px flex-1 bg-muted mt-1" />
               </div>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState, useTransition } from 'react'
+import { Pencil } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { updateDayTitle } from '@/lib/actions/tour-dates'
 
@@ -33,7 +34,7 @@ export function EditableDayTitle({ tourDateId, customTitle, derivedTitle }: Edit
     })
   }
 
-  const titleClasses = 'text-3xl font-bold tracking-tight text-foreground'
+  const titleClasses = 'text-2xl font-bold tracking-tight text-foreground lg:text-3xl'
 
   if (editing) {
     return (
@@ -61,15 +62,26 @@ export function EditableDayTitle({ tourDateId, customTitle, derivedTitle }: Edit
   }
 
   return (
-    <h1
-      onClick={() => setEditing(true)}
-      title="Click to rename this day"
-      className={cn(
-        titleClasses,
-        '-mx-1 cursor-text rounded px-1 transition-colors hover:bg-muted/50',
-      )}
-    >
-      {display}
-    </h1>
+    <div className="flex items-center gap-1.5">
+      <h1
+        onClick={() => setEditing(true)}
+        aria-label="Rename this day"
+        className={cn(
+          titleClasses,
+          'min-w-0 -mx-1 cursor-text rounded px-1 transition-colors hover:bg-muted/50',
+        )}
+      >
+        {display}
+      </h1>
+      {/* Touch devices have no hover, so expose an explicit edit control on mobile. */}
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        aria-label="Rename this day"
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:text-foreground lg:hidden"
+      >
+        <Pencil className="h-4 w-4" />
+      </button>
+    </div>
   )
 }

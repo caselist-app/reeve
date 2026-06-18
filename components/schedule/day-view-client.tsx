@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, type ReactNode } from 'react'
-import { Plus, MoreHorizontal, Info, X } from 'lucide-react'
+import { Plus, MoreHorizontal, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import * as SheetPrimitive from '@radix-ui/react-dialog'
+import { cn } from '@/lib/utils'
 import { useSchedulePanel } from '@/stores/schedule-panel-store'
 import { useSidePanel } from '@/stores/side-panel-store'
 import { useIsMobile } from '@/hooks/use-is-mobile'
@@ -71,6 +72,8 @@ interface DayViewClientProps {
   dayInfoPanel: ReactNode
   // Horizontal date chips, visible only on mobile (the slot is lg:hidden internally).
   dateStrip?: ReactNode
+  // Compact day summary pinned to the bottom on mobile; taps open the day-info sheet.
+  dayInfoDock?: ReactNode
   panelData: DayPanelData
   // Context needed for the add flow forms.
   addContext: { tourId: string; tourDateId: string; date: string; timezone: string }
@@ -82,15 +85,56 @@ interface DayViewClientProps {
   } | null
 }
 
+// Edit/delete-day menu. Shared by the desktop toolbar and the mobile Day Info
+// sheet so the two stay identical.
+function DayOptionsMenu({
+  onEdit,
+  onDelete,
+  triggerClassName,
+}: {
+  onEdit: () => void
+  onDelete: () => void
+  triggerClassName?: string
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label="Day options"
+          className={cn(
+            'flex items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground',
+            triggerClassName,
+          )}
+        >
+          <MoreHorizontal className="h-4 w-4" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-40">
+        <DropdownMenuItem onClick={onEdit}>Edit day</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={onDelete}
+          className="text-destructive focus:text-destructive"
+        >
+          Delete day
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 // State shell for the schedule day view. Holds which timeline card is active
 // and swaps the right column between the day info panel and the edit panel.
 // Only this component is a client component; the slots remain Server Components.
-export function DayViewClient({ timeline, dayInfoPanel, dateStrip, panelData, addContext, dayMeta }: DayViewClientProps) {
+export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, panelData, addContext, dayMeta }: DayViewClientProps) {
   const { activeCard, setActiveCard } = useSchedulePanel()
   const { open: openSidePanel } = useSidePanel()
   const router = useRouter()
   const isMobile = useIsMobile()
   const [popoverOpen, setPopoverOpen] = useState(false)
+  // Mobile-only: the FAB opens the category picker as a bottom-sheet.
+  const [pickerOpen, setPickerOpen] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState<AddCategory | null>(null)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -135,14 +179,17 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, panelData, ad
 
   function handleCategorySelect(category: AddCategory) {
     setPopoverOpen(false)
+    setPickerOpen(false)
     setActiveCard(null)
     setSelectedCategory(category)
   }
 
-  // Back from the form re-opens the popover so the user can pick a different type.
+  // Back from the form re-opens the picker so the user can pick a different type:
+  // the popover on desktop, the picker bottom-sheet on mobile.
   function handleAddBack() {
     setSelectedCategory(null)
-    setPopoverOpen(true)
+    if (isMobile) setPickerOpen(true)
+    else setPopoverOpen(true)
   }
 
   function handleAddClose() {
@@ -171,50 +218,19 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, panelData, ad
 
   return (
     <>
-      <div className="flex flex-1 min-w-0 min-h-0">
+      <div className="flex flex-col lg:flex-row flex-1 min-w-0 min-h-0">
         {/* Timeline: flex-1 */}
         <div className="relative flex flex-col flex-1 min-w-0">
           {dateStrip}
-          {/* Day-level actions: three dots (edit/delete) and add, top-right. */}
-          <div className="absolute right-5 top-5 z-10 flex items-center gap-1.5">
+          {/* Day-level actions: desktop only, floated top-right. On mobile the
+              day options live in the Day Info sheet and add-to-day is the FAB. */}
+          <div className="hidden lg:absolute lg:right-5 lg:top-5 z-10 lg:flex items-center gap-1.5">
             {dayMeta && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button
-                    type="button"
-                    aria-label="Day options"
-                    title="Day options"
-                    className="flex h-11 w-11 lg:h-8 lg:w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
-                  >
-                    <MoreHorizontal className="h-4 w-4" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-40">
-                  <DropdownMenuItem onClick={handleEditDay}>
-                    Edit day
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={() => setDeleteDialogOpen(true)}
-                    className="text-destructive focus:text-destructive"
-                  >
-                    Delete day
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-
-            {/* Day-info trigger: only visible on mobile where the right column is hidden. */}
-            {isMobile && (
-              <button
-                type="button"
-                aria-label="Day info"
-                title="Day info"
-                onClick={() => setDayInfoOpen(true)}
-                className="flex h-11 w-11 lg:h-8 lg:w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
-              >
-                <Info className="h-4 w-4" />
-              </button>
+              <DayOptionsMenu
+                onEdit={handleEditDay}
+                onDelete={() => setDeleteDialogOpen(true)}
+                triggerClassName="h-8 w-8"
+              />
             )}
 
             <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
@@ -222,8 +238,7 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, panelData, ad
                 <button
                   type="button"
                   aria-label="Add to day"
-                  title="Add to day"
-                  className="flex h-11 w-11 lg:h-8 lg:w-8 items-center justify-center rounded-lg bg-muted text-foreground transition-colors hover:bg-muted/70"
+                  className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-foreground transition-colors hover:bg-muted/70"
                 >
                   <Plus className="h-4 w-4" />
                 </button>
@@ -240,9 +255,35 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, panelData, ad
           <div className="flex-1 overflow-y-auto lg:border-r lg:border-border">
             {timeline}
           </div>
+
+          {/* Mobile add-to-day FAB, pinned bottom-right of the timeline, above the dock. */}
+          {isMobile && (
+            <button
+              type="button"
+              onClick={() => setPickerOpen(true)}
+              aria-label="Add to day"
+              className="absolute bottom-4 right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform active:scale-95 lg:hidden"
+            >
+              <Plus className="h-6 w-6" />
+            </button>
+          )}
         </div>
 
-        {/* Right panel: 260px fixed. Hidden on mobile — replaced by the bottom-sheet in C15. */}
+        {/* Mobile-only day info dock: always visible, pinned at the bottom.
+            Tapping it opens the full day info sheet below. */}
+        {isMobile && dayInfoDock && (
+          <button
+            type="button"
+            onClick={() => setDayInfoOpen(true)}
+            aria-label="Open day info"
+            className="shrink-0 w-full border-t border-border bg-muted/40 px-4 pt-2 pb-[max(0.75rem,var(--safe-bottom))] text-left lg:hidden"
+          >
+            <div className="mx-auto mb-1.5 h-1 w-9 rounded-full bg-border" />
+            {dayInfoDock}
+          </button>
+        )}
+
+        {/* Right panel: 260px fixed. Hidden on mobile, where the dock + sheet replace it. */}
         <div className="hidden lg:block w-[260px] shrink-0 overflow-y-auto">
           {selectedCategory ? (
             <AddFlow
@@ -309,12 +350,21 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, panelData, ad
               <SheetPrimitive.Title className="sr-only">Day info</SheetPrimitive.Title>
               <div className="flex shrink-0 items-center justify-between px-4 py-3 border-b border-border">
                 <span className="text-sm font-semibold">Day info</span>
-                <SheetPrimitive.Close
-                  className="text-muted-foreground hover:text-foreground transition-colors"
-                  aria-label="Close"
-                >
-                  <X className="h-4 w-4" />
-                </SheetPrimitive.Close>
+                <div className="flex items-center gap-1">
+                  {dayMeta && (
+                    <DayOptionsMenu
+                      onEdit={() => { setDayInfoOpen(false); handleEditDay() }}
+                      onDelete={() => { setDayInfoOpen(false); setDeleteDialogOpen(true) }}
+                      triggerClassName="h-9 w-9"
+                    />
+                  )}
+                  <SheetPrimitive.Close
+                    className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+                    aria-label="Close"
+                  >
+                    <X className="h-4 w-4" />
+                  </SheetPrimitive.Close>
+                </div>
               </div>
               <div className="flex-1 overflow-y-auto">
                 {dayInfoPanel}
@@ -324,9 +374,26 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, panelData, ad
         </SheetPrimitive.Root>
       )}
 
-      {/* Bottom-sheet for the add flow on mobile. Picker opens the popover;
-          after category selection the form slides up here. onBack re-opens
-          the popover so the user can switch type. */}
+      {/* Mobile category picker: opened by the FAB. Choosing a category opens
+          the add-form sheet below. */}
+      {isMobile && (
+        <SheetPrimitive.Root open={pickerOpen} onOpenChange={setPickerOpen}>
+          <SheetPrimitive.Portal>
+            <SheetPrimitive.Overlay className="fixed inset-0 z-50 bg-black/60 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+            <SheetPrimitive.Content className="fixed inset-x-0 bottom-0 z-50 flex flex-col max-h-[80dvh] rounded-t-xl border-t border-border bg-background pb-[env(safe-area-inset-bottom)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom duration-300">
+              <SheetPrimitive.Title className="px-4 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Add to day
+              </SheetPrimitive.Title>
+              <div className="px-2 pb-2">
+                <AddPicker onSelect={handleCategorySelect} />
+              </div>
+            </SheetPrimitive.Content>
+          </SheetPrimitive.Portal>
+        </SheetPrimitive.Root>
+      )}
+
+      {/* Bottom-sheet for the add flow on mobile. The FAB picker selects a
+          category; the form slides up here. onBack re-opens the picker. */}
       {isMobile && (
         <SheetPrimitive.Root
           open={selectedCategory !== null}
