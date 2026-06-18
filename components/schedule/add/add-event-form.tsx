@@ -26,7 +26,9 @@ function fromDatetimeLocal(local: string | null, tz: string): string | null {
   return new Date(ref.getTime() + offsetMs).toISOString()
 }
 
-export function AddEventForm({ tourId, tourDateId, date, timezone, onBack, onSuccess }: AddEventFormProps) {
+// tourDateId is part of the shared add-form props but unused here: day events
+// key off the date, not a tour_date_id link.
+export function AddEventForm({ tourId, date, timezone, onBack, onSuccess }: AddEventFormProps) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
