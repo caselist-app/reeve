@@ -7,6 +7,7 @@ import type { Tables } from '@/lib/types/database'
 import { useSidePanel } from '@/stores/side-panel-store'
 import { PanelShell } from '@/components/layout/panel-shell'
 import { Button } from '@/components/ui/button'
+import { SectionHeader } from '@/components/ui/section-header'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -149,7 +150,7 @@ export function ContactSheet({ contact, onSuccess }: Props) {
         </div>
 
         <Separator />
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Contact</p>
+        <SectionHeader>Contact</SectionHeader>
 
         <div className="space-y-2">
           <Label htmlFor={`${formId}-contact_email`}>Email</Label>
@@ -204,7 +205,7 @@ export function ContactSheet({ contact, onSuccess }: Props) {
         </div>
 
         <Separator />
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Emergency contact</p>
+        <SectionHeader>Emergency contact</SectionHeader>
 
         <div className="space-y-2">
           <Label htmlFor={`${formId}-emergency_contact_name`}>Name</Label>
@@ -225,7 +226,7 @@ export function ContactSheet({ contact, onSuccess }: Props) {
         </div>
 
         <Separator />
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Travel</p>
+        <SectionHeader>Travel</SectionHeader>
 
         <div className="space-y-2">
           <Label htmlFor={`${formId}-passport_first_names`}>First names (as on passport)</Label>
@@ -288,7 +289,7 @@ export function ContactSheet({ contact, onSuccess }: Props) {
         </div>
 
         <Separator />
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Dietary</p>
+        <SectionHeader>Dietary</SectionHeader>
 
         <div className="space-y-2">
           <Label htmlFor={`${formId}-dietary`}>Requirements</Label>
@@ -323,7 +324,7 @@ export function ContactSheet({ contact, onSuccess }: Props) {
         </div>
 
         <Separator />
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Default pay</p>
+        <SectionHeader>Default pay</SectionHeader>
         <p className="text-xs text-muted-foreground">
           Used to pre-fill per diem and wage when this contact is added to a tour. Optional.
         </p>

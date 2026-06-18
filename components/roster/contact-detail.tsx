@@ -12,6 +12,7 @@ import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { DataField } from '@/components/ui/data-field'
+import { ListRow } from '@/components/ui/list-row'
 import { SectionHeader } from '@/components/ui/section-header'
 import { StatusBadge, PASSPORT_VARIANT } from '@/components/ui/status-badge'
 import { useSidePanel } from '@/stores/side-panel-store'
@@ -165,17 +166,17 @@ export function ContactDetail({ contact, tours }: Props) {
       ) : (
         <div className="space-y-1.5">
           {tours.map((t) => (
-            <Link
+            <ListRow
               key={t.personId}
               href={`/tours/${t.tourId}/people`}
-              className="flex items-center justify-between rounded-xl border border-border px-4 py-2.5 text-sm transition-colors hover:bg-muted/50"
+              className="flex items-center justify-between py-2.5 text-sm"
             >
               <span className="min-w-0">
                 <span className="font-medium">{t.tourName}</span>
                 {t.role && <span className="text-muted-foreground"> · {t.role}</span>}
               </span>
               <StatusBadge label={t.status} />
-            </Link>
+            </ListRow>
           ))}
         </div>
       )}

@@ -8,6 +8,7 @@ import type { PersonWithContact } from '@/components/people/people-view'
 import { useSidePanel } from '@/stores/side-panel-store'
 import { PanelShell } from '@/components/layout/panel-shell'
 import { Button } from '@/components/ui/button'
+import { SectionHeader } from '@/components/ui/section-header'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -166,7 +167,7 @@ export function PersonSheet({
         </div>
 
         <Separator />
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Contact</p>
+        <SectionHeader>Contact</SectionHeader>
 
         <div className="space-y-2">
           <Label htmlFor={`${formId}-contact_email`}>Email</Label>
@@ -229,7 +230,7 @@ export function PersonSheet({
         </div>
 
         <Separator />
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Emergency contact</p>
+        <SectionHeader>Emergency contact</SectionHeader>
 
         <div className="space-y-2">
           <Label htmlFor={`${formId}-emergency_contact_name`}>Name</Label>
@@ -250,7 +251,7 @@ export function PersonSheet({
         </div>
 
         <Separator />
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Travel</p>
+        <SectionHeader>Travel</SectionHeader>
 
         <div className="space-y-2">
           <Label htmlFor={`${formId}-home_city`}>Home city</Label>
@@ -293,7 +294,7 @@ export function PersonSheet({
         </div>
 
         <Separator />
-        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Dietary</p>
+        <SectionHeader>Dietary</SectionHeader>
         <p className="text-xs text-muted-foreground">
           Source of truth for riders and day sheets. Never duplicated elsewhere.
         </p>
@@ -333,9 +334,7 @@ export function PersonSheet({
         {isCrewType && (
           <>
             <Separator />
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-              Pay and per diems
-            </p>
+            <SectionHeader>Pay and per diems</SectionHeader>
             <p className="text-xs text-muted-foreground">
               All optional. Used for settlement and per diem calculations.
             </p>
