@@ -232,7 +232,7 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
         {/* Tour terms section — only shown when opened from the people page */}
         {hasTourContext && (
           <>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Type</Label>
                 <Select
@@ -268,7 +268,7 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
 
         {/* Default type/role — only shown in roster context */}
         {!hasTourContext && (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>Default type</Label>
               <Select value={personType} onValueChange={(v) => setPersonType(v as PersonType)}>
@@ -315,7 +315,7 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-2">
             <Label>Preferred channel</Label>
             <Select value={preferredChannel} onValueChange={(v) => setPreferredChannel(v as Channel)}>
@@ -390,7 +390,7 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-2">
             <Label htmlFor={`${formId}-passport_number`}>Passport number</Label>
             <Input
@@ -495,7 +495,7 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
               </>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor={`${formId}-${isCrewInTourContext ? 'per_diem_rate' : 'default_per_diem_rate'}`}>Per diem</Label>
                 <Input
