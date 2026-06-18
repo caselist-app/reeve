@@ -188,7 +188,7 @@ export function PersonSheet({
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-2">
             <Label>Preferred channel</Label>
             <Select
@@ -263,7 +263,7 @@ export function PersonSheet({
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-2">
             <Label htmlFor={`${formId}-passport_number`}>Passport number</Label>
             <Input
@@ -339,7 +339,7 @@ export function PersonSheet({
               All optional. Used for settlement and per diem calculations.
             </p>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label htmlFor={`${formId}-per_diem_rate`}>Per diem</Label>
                 <Input
