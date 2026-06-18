@@ -28,6 +28,7 @@ export const contactSchema = z.object({
   passport_country: z.string().optional(),
   passport_first_names: z.string().optional(),
   passport_surname: z.string().optional(),
+  date_of_birth: z.string().optional(),
   tshirt_size: z.string().optional(),
   default_person_type: z.enum(['artist', 'crew', 'management', 'support']).optional(),
   default_role: z.string().optional(),

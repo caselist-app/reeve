@@ -79,6 +79,7 @@ function toRow(c: z.infer<typeof contactSchema>) {
     passport_country: c.passport_country || null,
     passport_first_names: c.passport_first_names || null,
     passport_surname: c.passport_surname || null,
+    date_of_birth: c.date_of_birth || null,
     tshirt_size: c.tshirt_size || null,
     default_person_type: c.default_person_type ?? 'crew',
     default_role: c.default_role || null,

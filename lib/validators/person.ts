@@ -29,9 +29,12 @@ export const personSchema = z.object({
   dietary: z.string().optional(),
   allergies: z.string().optional(),
   home_city: z.string().optional(),
+  passport_first_names: z.string().optional(),
+  passport_surname: z.string().optional(),
   passport_number: z.string().optional(),
   passport_expiry: z.string().optional(),
   passport_country: z.string().optional(),
+  date_of_birth: z.string().optional(),
   tshirt_size: z.string().optional(),
 })
 

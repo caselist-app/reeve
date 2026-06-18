@@ -254,6 +254,7 @@ export type Database = {
           contact_email: string | null
           contact_phone: string | null
           created_at: string
+          date_of_birth: string | null
           default_daily_wage_rate: number | null
           default_per_diem_currency: string | null
           default_per_diem_rate: number | null
@@ -285,6 +286,7 @@ export type Database = {
           contact_email?: string | null
           contact_phone?: string | null
           created_at?: string
+          date_of_birth?: string | null
           default_daily_wage_rate?: number | null
           default_per_diem_currency?: string | null
           default_per_diem_rate?: number | null
@@ -316,6 +318,7 @@ export type Database = {
           contact_email?: string | null
           contact_phone?: string | null
           created_at?: string
+          date_of_birth?: string | null
           default_daily_wage_rate?: number | null
           default_per_diem_currency?: string | null
           default_per_diem_rate?: number | null
