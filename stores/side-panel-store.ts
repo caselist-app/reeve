@@ -6,23 +6,29 @@ import type { Tables } from '@/lib/types/database'
 // Inline types to avoid circular imports with component files.
 type PersonType = 'artist' | 'crew' | 'management' | 'support'
 
-// Tables<'people'> & { contacts: Tables<'contacts'> }
-// Mirrors PersonWithContact from components/people/people-view.tsx
-type PersonWithContact = Tables<'people'> & { contacts: Tables<'contacts'> }
-
 // Mirrors SendableDocument and ContactablePerson from components/shows/send-rider-sheet.tsx
 type SendableDocument = { id: string; title: string; doc_type: string }
 type ContactablePerson = { id: string; name: string; contact_email: string }
 
-export type PanelDescriptor =
+// Tour-specific context passed when opening a contact panel from the people
+// page. Carries the membership fields (type, role, per-tour rates) that live
+// on people / crew_detail, not on the contact itself.
+export type ContactTourContext =
   | {
-      type: 'person'
+      mode: 'add'
       tourId: string
       defaultType: PersonType
-      person: PersonWithContact | null
-      crewDetail: Tables<'crew_detail'> | null
-      onSuccess: () => void
     }
+  | {
+      mode: 'edit'
+      personId: string
+      tourId: string
+      personType: PersonType
+      role: string | null
+      crewDetail: Tables<'crew_detail'> | null
+    }
+
+export type PanelDescriptor =
   | {
       type: 'bulk-add'
       tourId: string
@@ -31,6 +37,7 @@ export type PanelDescriptor =
   | {
       type: 'contact'
       contact: Tables<'contacts'> | null
+      tourContext?: ContactTourContext
       onSuccess: (contactId?: string) => void
     }
   | {
@@ -63,6 +70,7 @@ export type PanelDescriptor =
   | {
       type: 'contact-view'
       contactId: string
+      tourContext?: ContactTourContext & { mode: 'edit' }
       onSuccess: () => void
     }
 

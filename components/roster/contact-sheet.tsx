@@ -2,8 +2,10 @@
 
 import { useState, useId, useTransition } from 'react'
 import { createContact, updateContact } from '@/lib/actions/contacts'
+import { addPerson, updatePersonTerms } from '@/lib/actions/people'
 import { contactSchema } from '@/lib/validators/contact'
 import type { Tables } from '@/lib/types/database'
+import type { ContactTourContext } from '@/stores/side-panel-store'
 import { useSidePanel } from '@/stores/side-panel-store'
 import { PanelShell } from '@/components/layout/panel-shell'
 import { Button } from '@/components/ui/button'
@@ -27,26 +29,48 @@ const CURRENCIES = ['GBP', 'USD', 'EUR', 'AUD', 'CAD', 'CHF', 'DKK', 'NOK', 'SEK
 
 interface Props {
   contact: Tables<'contacts'> | null
+  // When provided, a "Tour terms" section is shown and the save path writes to
+  // both the contact (identity) and the people/crew_detail rows (tour terms).
+  tourContext?: ContactTourContext
   onSuccess: (contactId?: string) => void
 }
 
-export function ContactSheet({ contact, onSuccess }: Props) {
+export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
   const formId = useId()
   const { close } = useSidePanel()
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
-  // Panel unmounts between opens, so initial state is always fresh.
+  const isEditing = contact !== null
+  const hasTourContext = tourContext !== undefined
+
+  // Tour-context initial values come from the membership row; roster defaults
+  // come from the contact.
+  const initialPersonType: PersonType = hasTourContext
+    ? tourContext.mode === 'edit'
+      ? (tourContext.personType as PersonType)
+      : tourContext.defaultType
+    : (contact?.default_person_type as PersonType) ?? 'crew'
+
+  const initialPerDiemCurrency =
+    hasTourContext && tourContext.mode === 'edit'
+      ? (tourContext.crewDetail?.per_diem_currency ?? 'GBP')
+      : (contact?.default_per_diem_currency ?? 'GBP')
+
+  const initialWageCurrency =
+    hasTourContext && tourContext.mode === 'edit'
+      ? (tourContext.crewDetail?.wage_currency ?? 'GBP')
+      : (contact?.default_wage_currency ?? 'GBP')
+
+  // Panel unmounts between opens so initial state is always fresh.
   const [preferredChannel, setPreferredChannel] = useState<Channel>(
     (contact?.preferred_channel as Channel) ?? 'whatsapp'
   )
-  const [defaultType, setDefaultType] = useState<PersonType>(
-    (contact?.default_person_type as PersonType) ?? 'crew'
-  )
-  const [perDiemCurrency, setPerDiemCurrency] = useState(contact?.default_per_diem_currency ?? 'GBP')
-  const [wageCurrency, setWageCurrency] = useState(contact?.default_wage_currency ?? 'GBP')
+  const [personType, setPersonType] = useState<PersonType>(initialPersonType)
+  const [perDiemCurrency, setPerDiemCurrency] = useState(initialPerDiemCurrency)
+  const [wageCurrency, setWageCurrency] = useState(initialWageCurrency)
 
-  const isEditing = contact !== null
+  const isCrewInTourContext = hasTourContext && personType === 'crew'
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -56,7 +80,8 @@ export function ContactSheet({ contact, onSuccess }: Props) {
     const str = (key: string) => (fd.get(key) as string) || undefined
     const num = (key: string) => (fd.get(key) ? Number(fd.get(key)) : undefined)
 
-    const raw = {
+    // Identity fields common to both paths.
+    const identityRaw = {
       name: (fd.get('name') as string) ?? '',
       contact_email: str('contact_email'),
       contact_phone: str('contact_phone'),
@@ -68,19 +93,88 @@ export function ContactSheet({ contact, onSuccess }: Props) {
       dietary: str('dietary'),
       allergies: str('allergies'),
       home_city: str('home_city'),
+      passport_first_names: str('passport_first_names'),
+      passport_surname: str('passport_surname'),
       passport_number: str('passport_number'),
       passport_expiry: str('passport_expiry'),
       passport_country: str('passport_country'),
-      passport_first_names: str('passport_first_names'),
-      passport_surname: str('passport_surname'),
+      date_of_birth: str('date_of_birth'),
       tshirt_size: str('tshirt_size'),
-      default_person_type: defaultType,
+      notes: str('notes'),
+    }
+
+    // Tour terms only used when tourContext is present.
+    const tourRole = str('tour_role') ?? null
+    const crewDetailRaw = isCrewInTourContext
+      ? {
+          per_diem_rate: num('per_diem_rate'),
+          per_diem_currency: perDiemCurrency || undefined,
+          daily_wage_rate: num('daily_wage_rate'),
+          wage_currency: wageCurrency || undefined,
+        }
+      : undefined
+
+    if (hasTourContext) {
+      // Add mode: create a new contact and tour membership in one shot.
+      if (tourContext.mode === 'add') {
+        const personRaw = {
+          ...identityRaw,
+          person_type: personType,
+          role: tourRole ?? undefined,
+          // Seed the contact's defaults from the tour terms so future tours
+          // pre-fill correctly.
+          default_person_type: personType,
+          default_role: tourRole ?? undefined,
+        }
+
+        startTransition(async () => {
+          const result = await addPerson(tourContext.tourId, personRaw as Parameters<typeof addPerson>[1], crewDetailRaw)
+          if (result.error) {
+            setError(result.error)
+          } else {
+            close()
+            onSuccess(result.personId)
+          }
+        })
+        return
+      }
+
+      // Edit mode: update identity on the contact, tour terms on people/crew_detail.
+      const parsedIdentity = contactSchema.safeParse({
+        ...identityRaw,
+        default_person_type: personType,
+        default_role: tourRole ?? undefined,
+      })
+      if (!parsedIdentity.success) {
+        setError(parsedIdentity.error.issues[0].message)
+        return
+      }
+
+      startTransition(async () => {
+        const [identityResult, termsResult] = await Promise.all([
+          updateContact(contact!.id, parsedIdentity.data),
+          updatePersonTerms(tourContext.personId, personType, tourRole, crewDetailRaw),
+        ])
+        const err = identityResult.error ?? termsResult.error
+        if (err) {
+          setError(err)
+        } else {
+          close()
+          onSuccess(contact!.id)
+        }
+      })
+      return
+    }
+
+    // Roster-only path: create or update the contact with default pay fields.
+    const raw = {
+      ...identityRaw,
+      default_person_type: personType,
       default_role: str('default_role'),
       default_per_diem_rate: num('default_per_diem_rate'),
       default_per_diem_currency: perDiemCurrency || undefined,
       default_daily_wage_rate: num('default_daily_wage_rate'),
       default_wage_currency: wageCurrency || undefined,
-      notes: str('notes'),
     }
 
     const parsed = contactSchema.safeParse(raw)
@@ -103,14 +197,26 @@ export function ContactSheet({ contact, onSuccess }: Props) {
     })
   }
 
+  const title = hasTourContext
+    ? tourContext.mode === 'add'
+      ? `Add ${personType}`
+      : `Edit ${contact?.name ?? ''}`
+    : isEditing
+      ? `Edit ${contact.name}`
+      : 'New contact'
+
+  const description = hasTourContext
+    ? tourContext.mode === 'add'
+      ? 'Adds to your roster and to this tour.'
+      : "Changes to identity apply on every tour they are on."
+    : isEditing
+      ? "Changes apply on every tour they are on."
+      : 'Add someone to your roster. You can add them to a tour later.'
+
   return (
     <PanelShell
-      title={isEditing ? `Edit ${contact.name}` : 'New contact'}
-      description={
-        isEditing
-          ? "Update this person's details. Changes apply on every tour they are on."
-          : 'Add someone to your roster. You can add them to a tour later.'
-      }
+      title={title}
+      description={description}
       headerAction={
         <Button type="submit" form={formId} size="sm" disabled={pending}>
           {pending ? 'Saving...' : 'Save'}
@@ -123,31 +229,121 @@ export function ContactSheet({ contact, onSuccess }: Props) {
           <Input id={`${formId}-name`} name="name" defaultValue={contact?.name} required />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <Label>Default type</Label>
-            <Select value={defaultType} onValueChange={(v) => setDefaultType(v as PersonType)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="artist">Artist</SelectItem>
-                <SelectItem value="crew">Crew</SelectItem>
-                <SelectItem value="management">Management</SelectItem>
-                <SelectItem value="support">Support</SelectItem>
-              </SelectContent>
-            </Select>
+        {/* Tour terms section — only shown when opened from the people page */}
+        {hasTourContext && (
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Type</Label>
+                <Select
+                  value={personType}
+                  onValueChange={(v) => setPersonType(v as PersonType)}
+                  disabled={tourContext.mode === 'edit'}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="artist">Artist</SelectItem>
+                    <SelectItem value="crew">Crew</SelectItem>
+                    <SelectItem value="management">Management</SelectItem>
+                    <SelectItem value="support">Support</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor={`${formId}-tour_role`}>Role</Label>
+                <Input
+                  id={`${formId}-tour_role`}
+                  name="tour_role"
+                  defaultValue={tourContext.mode === 'edit' ? (tourContext.role ?? '') : ''}
+                  placeholder="FOH Engineer"
+                />
+              </div>
+            </div>
+
+            {isCrewInTourContext && (
+              <>
+                <Separator />
+                <SectionHeader>Pay and per diems</SectionHeader>
+                <p className="text-xs text-muted-foreground">
+                  All optional. Used for settlement and per diem calculations on this tour.
+                </p>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor={`${formId}-per_diem_rate`}>Per diem</Label>
+                    <Input
+                      id={`${formId}-per_diem_rate`}
+                      name="per_diem_rate"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      defaultValue={tourContext.mode === 'edit' ? (tourContext.crewDetail?.per_diem_rate ?? '') : ''}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Currency</Label>
+                    <Select value={perDiemCurrency} onValueChange={setPerDiemCurrency}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {CURRENCIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor={`${formId}-daily_wage_rate`}>Daily wage</Label>
+                    <Input
+                      id={`${formId}-daily_wage_rate`}
+                      name="daily_wage_rate"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      defaultValue={tourContext.mode === 'edit' ? (tourContext.crewDetail?.daily_wage_rate ?? '') : ''}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Wage currency</Label>
+                    <Select value={wageCurrency} onValueChange={setWageCurrency}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {CURRENCIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </>
+            )}
+            <Separator />
+          </>
+        )}
+
+        {/* Default type/role — only shown in roster context */}
+        {!hasTourContext && (
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label>Default type</Label>
+              <Select value={personType} onValueChange={(v) => setPersonType(v as PersonType)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="artist">Artist</SelectItem>
+                  <SelectItem value="crew">Crew</SelectItem>
+                  <SelectItem value="management">Management</SelectItem>
+                  <SelectItem value="support">Support</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor={`${formId}-default_role`}>Default role</Label>
+              <Input
+                id={`${formId}-default_role`}
+                name="default_role"
+                defaultValue={contact?.default_role ?? ''}
+                placeholder="FOH Engineer"
+              />
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor={`${formId}-default_role`}>Default role</Label>
-            <Input
-              id={`${formId}-default_role`}
-              name="default_role"
-              defaultValue={contact?.default_role ?? ''}
-              placeholder="FOH Engineer"
-            />
-          </div>
-        </div>
+        )}
 
         <Separator />
         <SectionHeader>Contact</SectionHeader>
@@ -175,9 +371,7 @@ export function ContactSheet({ contact, onSuccess }: Props) {
           <div className="space-y-2">
             <Label>Preferred channel</Label>
             <Select value={preferredChannel} onValueChange={(v) => setPreferredChannel(v as Channel)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="whatsapp">WhatsApp</SelectItem>
                 <SelectItem value="email">Email</SelectItem>
@@ -269,6 +463,16 @@ export function ContactSheet({ contact, onSuccess }: Props) {
         </div>
 
         <div className="space-y-2">
+          <Label htmlFor={`${formId}-date_of_birth`}>Date of birth</Label>
+          <Input
+            id={`${formId}-date_of_birth`}
+            name="date_of_birth"
+            type="date"
+            defaultValue={contact?.date_of_birth ?? ''}
+          />
+        </div>
+
+        <div className="space-y-2">
           <Label htmlFor={`${formId}-passport_country`}>Issuing country</Label>
           <Input
             id={`${formId}-passport_country`}
@@ -323,62 +527,59 @@ export function ContactSheet({ contact, onSuccess }: Props) {
           />
         </div>
 
-        <Separator />
-        <SectionHeader>Default pay</SectionHeader>
-        <p className="text-xs text-muted-foreground">
-          Used to pre-fill per diem and wage when this contact is added to a tour. Optional.
-        </p>
+        {/* Default pay — only shown in roster context (no tourContext) */}
+        {!hasTourContext && (
+          <>
+            <Separator />
+            <SectionHeader>Default pay</SectionHeader>
+            <p className="text-xs text-muted-foreground">
+              Used to pre-fill per diem and wage when this contact is added to a tour. Optional.
+            </p>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <Label htmlFor={`${formId}-default_per_diem_rate`}>Per diem</Label>
-            <Input
-              id={`${formId}-default_per_diem_rate`}
-              name="default_per_diem_rate"
-              type="number"
-              step="0.01"
-              min="0"
-              defaultValue={contact?.default_per_diem_rate ?? ''}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Currency</Label>
-            <Select value={perDiemCurrency} onValueChange={setPerDiemCurrency}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CURRENCIES.map((c) => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor={`${formId}-default_daily_wage_rate`}>Daily wage</Label>
-            <Input
-              id={`${formId}-default_daily_wage_rate`}
-              name="default_daily_wage_rate"
-              type="number"
-              step="0.01"
-              min="0"
-              defaultValue={contact?.default_daily_wage_rate ?? ''}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Wage currency</Label>
-            <Select value={wageCurrency} onValueChange={setWageCurrency}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {CURRENCIES.map((c) => (
-                  <SelectItem key={c} value={c}>{c}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor={`${formId}-default_per_diem_rate`}>Per diem</Label>
+                <Input
+                  id={`${formId}-default_per_diem_rate`}
+                  name="default_per_diem_rate"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  defaultValue={contact?.default_per_diem_rate ?? ''}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Currency</Label>
+                <Select value={perDiemCurrency} onValueChange={setPerDiemCurrency}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CURRENCIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor={`${formId}-default_daily_wage_rate`}>Daily wage</Label>
+                <Input
+                  id={`${formId}-default_daily_wage_rate`}
+                  name="default_daily_wage_rate"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  defaultValue={contact?.default_daily_wage_rate ?? ''}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Wage currency</Label>
+                <Select value={wageCurrency} onValueChange={setWageCurrency}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CURRENCIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </>
+        )}
 
         <Separator />
 

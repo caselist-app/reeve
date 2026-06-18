@@ -36,22 +36,25 @@ export function PeopleView({ tourId, people, crewDetails }: Props) {
 
   function handleAdd(type: PersonType) {
     open({
-      type: 'person',
-      tourId,
-      defaultType: type,
-      person: null,
-      crewDetail: null,
+      type: 'contact',
+      contact: null,
+      tourContext: { mode: 'add', tourId, defaultType: type },
       onSuccess: () => router.refresh(),
     })
   }
 
   function handleEdit(person: PersonWithContact) {
     open({
-      type: 'person',
-      tourId,
-      defaultType: person.person_type as PersonType,
-      person,
-      crewDetail: crewDetails[person.id] ?? null,
+      type: 'contact-view',
+      contactId: person.contacts.id,
+      tourContext: {
+        mode: 'edit',
+        personId: person.id,
+        tourId,
+        personType: person.person_type as PersonType,
+        role: person.role,
+        crewDetail: crewDetails[person.id] ?? null,
+      },
       onSuccess: () => router.refresh(),
     })
   }

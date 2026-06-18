@@ -6,7 +6,6 @@ import { useSidePanel } from '@/stores/side-panel-store'
 // Each panel is loaded on demand the first time it opens, rather than shipping
 // in the initial bundle on every page. They only ever render after a user
 // action, so client-only loading (ssr: false) costs nothing in UX.
-const PersonSheet = dynamic(() => import('@/components/people/person-sheet').then((m) => m.PersonSheet), { ssr: false })
 const BulkAdd = dynamic(() => import('@/components/people/bulk-add').then((m) => m.BulkAdd), { ssr: false })
 const ContactSheet = dynamic(() => import('@/components/roster/contact-sheet').then((m) => m.ContactSheet), { ssr: false })
 const ContactPanel = dynamic(() => import('@/components/roster/contact-panel').then((m) => m.ContactPanel), { ssr: false })
@@ -22,16 +21,6 @@ export function ActivePanel() {
   if (!panel) return null
 
   switch (panel.type) {
-    case 'person':
-      return (
-        <PersonSheet
-          tourId={panel.tourId}
-          defaultType={panel.defaultType}
-          person={panel.person}
-          crewDetail={panel.crewDetail}
-          onSuccess={panel.onSuccess}
-        />
-      )
     case 'bulk-add':
       return (
         <BulkAdd
@@ -43,6 +32,7 @@ export function ActivePanel() {
       return (
         <ContactSheet
           contact={panel.contact}
+          tourContext={panel.tourContext}
           onSuccess={panel.onSuccess}
         />
       )
@@ -80,7 +70,11 @@ export function ActivePanel() {
       )
     case 'contact-view':
       return (
-        <ContactPanel contactId={panel.contactId} onSuccess={panel.onSuccess} />
+        <ContactPanel
+          contactId={panel.contactId}
+          tourContext={panel.tourContext}
+          onSuccess={panel.onSuccess}
+        />
       )
     default:
       return null
