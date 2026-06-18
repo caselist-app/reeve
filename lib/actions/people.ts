@@ -236,7 +236,7 @@ export async function addContactToTour(
     p_tour_id: tourId,
     p_contact_id: contactId,
     p_person_type: personType,
-    p_role: null,
+    p_role: undefined,
   })
 
   if (error) {
