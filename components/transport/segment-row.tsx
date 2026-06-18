@@ -106,14 +106,14 @@ export function SegmentRow({ segment, tourId, timezone }: SegmentRowProps) {
       </td>
 
       {/* Carrier + ref */}
-      <td className="py-3 pr-4">
-        <span className="text-sm text-muted-foreground truncate max-w-[180px] block">
+      <td className="hidden sm:table-cell py-3 pr-4">
+        <span className="text-sm text-muted-foreground">
           {formatCarrier(segment) || '-'}
         </span>
       </td>
 
       {/* People */}
-      <td className="py-3 pr-4 whitespace-nowrap">
+      <td className="hidden sm:table-cell py-3 pr-4 whitespace-nowrap">
         {segment.assigned_count > 0 ? (
           <span className="text-sm text-muted-foreground">
             {segment.assigned_count} {segment.assigned_count === 1 ? 'person' : 'people'}
@@ -133,7 +133,7 @@ export function SegmentRow({ segment, tourId, timezone }: SegmentRowProps) {
       </td>
 
       {/* Planner link */}
-      <td className="py-3 pr-4 whitespace-nowrap">
+      <td className="hidden sm:table-cell py-3 pr-4 whitespace-nowrap">
         <Link
           href={plannerHref}
           className="text-sm text-muted-foreground hover:text-foreground transition-colors"
