@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
+import { StatusBadge } from '@/components/ui/status-badge'
 
 type RoomAssignment = {
   id: string
@@ -67,13 +68,10 @@ export function HotelStayDetail({ stay, tourId }: HotelStayDetailProps) {
     <div className="space-y-6">
       {/* Status badge */}
       <div className="flex items-center gap-2">
-        <span className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
-          isBooked
-            ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-            : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-        }`}>
-          {isBooked ? 'Booked' : 'Planned'}
-        </span>
+        <StatusBadge
+          label={isBooked ? 'Booked' : 'Planned'}
+          variant={isBooked ? 'success' : 'warning'}
+        />
       </div>
 
       {/* Property details */}

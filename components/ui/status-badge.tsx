@@ -35,8 +35,9 @@ export function StatusBadge({ label, variant = 'default', className }: StatusBad
 export const TRANSPORT_VARIANT: Record<string, StatusVariant> = {
   planned: 'warning',
   booked: 'success',
-  ticketed: 'success',
-  cancelled: 'danger',
+  ticketed: 'info',
+  changed: 'warning',
+  cancelled: 'default',
 }
 
 export const TOUR_STATUS_VARIANT: Record<string, StatusVariant> = {

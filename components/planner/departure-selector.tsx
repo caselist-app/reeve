@@ -3,10 +3,10 @@
 import { useState, useTransition } from 'react'
 import { ChevronDown, Home, MapPin, ArrowRight, Loader2 } from 'lucide-react'
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
@@ -68,15 +68,15 @@ export function DepartureSelector({
     : null
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger asChild>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
         <button className="flex items-center gap-1 font-semibold hover:text-foreground/70 transition-colors">
           {current.label}
           <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
         </button>
-      </DropdownMenuTrigger>
+      </PopoverTrigger>
 
-      <DropdownMenuContent className="w-72 p-2" align="start">
+      <PopoverContent className="w-72 p-2" align="start">
         <p className="px-2 pb-1 pt-0.5 text-xs font-medium text-muted-foreground uppercase tracking-wide">
           Departing from
         </p>
@@ -149,7 +149,7 @@ export function DepartureSelector({
             )}
           </Button>
         </div>
-      </DropdownMenuContent>
-    </DropdownMenu>
+      </PopoverContent>
+    </Popover>
   )
 }

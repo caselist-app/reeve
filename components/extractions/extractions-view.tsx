@@ -5,6 +5,15 @@ import { useRouter } from 'next/navigation'
 import { confirmExtraction, discardExtraction } from '@/lib/actions/extractions'
 import type { ExtractionProposal } from '@/lib/ai/extract'
 import { cn } from '@/lib/utils'
+import { StatusBadge, type StatusVariant } from '@/components/ui/status-badge'
+import { SectionHeader } from '@/components/ui/section-header'
+
+// Domain labels and canonical colour for each extraction status.
+const EXTRACTION_BADGE: Record<Extraction['extraction_status'], { label: string; variant: StatusVariant }> = {
+  pending: { label: 'Processing', variant: 'warning' },
+  extracted: { label: 'Ready to review', variant: 'success' },
+  failed: { label: 'Failed', variant: 'danger' },
+}
 
 type Extraction = {
   id: string
@@ -123,7 +132,11 @@ function ExtractionCard({ extraction, onDone }: { extraction: Extraction; onDone
             {extraction.from_address ?? 'Unknown sender'} &middot; {fmtDate(extraction.created_at)}
           </p>
         </div>
-        <StatusBadge status={extraction.extraction_status} />
+        <StatusBadge
+          className="shrink-0"
+          label={EXTRACTION_BADGE[extraction.extraction_status].label}
+          variant={EXTRACTION_BADGE[extraction.extraction_status].variant}
+        />
       </div>
 
       {extraction.extraction_status === 'pending' && (
@@ -147,9 +160,7 @@ function ExtractionCard({ extraction, onDone }: { extraction: Extraction; onDone
           {/* Shows */}
           {proposed.shows.length > 0 && (
             <section className="space-y-3">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Shows ({proposed.shows.length})
-              </h3>
+              <SectionHeader>Shows ({proposed.shows.length})</SectionHeader>
               {proposed.shows.map((show, i) => (
                 <div key={i} className="grid grid-cols-2 gap-3 rounded-lg border border-border/60 bg-muted/30 p-3">
                   <Field label="Date" value={show.date ?? ''} onChange={(v) => setShow(i, 'date', v)} />
@@ -165,9 +176,7 @@ function ExtractionCard({ extraction, onDone }: { extraction: Extraction; onDone
           {/* Transport */}
           {proposed.transport_segments.length > 0 && (
             <section className="space-y-3">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Transport ({proposed.transport_segments.length})
-              </h3>
+              <SectionHeader>Transport ({proposed.transport_segments.length})</SectionHeader>
               {proposed.transport_segments.map((seg, i) => (
                 <div key={i} className="grid grid-cols-2 gap-3 rounded-lg border border-border/60 bg-muted/30 p-3">
                   <Field label="Mode" value={seg.mode ?? ''} onChange={(v) => setSegment(i, 'mode', v)} />
@@ -186,9 +195,7 @@ function ExtractionCard({ extraction, onDone }: { extraction: Extraction; onDone
           {/* Hotels */}
           {proposed.hotel_stays.length > 0 && (
             <section className="space-y-3">
-              <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                Hotels ({proposed.hotel_stays.length})
-              </h3>
+              <SectionHeader>Hotels ({proposed.hotel_stays.length})</SectionHeader>
               {proposed.hotel_stays.map((hotel, i) => (
                 <div key={i} className="grid grid-cols-2 gap-3 rounded-lg border border-border/60 bg-muted/30 p-3">
                   <Field label="Hotel" value={hotel.name ?? ''} onChange={(v) => setHotel(i, 'name', v)} />
@@ -245,20 +252,6 @@ function ExtractionCard({ extraction, onDone }: { extraction: Extraction; onDone
         </div>
       )}
     </div>
-  )
-}
-
-function StatusBadge({ status }: { status: 'pending' | 'extracted' | 'failed' }) {
-  const map = {
-    pending: { label: 'Processing', className: 'bg-amber-500/10 text-amber-600' },
-    extracted: { label: 'Ready to review', className: 'bg-green-500/10 text-green-600' },
-    failed: { label: 'Failed', className: 'bg-destructive/10 text-destructive' },
-  }
-  const { label, className } = map[status]
-  return (
-    <span className={cn('shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium', className)}>
-      {label}
-    </span>
   )
 }
 

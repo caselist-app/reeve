@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Truck } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { StatusBadge } from '@/components/ui/status-badge'
 import type { Tables } from '@/lib/types/database'
 import type { Json } from '@/lib/types/database'
 
@@ -96,16 +97,10 @@ export function StayRow({ stay, tourId }: StayRowProps) {
 
       {/* Status badge */}
       <td className="py-3 pr-4 whitespace-nowrap">
-        <span
-          className={cn(
-            'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
-            isConfirmed
-              ? 'bg-green-500/10 text-green-600 dark:text-green-400'
-              : 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
-          )}
-        >
-          {isConfirmed ? 'Confirmed' : 'To confirm'}
-        </span>
+        <StatusBadge
+          label={isConfirmed ? 'Confirmed' : 'To confirm'}
+          variant={isConfirmed ? 'success' : 'warning'}
+        />
       </td>
 
       {/* Details link, more prominent when unconfirmed */}

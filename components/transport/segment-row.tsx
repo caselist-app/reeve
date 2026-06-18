@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Plane, Train, Bus, Truck, Car } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { StatusBadge, TRANSPORT_VARIANT } from '@/components/ui/status-badge'
 import type { Tables } from '@/lib/types/database'
 
 export interface SegmentWithContext extends Tables<'transport_segments'> {
@@ -21,14 +22,6 @@ const MODE_ICON: Record<string, React.ComponentType<{ className?: string }>> = {
   truck: Truck,
   ground: Car,
   hire: Car,
-}
-
-const STATUS_CLASS: Record<string, string> = {
-  planned: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-  booked: 'bg-green-500/10 text-green-600 dark:text-green-400',
-  ticketed: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-  changed: 'bg-orange-500/10 text-orange-600 dark:text-orange-400',
-  cancelled: 'bg-muted text-muted-foreground',
 }
 
 function formatDateTime(iso: string | null, timezone: string): { date: string; time: string } {
@@ -132,14 +125,11 @@ export function SegmentRow({ segment, tourId, timezone }: SegmentRowProps) {
 
       {/* Status badge */}
       <td className="py-3 pr-4 whitespace-nowrap">
-        <span
-          className={cn(
-            'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize',
-            STATUS_CLASS[segment.status] ?? STATUS_CLASS.planned
-          )}
-        >
-          {segment.status}
-        </span>
+        <StatusBadge
+          label={segment.status}
+          variant={TRANSPORT_VARIANT[segment.status] ?? 'warning'}
+          className="capitalize"
+        />
       </td>
 
       {/* Planner link */}
