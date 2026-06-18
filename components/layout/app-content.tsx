@@ -5,6 +5,7 @@ import * as SheetPrimitive from '@radix-ui/react-dialog'
 import { cn } from '@/lib/utils'
 import { useSidePanel } from '@/stores/side-panel-store'
 import { ActivePanel } from '@/components/layout/active-panel'
+import { MobileTopBar } from '@/components/layout/mobile-top-bar'
 import { useIsMobile } from '@/hooks/use-is-mobile'
 
 interface AppContentProps {
@@ -51,14 +52,17 @@ export function AppContent({ children }: AppContentProps) {
     </div>
   ) : null
 
-  // Below md: render as a fixed full-height overlay using Sheet primitives
-  // so the main content is never hidden behind the panel.
+  // Below md: top bar + main content stacked vertically, panel as fixed overlay.
   if (isMobile) {
     return (
-      <div className="flex flex-1 min-h-0 overflow-hidden py-2 pr-2">
-        <main className="flex-1 min-w-0 bg-background border border-border rounded-3xl overflow-y-auto overflow-x-hidden">
-          {children}
-        </main>
+      <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+        <MobileTopBar />
+
+        <div className="flex flex-1 min-h-0 overflow-hidden p-2">
+          <main className="flex-1 min-w-0 bg-background border border-border rounded-3xl overflow-y-auto overflow-x-hidden">
+            {children}
+          </main>
+        </div>
 
         <SheetPrimitive.Root open={isOpen} onOpenChange={(open) => { if (!open) close() }}>
           <SheetPrimitive.Portal>
