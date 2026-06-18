@@ -83,7 +83,7 @@ export function Sidebar({ tours, lastTourId = null }: SidebarProps) {
           <button
             onClick={openPalette}
             className={cn(
-              'flex items-center gap-2.5 rounded-lg px-2 h-7 text-xs font-medium transition-colors w-full',
+              'flex items-center gap-2.5 rounded-lg px-2 h-10 md:h-7 text-xs font-medium transition-colors w-full',
               'hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
             )}
             style={{ color: 'var(--sidebar-muted-foreground)' }}
@@ -101,7 +101,7 @@ export function Sidebar({ tours, lastTourId = null }: SidebarProps) {
           <Link
             href="/roster"
             className={cn(
-              'flex items-center gap-2.5 rounded-lg px-2 h-7 text-xs font-medium transition-colors',
+              'flex items-center gap-2.5 rounded-lg px-2 h-10 md:h-7 text-xs font-medium transition-colors',
               isRoster
                 ? 'bg-sidebar-accent text-sidebar-accent-foreground'
                 : 'hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
@@ -131,7 +131,7 @@ export function Sidebar({ tours, lastTourId = null }: SidebarProps) {
                   key={section}
                   href={navHref(section)}
                   className={cn(
-                    'flex items-center gap-2.5 rounded-lg px-2 h-7 text-xs font-medium transition-colors',
+                    'flex items-center gap-2.5 rounded-lg px-2 h-10 md:h-7 text-xs font-medium transition-colors',
                     active
                       ? 'bg-sidebar-accent text-sidebar-accent-foreground'
                       : 'hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
@@ -148,7 +148,7 @@ export function Sidebar({ tours, lastTourId = null }: SidebarProps) {
             <button
               onClick={() => setSettingsOpen(true)}
               className={cn(
-                'flex items-center gap-2.5 rounded-lg px-2 h-7 text-xs font-medium transition-colors w-full',
+                'flex items-center gap-2.5 rounded-lg px-2 h-10 md:h-7 text-xs font-medium transition-colors w-full',
                 'hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
               )}
               style={{ color: 'var(--sidebar-muted-foreground)' }}

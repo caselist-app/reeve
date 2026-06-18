@@ -15,7 +15,7 @@ export function MobileTopBar() {
         type="button"
         onClick={open}
         aria-label="Open navigation"
-        className="flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+        className="flex h-11 w-11 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
       >
         <Menu className="h-5 w-5" />
       </button>
