@@ -35,7 +35,7 @@ export function PanelShell({ title, description, headerAction, children }: Panel
           </button>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto px-5 py-5">
+      <div className="flex-1 overflow-y-auto px-5 py-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]">
         {children}
       </div>
     </div>
