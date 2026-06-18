@@ -1,13 +1,17 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import { ChevronLeft } from 'lucide-react'
-import { AddFlightForm } from '@/components/schedule/add/add-flight-form'
-import { AddDriveForm } from '@/components/schedule/add/add-drive-form'
-import { AddRailForm } from '@/components/schedule/add/add-rail-form'
-import { AddHotelForm } from '@/components/schedule/add/add-hotel-form'
-import { AddShowForm } from '@/components/schedule/add/add-show-form'
-import { AddEventForm } from '@/components/schedule/add/add-event-form'
 import type { AddCategory } from '@/components/schedule/add/add-picker'
+
+// The add forms only render once a category is picked, so each loads on demand
+// instead of shipping in the schedule bundle.
+const AddFlightForm = dynamic(() => import('@/components/schedule/add/add-flight-form').then((m) => m.AddFlightForm), { ssr: false })
+const AddDriveForm = dynamic(() => import('@/components/schedule/add/add-drive-form').then((m) => m.AddDriveForm), { ssr: false })
+const AddRailForm = dynamic(() => import('@/components/schedule/add/add-rail-form').then((m) => m.AddRailForm), { ssr: false })
+const AddHotelForm = dynamic(() => import('@/components/schedule/add/add-hotel-form').then((m) => m.AddHotelForm), { ssr: false })
+const AddShowForm = dynamic(() => import('@/components/schedule/add/add-show-form').then((m) => m.AddShowForm), { ssr: false })
+const AddEventForm = dynamic(() => import('@/components/schedule/add/add-event-form').then((m) => m.AddEventForm), { ssr: false })
 
 interface AddFlowProps {
   tourId: string

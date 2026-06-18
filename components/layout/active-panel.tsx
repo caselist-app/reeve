@@ -1,13 +1,18 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import { useSidePanel } from '@/stores/side-panel-store'
-import { PersonSheet } from '@/components/people/person-sheet'
-import { BulkAdd } from '@/components/people/bulk-add'
-import { ContactSheet } from '@/components/roster/contact-sheet'
-import { ContactPanel } from '@/components/roster/contact-panel'
-import { AddShowPanel } from '@/components/shows/add-show-panel'
-import { SendRiderSheet } from '@/components/shows/send-rider-sheet'
-import { AddDayPanel } from '@/components/schedule/add-day-panel'
+
+// Each panel is loaded on demand the first time it opens, rather than shipping
+// in the initial bundle on every page. They only ever render after a user
+// action, so client-only loading (ssr: false) costs nothing in UX.
+const PersonSheet = dynamic(() => import('@/components/people/person-sheet').then((m) => m.PersonSheet), { ssr: false })
+const BulkAdd = dynamic(() => import('@/components/people/bulk-add').then((m) => m.BulkAdd), { ssr: false })
+const ContactSheet = dynamic(() => import('@/components/roster/contact-sheet').then((m) => m.ContactSheet), { ssr: false })
+const ContactPanel = dynamic(() => import('@/components/roster/contact-panel').then((m) => m.ContactPanel), { ssr: false })
+const AddShowPanel = dynamic(() => import('@/components/shows/add-show-panel').then((m) => m.AddShowPanel), { ssr: false })
+const SendRiderSheet = dynamic(() => import('@/components/shows/send-rider-sheet').then((m) => m.SendRiderSheet), { ssr: false })
+const AddDayPanel = dynamic(() => import('@/components/schedule/add-day-panel').then((m) => m.AddDayPanel), { ssr: false })
 
 // Renders the correct panel content based on the active descriptor.
 // Mounted inside AppContent, which handles the slide-in animation and
