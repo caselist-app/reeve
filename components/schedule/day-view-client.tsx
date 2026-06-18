@@ -67,6 +67,8 @@ export interface DayPanelData {
 interface DayViewClientProps {
   timeline: ReactNode
   dayInfoPanel: ReactNode
+  // Horizontal date chips, visible only on mobile (the slot is lg:hidden internally).
+  dateStrip?: ReactNode
   panelData: DayPanelData
   // Context needed for the add flow forms.
   addContext: { tourId: string; tourDateId: string; date: string; timezone: string }
@@ -81,7 +83,7 @@ interface DayViewClientProps {
 // State shell for the schedule day view. Holds which timeline card is active
 // and swaps the right column between the day info panel and the edit panel.
 // Only this component is a client component; the slots remain Server Components.
-export function DayViewClient({ timeline, dayInfoPanel, panelData, addContext, dayMeta }: DayViewClientProps) {
+export function DayViewClient({ timeline, dayInfoPanel, dateStrip, panelData, addContext, dayMeta }: DayViewClientProps) {
   const { activeCard, setActiveCard } = useSchedulePanel()
   const { open: openSidePanel } = useSidePanel()
   const router = useRouter()
@@ -168,6 +170,7 @@ export function DayViewClient({ timeline, dayInfoPanel, panelData, addContext, d
       <div className="flex flex-1 min-w-0 min-h-0">
         {/* Timeline: flex-1 */}
         <div className="relative flex flex-col flex-1 min-w-0">
+          {dateStrip}
           {/* Day-level actions: three dots (edit/delete) and add, top-right. */}
           <div className="absolute right-5 top-5 z-10 flex items-center gap-1.5">
             {dayMeta && (

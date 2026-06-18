@@ -3,6 +3,8 @@ import { fetchDayRecords } from '@/lib/schedule/day-records'
 import { DayViewClient, type DayPanelData } from '@/components/schedule/day-view-client'
 import { DayTimeline } from '@/components/schedule/day-timeline'
 import { DayInfoPanel } from '@/components/schedule/day-info-panel'
+import { DateStrip } from '@/components/schedule/date-strip'
+import { defaultScheduleDate } from '@/lib/schedule/schedule-shell'
 
 interface TourDateLite {
   id: string
@@ -11,17 +13,24 @@ interface TourDateLite {
   custom_title: string | null
 }
 
+interface TourDateShell {
+  id: string
+  date: string
+  day_type: string
+}
+
 interface DayContentProps {
   tourId: string
   tourName: string
   timezone: string
   selectedDate: string
   tourDate: TourDateLite | null
+  dates: TourDateShell[]
 }
 
 // The per-day half of the schedule. It is rendered inside a Suspense boundary
 // so the date sidebar paints immediately while this fetch resolves.
-export async function DayContent({ tourId, tourName, timezone, selectedDate, tourDate }: DayContentProps) {
+export async function DayContent({ tourId, tourName, timezone, selectedDate, tourDate, dates }: DayContentProps) {
   const supabase = await createClient()
 
   const records = await fetchDayRecords(supabase, {
@@ -52,6 +61,13 @@ export async function DayContent({ tourId, tourName, timezone, selectedDate, tou
   return (
     <DayViewClient
       panelData={panelData}
+      dateStrip={
+        <DateStrip
+          tourId={tourId}
+          dates={dates}
+          defaultDate={defaultScheduleDate(dates)}
+        />
+      }
       addContext={{
         tourId,
         tourDateId: tourDate?.id ?? '',
