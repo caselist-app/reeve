@@ -64,6 +64,43 @@ export async function updateTourDate(
 
   const supabase = await createClient()
 
+  // Changing day_type away from 'show' or 'rehearsal' does not touch the
+  // shows/rehearsals row that defines it (it was created by a separate
+  // action). Silently allowing the change orphans that row: it stays in the
+  // database, still pointing at this date, invisible from the day it was
+  // created on. Block the change instead and tell the TM to delete the
+  // attached entity first, so removal is always an explicit, visible action.
+  if (data.day_type) {
+    const { data: current } = await supabase
+      .from('tour_dates')
+      .select('day_type')
+      .eq('id', tourDateId)
+      .single()
+
+    if (current && data.day_type !== current.day_type) {
+      if (current.day_type === 'show') {
+        const { data: show } = await supabase
+          .from('shows')
+          .select('id')
+          .eq('tour_date_id', tourDateId)
+          .maybeSingle()
+        if (show) {
+          return { error: 'This day still has a show attached. Delete the show first, then change the day type.' }
+        }
+      }
+      if (current.day_type === 'rehearsal') {
+        const { data: rehearsal } = await supabase
+          .from('rehearsals')
+          .select('id')
+          .eq('tour_date_id', tourDateId)
+          .maybeSingle()
+        if (rehearsal) {
+          return { error: 'This day still has a rehearsal attached. Delete the rehearsal first, then change the day type.' }
+        }
+      }
+    }
+  }
+
   const { error } = await supabase
     .from('tour_dates')
     .update(data)

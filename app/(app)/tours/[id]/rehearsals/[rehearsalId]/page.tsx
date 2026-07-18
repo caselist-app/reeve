@@ -64,6 +64,7 @@ export default async function RehearsalDetailPage({
       <PageHeader eyebrow={tour.artists?.name ?? ''} title={dateLabel} description="Rehearsal" />
 
       <RehearsalForm
+        tourId={id}
         rehearsalId={rehearsalId}
         initialData={{
           location_name: rehearsal.location_name,

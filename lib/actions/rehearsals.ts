@@ -1,7 +1,9 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
+import { revertDayTypeIfOrphaned } from '@/lib/schedule/day-type-revert'
 import { z } from 'zod'
 
 const rehearsalSchema = z.object({
@@ -107,12 +109,30 @@ export async function deleteRehearsal(rehearsalId: string): Promise<RehearsalAct
 
   const supabase = await createClient()
 
+  // RLS check: returns null if caller does not own the rehearsal's tour.
+  const { data: rehearsal } = await supabase
+    .from('rehearsals')
+    .select('id, tour_id, tour_date_id')
+    .eq('id', rehearsalId)
+    .single()
+
+  if (!rehearsal) return { error: 'Rehearsal not found.' }
+
   const { error } = await supabase
     .from('rehearsals')
     .delete()
     .eq('id', rehearsalId)
 
   if (error) return { error: error.message }
+
+  // The rehearsal's tour_date was upserted to day_type = 'rehearsal' when it
+  // was created. Without this, the day would stay stuck labelled "Rehearsal"
+  // with nothing behind it.
+  if (rehearsal.tour_date_id) {
+    await revertDayTypeIfOrphaned(supabase, rehearsal.tour_date_id, 'rehearsal')
+  }
+
+  revalidatePath(`/tours/${rehearsal.tour_id}/schedule`)
 
   return { error: null }
 }

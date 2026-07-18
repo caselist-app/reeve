@@ -1,11 +1,23 @@
 'use client'
 
 import { useTransition, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useSchedulePanel } from '@/stores/schedule-panel-store'
 import { EditPanel } from '@/components/schedule/edit-panel'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
-import { updateDaySheet } from '@/lib/actions/shows'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { updateDaySheet, deleteShow } from '@/lib/actions/shows'
 import type { Tables } from '@/lib/types/database'
 
 type DaySheet = Pick<
@@ -73,6 +85,20 @@ export function ShowPanel({ showId, venueName, timezone, daySheet }: ShowPanelPr
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const router = useRouter()
+  const { setActiveCard } = useSchedulePanel()
+
+  async function handleDelete() {
+    setDeleting(true)
+    const result = await deleteShow(showId)
+    setDeleting(false)
+    if (result.error) { setError(result.error); return }
+    setDeleteOpen(false)
+    setActiveCard(null)
+    router.refresh()
+  }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -124,6 +150,40 @@ export function ShowPanel({ showId, venueName, timezone, daySheet }: ShowPanelPr
         </Button>
         {saved && <p className="text-xs text-muted-foreground text-center">Saved.</p>}
       </form>
+
+      <div className="mt-5 border-t border-border pt-4">
+        <Button
+          type="button"
+          variant="destructive"
+          size="sm"
+          className="w-full"
+          onClick={() => setDeleteOpen(true)}
+        >
+          Delete show
+        </Button>
+      </div>
+
+      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this show?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes {venueName} and its day sheet and advance status from the tour.
+              The day reverts to travel or day off. This cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? 'Deleting...' : 'Delete show'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </EditPanel>
   )
 }

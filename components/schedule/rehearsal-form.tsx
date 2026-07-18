@@ -1,14 +1,27 @@
 'use client'
 
 import { useTransition, useState, useId } from 'react'
+import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { updateRehearsal } from '@/lib/actions/rehearsals'
+import { updateRehearsal, deleteRehearsal } from '@/lib/actions/rehearsals'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog'
 
 interface RehearsalFormProps {
+  tourId: string
   rehearsalId: string
   initialData: {
     location_name: string
@@ -27,11 +40,22 @@ function toDatetimeLocal(iso: string | null | undefined): string {
   return iso.slice(0, 16)
 }
 
-export function RehearsalForm({ rehearsalId, initialData, className }: RehearsalFormProps) {
+export function RehearsalForm({ tourId, rehearsalId, initialData, className }: RehearsalFormProps) {
   const formId = useId()
+  const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  async function handleDelete() {
+    setDeleting(true)
+    const result = await deleteRehearsal(rehearsalId)
+    setDeleting(false)
+    if (result.error) { setError(result.error); return }
+    router.push(`/tours/${tourId}/schedule`)
+  }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -131,6 +155,34 @@ export function RehearsalForm({ rehearsalId, initialData, className }: Rehearsal
       </Button>
 
       {saved && <p className="text-sm text-muted-foreground">Saved.</p>}
+
+      <div className="border-t border-border pt-5">
+        <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+          <AlertDialogTrigger asChild>
+            <Button type="button" variant="destructive" size="sm">
+              Delete rehearsal
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete this rehearsal?</AlertDialogTitle>
+              <AlertDialogDescription>
+                The day reverts to travel or day off. This cannot be undone.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDelete}
+                disabled={deleting}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {deleting ? 'Deleting...' : 'Delete rehearsal'}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
     </form>
   )
 }

@@ -305,7 +305,7 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
             <AlertDialogTitle>Delete this day?</AlertDialogTitle>
             <AlertDialogDescription>
               This will permanently delete the day and everything on it: shows,
-              transport, hotels, and events. This cannot be undone.
+              rehearsals, transport, hotels, and events. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

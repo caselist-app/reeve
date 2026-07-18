@@ -8,6 +8,7 @@ import { bustTourContextCache } from '@/lib/ai/context'
 import { daySheetFormSchema } from '@/lib/validators/day-sheet'
 import { setAdvanceStatus } from '@/lib/shows/advance'
 import { resolveHubJob } from '@/trigger/jobs/resolve-hub'
+import { revertDayTypeIfOrphaned } from '@/lib/schedule/day-type-revert'
 import type { z } from 'zod'
 import type { TablesUpdate } from '@/lib/types/database'
 import type { Department, AdvanceStatus } from '@/lib/shows/advance'
@@ -151,7 +152,7 @@ export async function deleteShow(showId: string): Promise<ShowActionState> {
   // RLS check: returns null if caller does not own the show's tour.
   const { data: show } = await supabase
     .from('shows')
-    .select('id, tour_id')
+    .select('id, tour_id, tour_date_id')
     .eq('id', showId)
     .single()
 
@@ -166,7 +167,15 @@ export async function deleteShow(showId: string): Promise<ShowActionState> {
     return { error: error.message }
   }
 
+  // The show's tour_date was upserted to day_type = 'show' when it was
+  // created (create_show_with_dependents RPC). Without this, the day would
+  // stay stuck labelled "Show day" with no show behind it.
+  if (show.tour_date_id) {
+    await revertDayTypeIfOrphaned(supabase, show.tour_date_id, 'show')
+  }
+
   void bustTourContextCache(show.tour_id)
+  revalidatePath(`/tours/${show.tour_id}/schedule`)
 
   return { error: null }
 }
