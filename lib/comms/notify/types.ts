@@ -30,6 +30,7 @@ export type ImplementedType = keyof NotificationDataMap
 export type RenderedWhatsApp =
   | { kind: 'text'; body: string }
   | { kind: 'interactive'; body: string; buttons: [QuickReplyButton, ...QuickReplyButton[]] }
+  | { kind: 'template'; templateName: string; bodyParams: string[]; headerDocument?: { link: string; filename: string } }
 
 export interface RenderedEmail {
   subject: string
@@ -41,8 +42,10 @@ export interface NotificationDef<D> {
   // Time-critical nudges (bus_call, lobby_call) prefer WhatsApp regardless of
   // the person's preference; email is used only when they have no number.
   timeCritical: boolean
-  whatsapp(data: D): RenderedWhatsApp | Promise<RenderedWhatsApp>
-  email(data: D): RenderedEmail | Promise<RenderedEmail>
+  // Renderers are optional: block types are WhatsApp-only (no email() renderer),
+  // and resolveChannels drops a channel when its renderer is absent.
+  whatsapp?(data: D): RenderedWhatsApp | Promise<RenderedWhatsApp>
+  email?(data: D): RenderedEmail | Promise<RenderedEmail>
 }
 
 // The recipient, resolved through the people -> contacts join. Identity and

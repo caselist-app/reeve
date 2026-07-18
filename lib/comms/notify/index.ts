@@ -66,7 +66,9 @@ export async function notify<T extends ImplementedType>(
     preferredChannel: contact.preferred_channel ?? 'whatsapp',
   }
 
-  const channels = resolveChannels(recipient, def.timeCritical)
+  // resolveChannels now filters by renderer availability in addition to address,
+  // so block types with no email() renderer are automatically skipped for email contacts.
+  const channels = resolveChannels(recipient, def)
   if (channels.length === 0) return { personId: input.personId, channels: [] }
 
   // The tour's artist slug drives the email from-address. Loaded once, only if
@@ -110,7 +112,9 @@ export async function notify<T extends ImplementedType>(
       let providerMessageId: string | null = null
 
       if (channel === 'whatsapp') {
-        const rendered = await def.whatsapp(input.data)
+        // Non-null assertion safe: resolveChannels guarantees def.whatsapp exists
+        // before 'whatsapp' appears in channels[].
+        const rendered = await def.whatsapp!(input.data)
         const result = await sendWhatsAppRendered(recipient.whatsappNumber!, rendered)
         if (result.skipped) {
           // Template not yet configured: release the claim so this can be retried
@@ -121,7 +125,9 @@ export async function notify<T extends ImplementedType>(
         }
         providerMessageId = result.providerMessageId
       } else {
-        const rendered = await def.email(input.data)
+        // Non-null assertion safe: resolveChannels guarantees def.email exists
+        // before 'email' appears in channels[].
+        const rendered = await def.email!(input.data)
         ;({ providerMessageId } = await sendEmailRendered(recipient.email!, rendered, artistSlug))
       }
 

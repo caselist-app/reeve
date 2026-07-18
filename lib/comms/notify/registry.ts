@@ -3,9 +3,9 @@ import { renderMorningMessageEmail } from '@/lib/comms/templates/morning-message
 import type { ImplementedType, NotificationDataMap, NotificationDef } from './types'
 
 // One entry per implemented notification type. Typed as a full record over
-// ImplementedType, so adding a type to NotificationDataMap without giving it
-// both a WhatsApp and an email renderer is a compile error. That is the
-// guarantee that keeps a channel from being half-wired.
+// ImplementedType, so adding a type to NotificationDataMap without a registry
+// entry is a compile error. Renderers are optional: WhatsApp-only types (blocks)
+// omit email(), and resolveChannels automatically filters that channel out.
 type Registry = { [K in ImplementedType]: NotificationDef<NotificationDataMap[K]> }
 
 export const registry: Registry = {
