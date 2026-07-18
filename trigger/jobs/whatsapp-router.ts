@@ -31,27 +31,40 @@ export const whatsappRouterJob = task({
     if (result.action === 'template') {
       // Second idempotency guard before the outbound send.
       // The webhook guard covers most retries; this covers job-level retries.
-      if (payload.wamid) {
+      const claimKey = payload.wamid ? `router:sent:${payload.wamid}` : null
+      if (claimKey) {
         try {
-          const claimed = await redis.set(`router:sent:${payload.wamid}`, '1', { nx: true, ex: 60 * 60 * 24 })
+          const claimed = await redis.set(claimKey, '1', { nx: true, ex: 60 * 60 * 24 })
           if (claimed === null) return { action: 'template', sent: false, reason: 'duplicate' }
         } catch {
           // Redis unavailable: proceed rather than drop a command reply.
         }
       }
 
-      // Attach quick-reply buttons so the crew member can tap common commands
-      // without typing. Button taps arrive as interactive messages and are
-      // routed identically to typed slash commands.
-      await sendInteractiveWhatsApp({
-        to: payload.from_number,
-        body: result.reply,
-        buttons: [
-          { id: 'itinerary', title: '/itinerary' },
-          { id: 'travel', title: '/travel' },
-          { id: 'hotel', title: '/hotel' },
-        ],
-      })
+      try {
+        // Attach quick-reply buttons so the crew member can tap common commands
+        // without typing. Button taps arrive as interactive messages and are
+        // routed identically to typed slash commands.
+        await sendInteractiveWhatsApp({
+          to: payload.from_number,
+          body: result.reply,
+          buttons: [
+            { id: 'itinerary', title: '/itinerary' },
+            { id: 'travel', title: '/travel' },
+            { id: 'hotel', title: '/hotel' },
+          ],
+        })
+      } catch (err) {
+        // Release the claim so a Trigger.dev retry can attempt the send again.
+        if (claimKey) {
+          try {
+            await redis.del(claimKey)
+          } catch {
+            // Redis unavailable: nothing to release.
+          }
+        }
+        throw err
+      }
       return { action: 'template', sent: true }
     }
 
@@ -75,22 +88,37 @@ export const whatsappRouterJob = task({
     }
 
     // Second idempotency guard before the outbound AI send.
-    if (payload.wamid) {
+    const claimKey = payload.wamid ? `router:sent:${payload.wamid}` : null
+    if (claimKey) {
       try {
-        const claimed = await redis.set(`router:sent:${payload.wamid}`, '1', { nx: true, ex: 60 * 60 * 24 })
+        const claimed = await redis.set(claimKey, '1', { nx: true, ex: 60 * 60 * 24 })
         if (claimed === null) return { action: 'ai', sent: false, reason: 'duplicate' }
       } catch {
         // Redis unavailable: proceed rather than drop the answer.
       }
     }
 
-    const { answer } = await answerCrewQuestion({
-      tour_id: payload.tour_id,
-      person_id: payload.person_id,
-      question: payload.body,
-    })
+    try {
+      const { answer } = await answerCrewQuestion({
+        tour_id: payload.tour_id,
+        person_id: payload.person_id,
+        question: payload.body,
+      })
 
-    await sendWhatsApp({ to: payload.from_number, body: answer })
+      await sendWhatsApp({ to: payload.from_number, body: answer })
+    } catch (err) {
+      // Release the claim so a Trigger.dev retry can attempt this again,
+      // whether the AI call or the send itself failed.
+      if (claimKey) {
+        try {
+          await redis.del(claimKey)
+        } catch {
+          // Redis unavailable: nothing to release.
+        }
+      }
+      throw err
+    }
+
     return { action: 'ai', sent: true }
   },
 })
