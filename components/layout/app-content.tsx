@@ -88,7 +88,12 @@ export function AppContent({ children }: AppContentProps) {
 
   // md and above: inline panel that shrinks the main content area.
   return (
-    <div className="flex flex-1 gap-2 py-2 pr-2 min-h-0 overflow-hidden">
+    <div
+      className={cn(
+        'flex flex-1 py-2 pr-2 min-h-0 overflow-hidden transition-[gap] duration-200 ease-out',
+        showPanel ? 'gap-2' : 'gap-0',
+      )}
+    >
       <main
         className={cn(
           'min-w-0 bg-background border border-border rounded-3xl overflow-y-auto overflow-x-hidden transition-[flex] duration-200 ease-out',
@@ -98,7 +103,7 @@ export function AppContent({ children }: AppContentProps) {
         {children}
       </main>
 
-      {/* Inline side panel at lg+, full-width takeover at md-lg */}
+      {/* Inline side panel at lg+, full-width takeover at md-lg. Always mounted (even at w-0) so the width transition has a starting value to animate from; only the gap above is gated on showPanel. */}
       <div
         className={cn(
           'flex-shrink-0 overflow-hidden transition-[width] duration-200 ease-out',
