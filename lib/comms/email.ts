@@ -2,7 +2,19 @@ import { randomBytes } from 'crypto'
 import { Resend } from 'resend'
 import { createAdminClient } from '@/lib/supabase/admin'
 
-const resend = new Resend(process.env.RESEND_API_KEY)
+// Lazily constructed: the Resend SDK throws immediately if the key is
+// missing, and a module-level instantiation runs at import time, including
+// during Next.js's build-time page data collection where no request (and no
+// real env) is present. Deferring to first use keeps a build green without
+// requiring a real key.
+let resendClient: Resend | null = null
+
+function getResend(): Resend {
+  if (!resendClient) {
+    resendClient = new Resend(process.env.RESEND_API_KEY)
+  }
+  return resendClient
+}
 
 // Returns a URL-safe 32-character random token for document share links.
 // Stored in document_shares.share_token. Never reuse or predict.
@@ -79,7 +91,7 @@ export async function provisionTourEmailDomain(artistSlug: string): Promise<void
 
   // Check whether the domain is already provisioned in Resend.
   // The list API returns all domains for the account.
-  const { data: listData, error: listError } = await resend.domains.list()
+  const { data: listData, error: listError } = await getResend().domains.list()
   if (listError) {
     console.error(`[provisionTourEmailDomain] Failed to list domains:`, listError)
     return
@@ -91,7 +103,7 @@ export async function provisionTourEmailDomain(artistSlug: string): Promise<void
     return
   }
 
-  const { data, error } = await resend.domains.create({ name: domain })
+  const { data, error } = await getResend().domains.create({ name: domain })
   if (error || !data) {
     console.error(`[provisionTourEmailDomain] Failed to create domain ${domain}:`, error)
     return
@@ -116,7 +128,7 @@ export async function provisionTourEmailDomain(artistSlug: string): Promise<void
   } else {
     // Fetch the full domain record now that receiving is enabled, Resend
     // will have added inbound MX records that also need to land in Cloudflare.
-    const { data: fullDomain, error: getError } = await resend.domains.get(data.id)
+    const { data: fullDomain, error: getError } = await getResend().domains.get(data.id)
     if (getError || !fullDomain) {
       console.error(`[provisionTourEmailDomain] Failed to fetch updated records for ${domain}:`, getError)
     } else {
@@ -126,7 +138,7 @@ export async function provisionTourEmailDomain(artistSlug: string): Promise<void
 
   // Trigger Resend's DNS verification check. This replaces the manual
   // "Verify DNS Records" button click in the dashboard.
-  const { error: verifyError } = await resend.domains.verify(data.id)
+  const { error: verifyError } = await getResend().domains.verify(data.id)
   if (verifyError) {
     console.error(`[provisionTourEmailDomain] Verify call failed for ${domain}:`, verifyError)
   }
@@ -169,7 +181,7 @@ export type SendEmailParams = {
 export async function sendEmail(params: SendEmailParams): Promise<{ id: string | null }> {
   const from = tourFromAddress(params.artist_slug, params.from_local_part)
 
-  const { data, error } = await resend.emails.send({
+  const { data, error } = await getResend().emails.send({
     from,
     to: params.to,
     subject: params.subject,
