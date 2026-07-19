@@ -14,6 +14,7 @@ export type AffectedPerson = {
   id: string
   name: string
   whatsapp_number: string | null
+  contact_email: string | null
 }
 
 // Returns the people who should receive a notification for this change.
@@ -30,7 +31,7 @@ export async function getAffectedPeople(
     case 'transport_segment': {
       const { data } = await db
         .from('transport_assignments')
-        .select('people(id, contacts(name, whatsapp_number))')
+        .select('people(id, contacts(name, whatsapp_number, contact_email))')
         .eq('segment_id', change.segmentId)
         .eq('tour_id', tourId)
 
@@ -40,7 +41,7 @@ export async function getAffectedPeople(
     case 'hotel_stay': {
       const { data } = await db
         .from('room_assignments')
-        .select('people(id, contacts(name, whatsapp_number))')
+        .select('people(id, contacts(name, whatsapp_number, contact_email))')
         .eq('hotel_stay_id', change.stayId)
         .eq('tour_id', tourId)
 
@@ -100,7 +101,7 @@ export async function getAffectedPeople(
         segIds.length > 0
           ? db
               .from('transport_assignments')
-              .select('people(id, contacts(name, whatsapp_number))')
+              .select('people(id, contacts(name, whatsapp_number, contact_email))')
               .eq('tour_id', tourId)
               .in('segment_id', segIds)
               .then((r) => extractPeople(r.data))
@@ -108,7 +109,7 @@ export async function getAffectedPeople(
         stayIds.length > 0
           ? db
               .from('room_assignments')
-              .select('people(id, contacts(name, whatsapp_number))')
+              .select('people(id, contacts(name, whatsapp_number, contact_email))')
               .eq('tour_id', tourId)
               .in('hotel_stay_id', stayIds)
               .then((r) => extractPeople(r.data))
@@ -119,25 +120,30 @@ export async function getAffectedPeople(
     }
 
     case 'day_sheet': {
-      // Day sheet changes affect everyone traveling with the tour who has
-      // a contact channel. Not limited to people assigned to specific segments.
+      // Day sheet changes affect everyone traveling with the tour who has any
+      // contact channel (WhatsApp or email). The !inner join excludes people
+      // with no contact record at all. notify() resolves the actual channel per
+      // person from their preference, so we don't filter by address type here.
       const { data } = await db
         .from('people')
-        .select('id, contacts!inner(name, whatsapp_number)')
+        .select('id, contacts!inner(name, whatsapp_number, contact_email)')
         .eq('tour_id', tourId)
-        .not('contacts.whatsapp_number', 'is', null)
 
       return (data ?? []).map((row) => {
-        // To-one embed: object at runtime (Supabase types it loosely under !inner).
-        const c = row.contacts as unknown as { name: string; whatsapp_number: string | null } | null
-        return { id: row.id, name: c?.name ?? '', whatsapp_number: c?.whatsapp_number ?? null }
+        const c = row.contacts as unknown as { name: string; whatsapp_number: string | null; contact_email: string | null } | null
+        return {
+          id: row.id,
+          name: c?.name ?? '',
+          whatsapp_number: c?.whatsapp_number ?? null,
+          contact_email: c?.contact_email ?? null,
+        }
       })
     }
   }
 }
 
 // Safely extracts AffectedPerson[] from a joined Supabase result. Identity
-// (name, number) lives on the contact, so each person row nests a contact.
+// lives on the contact, so each person row nests a contact.
 function extractPeople(
   data: Array<{ people: unknown }> | null
 ): AffectedPerson[] {
@@ -146,13 +152,14 @@ function extractPeople(
     .map((row) => {
       const p = row.people as {
         id?: string
-        contacts?: { name?: string; whatsapp_number?: string | null } | null
+        contacts?: { name?: string; whatsapp_number?: string | null; contact_email?: string | null } | null
       } | null
       if (!p || typeof p.id !== 'string') return null
       return {
         id: p.id,
         name: p.contacts?.name ?? '',
         whatsapp_number: p.contacts?.whatsapp_number ?? null,
+        contact_email: p.contacts?.contact_email ?? null,
       }
     })
     .filter((p): p is AffectedPerson => p !== null)

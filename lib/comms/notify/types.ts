@@ -1,6 +1,8 @@
 import type { QuickReplyButton } from '@/lib/comms/whatsapp'
 import type { EmailAttachment } from '@/lib/comms/email'
 import type { MorningMessageData } from '@/lib/comms/templates/morning-message'
+import type { BoardingPassNotificationData } from '@/lib/comms/templates/boarding-pass'
+import type { OpenerData, ShowInfoData, CateringData, WrapData } from '@/lib/comms/templates/day-blocks'
 
 // A notification can leave on one or both of these. SMS was retired; new
 // channels (push, etc.) slot in by extending this union and the adapters.
@@ -16,12 +18,22 @@ export type NotificationType =
   | 'hotel_details'
   | 'bus_call'
   | 'lobby_call'
+  | 'opener'
+  | 'show_information'
+  | 'catering'
+  | 'wrap'
 
 // The data each notification type renders from. Entries are added as each type
 // is built; the registry is keyed off this, so adding a type here forces the
 // compiler to demand both a WhatsApp and an email renderer for it.
 export interface NotificationDataMap {
   morning_message: MorningMessageData
+  boarding_pass: BoardingPassNotificationData
+  change_alert: { message: string }
+  opener: OpenerData
+  show_information: ShowInfoData
+  catering: CateringData
+  wrap: WrapData
 }
 
 export type ImplementedType = keyof NotificationDataMap
@@ -30,6 +42,7 @@ export type ImplementedType = keyof NotificationDataMap
 export type RenderedWhatsApp =
   | { kind: 'text'; body: string }
   | { kind: 'interactive'; body: string; buttons: [QuickReplyButton, ...QuickReplyButton[]] }
+  | { kind: 'template'; templateName: string; bodyParams: string[]; headerDocument?: { link: string; filename: string } }
 
 export interface RenderedEmail {
   subject: string
@@ -41,8 +54,10 @@ export interface NotificationDef<D> {
   // Time-critical nudges (bus_call, lobby_call) prefer WhatsApp regardless of
   // the person's preference; email is used only when they have no number.
   timeCritical: boolean
-  whatsapp(data: D): RenderedWhatsApp | Promise<RenderedWhatsApp>
-  email(data: D): RenderedEmail | Promise<RenderedEmail>
+  // Renderers are optional: block types are WhatsApp-only (no email() renderer),
+  // and resolveChannels drops a channel when its renderer is absent.
+  whatsapp?(data: D): RenderedWhatsApp | Promise<RenderedWhatsApp>
+  email?(data: D): RenderedEmail | Promise<RenderedEmail>
 }
 
 // The recipient, resolved through the people -> contacts join. Identity and

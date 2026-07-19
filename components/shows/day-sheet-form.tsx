@@ -7,6 +7,7 @@ import { updateDaySheet } from '@/lib/actions/shows'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { NotifyPanel } from '@/components/broadcast/notify-panel'
 import type { Tables } from '@/lib/types/database'
 
@@ -28,6 +29,12 @@ const SCHEDULE = [
 ] as const
 
 type ScheduleKey = (typeof SCHEDULE)[number]['key']
+
+const CATERING_TIME_FIELDS = [
+  { startKey: 'catering_breakfast_start', endKey: 'catering_breakfast_end', label: 'Breakfast' },
+  { startKey: 'catering_lunch_start', endKey: 'catering_lunch_end', label: 'Lunch' },
+  { startKey: 'catering_dinner_start', endKey: 'catering_dinner_end', label: 'Dinner' },
+] as const
 
 // Formats a stored timestamptz as HH:MM in the tour's timezone for display in
 // a time input. Falls back to UTC when no timezone is set.
@@ -59,6 +66,9 @@ export function DaySheetForm({
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [showNotify, setShowNotify] = useState(false)
+  const [cateringType, setCateringType] = useState<'none' | 'buyout' | 'provided'>(
+    (initialData?.catering_type as 'none' | 'buyout' | 'provided') ?? 'none'
+  )
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -72,7 +82,16 @@ export function DaySheetForm({
     }
 
     startTransition(async () => {
-      const result = await updateDaySheet(showId, data)
+      const result = await updateDaySheet(showId, {
+        ...data,
+        catering_type: cateringType,
+        catering_breakfast_start: cateringType === 'provided' ? (fd.get('catering_breakfast_start') as string) || null : null,
+        catering_breakfast_end: cateringType === 'provided' ? (fd.get('catering_breakfast_end') as string) || null : null,
+        catering_lunch_start: cateringType === 'provided' ? (fd.get('catering_lunch_start') as string) || null : null,
+        catering_lunch_end: cateringType === 'provided' ? (fd.get('catering_lunch_end') as string) || null : null,
+        catering_dinner_start: cateringType === 'provided' ? (fd.get('catering_dinner_start') as string) || null : null,
+        catering_dinner_end: cateringType === 'provided' ? (fd.get('catering_dinner_end') as string) || null : null,
+      })
       if (result.error) {
         setError(result.error)
       } else {
@@ -110,6 +129,45 @@ export function DaySheetForm({
             />
           </div>
         ))}
+
+        <div className="border-t pt-4 mt-2 space-y-3">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Catering</p>
+
+          <div className="grid grid-cols-2 items-center gap-4">
+            <Label className="text-sm">Type</Label>
+            <Select value={cateringType} onValueChange={(v) => setCateringType(v as typeof cateringType)}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                <SelectItem value="buyout">Buyout</SelectItem>
+                <SelectItem value="provided">Provided</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {cateringType === 'provided' && CATERING_TIME_FIELDS.map(({ startKey, endKey, label }) => (
+            <div key={startKey} className="grid grid-cols-2 items-center gap-4">
+              <Label className="text-sm">{label}</Label>
+              <div className="flex items-center gap-1">
+                <Input
+                  name={startKey}
+                  type="time"
+                  defaultValue={toTimeInput(initialData?.[startKey] as string | null, timezone)}
+                  className={cn('font-mono')}
+                />
+                <span className="text-muted-foreground text-xs">to</span>
+                <Input
+                  name={endKey}
+                  type="time"
+                  defaultValue={toTimeInput(initialData?.[endKey] as string | null, timezone)}
+                  className={cn('font-mono')}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
 
         <div className="flex items-center gap-4 pt-2">
           <Button type="submit" disabled={pending}>

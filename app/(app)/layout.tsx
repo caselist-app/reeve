@@ -43,11 +43,20 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Last tour visited, so account-level pages keep the tour context in the sidebar.
   const lastTourId = cookieStore.get('reeve:last-tour')?.value ?? null
 
+  // Read persisted collapsed state so the server renders the icon-only rail
+  // correctly on first paint, same reasoning as the width cookie above.
+  const isCollapsed = cookieStore.get('reeve:sidebar-collapsed')?.value === '1'
+
   return (
     <div className="flex h-screen overflow-hidden bg-sidebar">
       {/* Desktop: always-visible resizable sidebar. Hidden on mobile. */}
       <div className="hidden md:contents">
-        <ResizableSidebar tours={tours ?? []} initialWidth={sidebarWidth} lastTourId={lastTourId} />
+        <ResizableSidebar
+          tours={tours ?? []}
+          initialWidth={sidebarWidth}
+          initialCollapsed={isCollapsed}
+          lastTourId={lastTourId}
+        />
       </div>
 
       {/* Mobile: sidebar rendered inside a drawer opened by the hamburger. */}

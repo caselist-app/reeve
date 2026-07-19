@@ -9,6 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
 interface Tour {
@@ -21,9 +22,10 @@ interface Tour {
 interface TourSelectorProps {
   tours: Tour[]
   activeTourId: string | null
+  collapsed?: boolean
 }
 
-export function TourSelector({ tours, activeTourId }: TourSelectorProps) {
+export function TourSelector({ tours, activeTourId, collapsed = false }: TourSelectorProps) {
   const router = useRouter()
   const pathname = usePathname()
   const activeTour = tours.find((t) => t.id === activeTourId)
@@ -49,34 +51,59 @@ export function TourSelector({ tours, activeTourId }: TourSelectorProps) {
     groups[seen.get(tour.artist_id)!].tours.push(tour)
   }
 
+  const initial = (activeTour?.artist_name ?? activeTour?.name ?? '?').trim().charAt(0).toUpperCase() || '?'
+
+  const expandedTrigger = (
+    <button
+      className={cn(
+        'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors',
+        'hover:bg-sidebar-accent/60',
+      )}
+    >
+      <div className="min-w-0 flex-1">
+        {activeTour ? (
+          <>
+            <p className="truncate text-xs font-semibold" style={{ color: 'var(--sidebar-foreground)' }}>
+              {activeTour.artist_name}
+            </p>
+            <p className="truncate text-xs" style={{ color: 'var(--sidebar-muted-foreground)' }}>
+              {activeTour.name}
+            </p>
+          </>
+        ) : (
+          <p className="truncate text-xs font-medium" style={{ color: 'var(--sidebar-muted-foreground)' }}>
+            Select tour
+          </p>
+        )}
+      </div>
+      <ChevronsUpDown className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--sidebar-muted-foreground)' }} />
+    </button>
+  )
+
+  const collapsedTrigger = (
+    <button
+      className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg text-xs font-semibold transition-colors hover:bg-sidebar-accent/60"
+      style={{ color: 'var(--sidebar-foreground)', backgroundColor: 'var(--sidebar-accent)' }}
+      aria-label={activeTour ? `${activeTour.artist_name}: ${activeTour.name}` : 'Select tour'}
+    >
+      {initial}
+    </button>
+  )
+
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          className={cn(
-            'flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left transition-colors',
-            'hover:bg-sidebar-accent/60',
-          )}
-        >
-          <div className="min-w-0 flex-1">
-            {activeTour ? (
-              <>
-                <p className="truncate text-xs font-semibold" style={{ color: 'var(--sidebar-foreground)' }}>
-                  {activeTour.artist_name}
-                </p>
-                <p className="truncate text-xs" style={{ color: 'var(--sidebar-muted-foreground)' }}>
-                  {activeTour.name}
-                </p>
-              </>
-            ) : (
-              <p className="truncate text-xs font-medium" style={{ color: 'var(--sidebar-muted-foreground)' }}>
-                Select tour
-              </p>
-            )}
-          </div>
-          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--sidebar-muted-foreground)' }} />
-        </button>
-      </DropdownMenuTrigger>
+      {collapsed ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>{collapsedTrigger}</DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="right">
+            {activeTour ? `${activeTour.artist_name}: ${activeTour.name}` : 'Select tour'}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        <DropdownMenuTrigger asChild>{expandedTrigger}</DropdownMenuTrigger>
+      )}
 
       <DropdownMenuContent align="start" className="w-56">
         {groups.map((group, i) => (

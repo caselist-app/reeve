@@ -1,34 +1,42 @@
-import { sendTemplate, sendInteractiveWhatsApp } from '@/lib/comms/whatsapp'
+import { sendWhatsApp, sendTemplate, sendInteractiveWhatsApp } from '@/lib/comms/whatsapp'
 import type { RenderedWhatsApp } from '../types'
 
-// Template ID for the approved Meta morning-message template.
-// Set in env once Meta approves. Until then, proactive sends are skipped.
-const MORNING_MESSAGE_TEMPLATE = process.env.WHATSAPP_TEMPLATE_MORNING_MESSAGE
-
 // Sends a rendered WhatsApp payload and returns the provider message id (wamid)
-// for receipt tracking. Text sends use the approved template so they deliver
-// outside the 24-hour Meta window. If the template is not yet configured,
-// the send is skipped and the caller's claim is released by the notify() caller.
+// for receipt tracking. All proactive sends must use approved Meta templates so
+// they deliver outside the 24-hour customer-service window.
+//
+// For kind: 'template', the renderer supplies its own template name via the
+// process.env lookup it does internally. If the env var is unset the renderer
+// passes an empty/undefined templateName and this function returns skipped: true
+// so notify() releases the claim for a later retry.
 export async function sendWhatsAppRendered(
   to: string,
   rendered: RenderedWhatsApp
 ): Promise<{ providerMessageId: string | null; skipped?: true }> {
-  if (rendered.kind === 'interactive') {
-    await sendInteractiveWhatsApp({ to, body: rendered.body, buttons: rendered.buttons })
-    return { providerMessageId: null }
-  }
+  switch (rendered.kind) {
+    case 'text': {
+      const { wamid } = await sendWhatsApp({ to, body: rendered.body })
+      return { providerMessageId: wamid }
+    }
 
-  // Proactive text sends (morning messages) must use an approved template.
-  if (!MORNING_MESSAGE_TEMPLATE) {
-    console.warn('[whatsapp-adapter] WHATSAPP_TEMPLATE_MORNING_MESSAGE not configured, skipping send')
-    return { providerMessageId: null, skipped: true }
-  }
+    case 'interactive': {
+      await sendInteractiveWhatsApp({ to, body: rendered.body, buttons: rendered.buttons })
+      return { providerMessageId: null }
+    }
 
-  const { wamid } = await sendTemplate({
-    to,
-    templateName: MORNING_MESSAGE_TEMPLATE,
-    languageCode: 'en',
-    bodyParams: [rendered.body],
-  })
-  return { providerMessageId: wamid }
+    case 'template': {
+      if (!rendered.templateName) {
+        console.warn('[whatsapp-adapter] template send skipped: templateName not configured')
+        return { providerMessageId: null, skipped: true }
+      }
+      const { wamid } = await sendTemplate({
+        to,
+        templateName: rendered.templateName,
+        languageCode: 'en',
+        bodyParams: rendered.bodyParams,
+        ...(rendered.headerDocument ? { headerDocument: rendered.headerDocument } : {}),
+      })
+      return { providerMessageId: wamid }
+    }
+  }
 }

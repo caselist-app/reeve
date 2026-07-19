@@ -1,17 +1,12 @@
 import { task } from '@trigger.dev/sdk/v3'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { sendTemplate } from '@/lib/comms/whatsapp'
 import {
   buildLegLabel,
   formatDeparture,
   formatTime,
-  renderBoardingPassMessage,
-  type BoardingPassData,
+  type BoardingPassNotificationData,
 } from '@/lib/comms/templates/boarding-pass'
-
-// Template ID for the approved Meta boarding-pass template.
-// Set in env once Meta approves. Until then, proactive sends are skipped.
-const BOARDING_PASS_TEMPLATE = process.env.WHATSAPP_TEMPLATE_BOARDING_PASS
+import { notify } from '@/lib/comms/notify'
 
 export type BoardingPassPayload = {
   tour_id: string
@@ -29,30 +24,13 @@ export const boardingPassJob = task({
   run: async (payload: BoardingPassPayload) => {
     const admin = createAdminClient()
 
-    // Claim the send slot atomically. A unique violation means already sent.
-    // On success, the row is in 'queued' state until the send completes.
-    // On send failure, the row is deleted so a job retry can re-attempt.
-    const claimKey = {
-      tour_id: payload.tour_id,
-      person_id: payload.person_id,
-      notification_type: 'boarding_pass' as const,
-      channel: 'whatsapp' as const,
-      dedup_dimension: payload.assignment_id,
-    }
-    const { error: claimError } = await admin
-      .from('notification_log')
-      .insert({ ...claimKey, status: 'queued' })
-
-    if (claimError?.code === '23505') return { skipped: true, reason: 'already_sent' }
-    if (claimError) throw new Error(`[boarding-pass] claim failed: ${claimError.message}`)
-
     const { data: assignment } = await admin
       .from('transport_assignments')
       .select(`
         seat,
         ticket_reference,
         boarding_pass_document_id,
-        people ( contacts ( name, whatsapp_number ) ),
+        people ( contacts ( name ) ),
         transport_segments (
           mode, origin, destination, depart_at, arrive_at,
           carrier_operator, vehicle_or_flight_no, tour_id
@@ -63,10 +41,8 @@ export const boardingPassJob = task({
 
     if (!assignment) return { skipped: true, reason: 'assignment_not_found' }
 
-    const personRow = assignment.people as {
-      contacts: { name: string; whatsapp_number: string | null } | null
-    } | null
-    const person = personRow?.contacts ?? null
+    const personName =
+      (assignment.people as { contacts: { name: string } | null } | null)?.contacts?.name ?? ''
 
     const seg = assignment.transport_segments as {
       mode: string
@@ -79,12 +55,6 @@ export const boardingPassJob = task({
       tour_id: string
     } | null
 
-    if (!person?.whatsapp_number) {
-      return { skipped: true, reason: 'no_contact_number' }
-    }
-
-    const to = person.whatsapp_number
-
     // Fetch the tour timezone for local time formatting.
     const { data: tour } = await admin
       .from('tours')
@@ -95,7 +65,7 @@ export const boardingPassJob = task({
     const timezone = tour?.timezone ?? 'UTC'
 
     // Look for a ground segment assigned to this person departing within 4 hours
-    // of the main leg, this is the car/van to the departure hub.
+    // of the main leg. This is the car/van to the departure hub.
     let groundPickup: string | null = null
     let groundOrigin: string | null = null
     if (seg?.depart_at) {
@@ -149,8 +119,25 @@ export const boardingPassJob = task({
       }
     }
 
-    const bpData: BoardingPassData = {
-      person_first_name: person.name.split(' ')[0],
+    // Generate a short-lived signed URL for the boarding pass PDF.
+    let signedUrl: string | null = null
+    if (assignment.boarding_pass_document_id) {
+      const { data: doc } = await admin
+        .from('documents')
+        .select('storage_path')
+        .eq('id', assignment.boarding_pass_document_id)
+        .single()
+
+      if (doc?.storage_path) {
+        const { data: signed } = await admin.storage
+          .from('documents')
+          .createSignedUrl(doc.storage_path, 60 * 60 * SEND_HOURS_BEFORE_DEPARTURE)
+        signedUrl = signed?.signedUrl ?? null
+      }
+    }
+
+    const data: BoardingPassNotificationData = {
+      person_first_name: personName.split(' ')[0],
       leg_label: buildLegLabel(seg?.mode ?? '', seg?.carrier_operator ?? null, seg?.vehicle_or_flight_no ?? null),
       origin: seg?.origin ?? null,
       destination: seg?.destination ?? null,
@@ -161,56 +148,19 @@ export const boardingPassJob = task({
       ground_origin: groundOrigin,
       load_in: loadIn,
       destination_venue: destinationVenue,
+      signedUrl,
     }
 
-    const body = renderBoardingPassMessage(bpData)
+    // notify() owns channel resolution, claim/send/release, and idempotency.
+    // Dedup dimension: assignment_id - one send ever per assignment per channel.
+    const result = await notify({
+      tourId: payload.tour_id,
+      personId: payload.person_id,
+      type: 'boarding_pass',
+      data,
+      dedupDimension: payload.assignment_id,
+    })
 
-    // Gate on the approved template. Proactive sends outside the 24-hour window
-    // silently fail on Meta's side unless sent as an approved template.
-    if (!BOARDING_PASS_TEMPLATE) {
-      await admin.from('notification_log').delete().match(claimKey)
-      console.warn('[boarding-pass] WHATSAPP_TEMPLATE_BOARDING_PASS not configured, skipping send')
-      return { skipped: true, reason: 'template_not_configured' }
-    }
-
-    // Generate a short-lived signed URL for the boarding pass PDF.
-    let documentLink: string | undefined
-    if (assignment.boarding_pass_document_id) {
-      const { data: doc } = await admin
-        .from('documents')
-        .select('storage_path')
-        .eq('id', assignment.boarding_pass_document_id)
-        .single()
-
-      if (doc?.storage_path) {
-        const { data: signedUrl } = await admin.storage
-          .from('documents')
-          .createSignedUrl(doc.storage_path, 60 * 60 * SEND_HOURS_BEFORE_DEPARTURE)
-        documentLink = signedUrl?.signedUrl
-      }
-    }
-
-    try {
-      const result = await sendTemplate({
-        to,
-        templateName: BOARDING_PASS_TEMPLATE,
-        languageCode: 'en',
-        bodyParams: [body],
-        ...(documentLink
-          ? { headerDocument: { link: documentLink, filename: 'boarding-pass.pdf' } }
-          : {}),
-      })
-
-      await admin
-        .from('notification_log')
-        .update({ status: 'sent', sent_at: new Date().toISOString(), provider_message_id: result.wamid })
-        .match(claimKey)
-
-      return { sent: true, to }
-    } catch (err) {
-      // Release the claim so a job retry can re-attempt.
-      await admin.from('notification_log').delete().match(claimKey)
-      throw err
-    }
+    return { outcomes: result.channels }
   },
 })

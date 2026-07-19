@@ -30,7 +30,7 @@ export function TourSettingsPanel({ tourId, isOpen, onClose }: TourSettingsPanel
     <div
       ref={panelRef}
       className={cn(
-        'absolute inset-0 bg-sidebar flex flex-col transition-transform duration-200 ease-out z-10',
+        'absolute inset-0 bg-sidebar flex flex-col transition-transform duration-200 ease-out z-10 overflow-hidden',
         isOpen ? 'translate-x-0' : '-translate-x-full',
       )}
     >

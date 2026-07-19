@@ -21,6 +21,14 @@ export const daySheetFormSchema = z.object({
   curfew: optionalTime,
   load_out: optionalTime,
   hotel_departure: optionalTime,
+  // Catering fields: type selector plus meal time windows.
+  catering_type: z.enum(['none', 'buyout', 'provided']).default('none'),
+  catering_breakfast_start: optionalTime,
+  catering_breakfast_end: optionalTime,
+  catering_lunch_start: optionalTime,
+  catering_lunch_end: optionalTime,
+  catering_dinner_start: optionalTime,
+  catering_dinner_end: optionalTime,
 })
 
 export type DaySheetForm = z.infer<typeof daySheetFormSchema>
