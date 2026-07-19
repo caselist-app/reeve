@@ -78,12 +78,14 @@ export async function POST(request: NextRequest) {
               ? { delivered_at: now }
               : { read_at: now }
 
-          // Update the broadcast_log row that matches this wamid.
+          // Update the notification_log row whose provider_message_id matches
+          // the wamid. The .is() guard prevents overwriting an already-set
+          // timestamp if Meta re-delivers the same status event.
           // Admin client bypasses RLS - this handler runs as the system, not a user.
           await admin
-            .from('broadcast_log')
+            .from('notification_log')
             .update(update)
-            .eq('wamid', wamid)
+            .eq('provider_message_id', wamid)
             .is(statusType === 'delivered' ? 'delivered_at' : 'read_at', null)
         }
       }
