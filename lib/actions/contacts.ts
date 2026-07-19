@@ -181,6 +181,47 @@ export async function updateContact(
   return { error: null, contactId }
 }
 
+// Generates a one-time Telegram deep link for this contact. The TM shares it
+// however suits; Reeve never sends it automatically. The webhook resolves
+// the token back to this contact when they tap Start.
+export async function createTelegramLinkToken(
+  contactId: string
+): Promise<{ error: string | null; deepLink?: string }> {
+  const user = await requireUser()
+
+  const supabase = await createClient()
+
+  // RLS also enforces this on the insert below, but checking first gives a
+  // clean error message instead of a silent RLS-denied no-op.
+  const { data: contact } = await supabase
+    .from('contacts')
+    .select('id')
+    .eq('id', contactId)
+    .eq('account_id', user.id)
+    .single()
+
+  if (!contact) {
+    return { error: 'Contact not found.' }
+  }
+
+  const botUsername = process.env.TELEGRAM_BOT_USERNAME
+  if (!botUsername) {
+    return { error: 'Telegram is not configured yet.' }
+  }
+
+  const { data: row, error } = await supabase
+    .from('telegram_link_tokens')
+    .insert({ contact_id: contactId, account_id: user.id })
+    .select('token')
+    .single()
+
+  if (error || !row) {
+    return { error: error?.message ?? 'Could not create a Telegram link.' }
+  }
+
+  return { error: null, deepLink: `https://t.me/${botUsername}?start=${row.token}` }
+}
+
 export async function deleteContact(contactId: string): Promise<ContactActionState> {
   await requireUser()
 

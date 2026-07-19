@@ -3,12 +3,13 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, Send } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Tables } from '@/lib/types/database'
 import { passportStatus, formatExpiry } from '@/lib/roster/passport'
 import { deleteContact } from '@/lib/actions/contacts'
 import { PageHeader } from '@/components/layout/page-header'
+import { ConnectTelegramDialog } from '@/components/roster/connect-telegram-dialog'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { DataField } from '@/components/ui/data-field'
@@ -47,6 +48,7 @@ export function ContactDetail({ contact, tours }: Props) {
   const router = useRouter()
   const { open } = useSidePanel()
   const [error, setError] = useState<string | null>(null)
+  const [telegramOpen, setTelegramOpen] = useState(false)
   const [pending, startTransition] = useTransition()
 
   const status = passportStatus(contact.passport_expiry)
@@ -89,6 +91,12 @@ export function ContactDetail({ contact, tours }: Props) {
             <Button size="sm" variant="outline" onClick={handleEdit}>
               Edit
             </Button>
+            {!contact.telegram_chat_id && (
+              <Button size="sm" variant="outline" onClick={() => setTelegramOpen(true)}>
+                <Send className="mr-1.5 h-3.5 w-3.5" />
+                Connect Telegram
+              </Button>
+            )}
             <AlertDialog>
               <AlertDialogTrigger asChild>
                 <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive">
@@ -119,6 +127,13 @@ export function ContactDetail({ contact, tours }: Props) {
         }
       />
 
+      <ConnectTelegramDialog
+        contactId={contact.id}
+        contactName={contact.name}
+        open={telegramOpen}
+        onOpenChange={setTelegramOpen}
+      />
+
       {error && <p className="mb-4 text-sm text-destructive">{error}</p>}
 
       {/* Passport expiry alert — only shown when flagged */}
@@ -140,6 +155,10 @@ export function ContactDetail({ contact, tours }: Props) {
         <DataField label="Phone" value={contact.contact_phone} mono />
         <DataField label="WhatsApp" value={contact.whatsapp_number} mono />
         <DataField label="Preferred channel" value={contact.preferred_channel} />
+        <DataField
+          label="Telegram"
+          value={contact.telegram_chat_id ? (contact.telegram_username ? `Connected as @${contact.telegram_username}` : 'Connected') : null}
+        />
         <DataField label="Home city" value={contact.home_city} />
         <DataField label="T-shirt" value={contact.tshirt_size} />
         <DataField label="Passport number" value={contact.passport_number} mono />
