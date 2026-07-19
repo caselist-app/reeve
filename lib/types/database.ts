@@ -262,19 +262,20 @@ export type Database = {
           default_role: string | null
           default_wage_currency: string | null
           dietary: string | null
+          email_enabled: boolean
           emergency_contact_name: string | null
           emergency_contact_phone: string | null
           home_city: string | null
           id: string
           name: string
           notes: string | null
+          operational_channel: string | null
           passport_country: string | null
           passport_expiry: string | null
           passport_first_names: string | null
           passport_number: string | null
           passport_surname: string | null
           photo_url: string | null
-          preferred_channel: string
           sms_number: string | null
           telegram_chat_id: number | null
           telegram_username: string | null
@@ -296,19 +297,20 @@ export type Database = {
           default_role?: string | null
           default_wage_currency?: string | null
           dietary?: string | null
+          email_enabled?: boolean
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
           home_city?: string | null
           id?: string
           name: string
           notes?: string | null
+          operational_channel?: string | null
           passport_country?: string | null
           passport_expiry?: string | null
           passport_first_names?: string | null
           passport_number?: string | null
           passport_surname?: string | null
           photo_url?: string | null
-          preferred_channel?: string
           sms_number?: string | null
           telegram_chat_id?: number | null
           telegram_username?: string | null
@@ -330,19 +332,20 @@ export type Database = {
           default_role?: string | null
           default_wage_currency?: string | null
           dietary?: string | null
+          email_enabled?: boolean
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
           home_city?: string | null
           id?: string
           name?: string
           notes?: string | null
+          operational_channel?: string | null
           passport_country?: string | null
           passport_expiry?: string | null
           passport_first_names?: string | null
           passport_number?: string | null
           passport_surname?: string | null
           photo_url?: string | null
-          preferred_channel?: string
           sms_number?: string | null
           telegram_chat_id?: number | null
           telegram_username?: string | null
