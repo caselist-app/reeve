@@ -1233,6 +1233,48 @@ export type Database = {
           },
         ]
       }
+      telegram_link_tokens: {
+        Row: {
+          account_id: string
+          contact_id: string
+          created_at: string
+          expires_at: string
+          token: string
+          used_at: string | null
+        }
+        Insert: {
+          account_id: string
+          contact_id: string
+          created_at?: string
+          expires_at?: string
+          token?: string
+          used_at?: string | null
+        }
+        Update: {
+          account_id?: string
+          contact_id?: string
+          created_at?: string
+          expires_at?: string
+          token?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "telegram_link_tokens_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telegram_link_tokens_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tour_dates: {
         Row: {
           created_at: string
