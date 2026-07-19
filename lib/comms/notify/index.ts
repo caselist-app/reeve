@@ -3,7 +3,7 @@ import { registry } from './registry'
 import { resolveChannels } from './channels'
 import { sendWhatsAppRendered } from './adapters/whatsapp'
 import { sendEmailRendered } from './adapters/email'
-import type { Channel, ImplementedType, NotificationDataMap, Recipient } from './types'
+import type { Channel, ImplementedType, NotificationDataMap, Recipient, RenderedWhatsApp, RenderedEmail } from './types'
 
 export type NotifyInput<T extends ImplementedType> = {
   tourId: string
@@ -83,6 +83,20 @@ export async function notify<T extends ImplementedType>(
     artistSlug = tour?.artists?.slug ?? null
   }
 
+  // One entry per channel. Adding a new channel (e.g. Telegram) means one new
+  // key here and a new adapter; no changes to the loop below.
+  // Non-null assertions on whatsapp_number and email are safe: resolveChannels
+  // already verified the address exists before including the channel.
+  const SENDERS: Record<
+    Channel,
+    (r: Recipient, rendered: unknown) => Promise<{ providerMessageId: string | null; skipped?: true }>
+  > = {
+    whatsapp: (r, rendered) =>
+      sendWhatsAppRendered(r.whatsappNumber!, rendered as RenderedWhatsApp),
+    email: (r, rendered) =>
+      sendEmailRendered(r.email!, rendered as RenderedEmail, artistSlug),
+  }
+
   const outcomes: ChannelOutcome[] = []
 
   for (const channel of channels) {
@@ -109,26 +123,20 @@ export async function notify<T extends ImplementedType>(
     }
 
     try {
-      let providerMessageId: string | null = null
+      // Non-null assertions safe: resolveChannels guarantees renderer presence
+      // before including a channel. The SENDERS map handles the actual dispatch.
+      const rendered = channel === 'whatsapp'
+        ? await def.whatsapp!(input.data)
+        : await def.email!(input.data)
 
-      if (channel === 'whatsapp') {
-        // Non-null assertion safe: resolveChannels guarantees def.whatsapp exists
-        // before 'whatsapp' appears in channels[].
-        const rendered = await def.whatsapp!(input.data)
-        const result = await sendWhatsAppRendered(recipient.whatsappNumber!, rendered)
-        if (result.skipped) {
-          // Template not yet configured: release the claim so this can be retried
-          // once the template env var is populated.
-          await admin.from('notification_log').delete().match(logKey)
-          outcomes.push({ channel, outcome: 'failed', error: 'template_not_configured' })
-          continue
-        }
-        providerMessageId = result.providerMessageId
-      } else {
-        // Non-null assertion safe: resolveChannels guarantees def.email exists
-        // before 'email' appears in channels[].
-        const rendered = await def.email!(input.data)
-        ;({ providerMessageId } = await sendEmailRendered(recipient.email!, rendered, artistSlug))
+      const result = await SENDERS[channel](recipient, rendered)
+
+      if (result.skipped) {
+        // Template not yet configured: release the claim so this can be retried
+        // once the template env var is populated.
+        await admin.from('notification_log').delete().match(logKey)
+        outcomes.push({ channel, outcome: 'failed', error: 'template_not_configured' })
+        continue
       }
 
       await admin
@@ -136,11 +144,11 @@ export async function notify<T extends ImplementedType>(
         .update({
           status: 'sent',
           sent_at: new Date().toISOString(),
-          provider_message_id: providerMessageId,
+          provider_message_id: result.providerMessageId,
         })
         .match(logKey)
 
-      outcomes.push({ channel, outcome: 'sent', providerMessageId })
+      outcomes.push({ channel, outcome: 'sent', providerMessageId: result.providerMessageId })
     } catch (err) {
       // Release the claim so job-level retry can re-attempt this channel.
       await admin.from('notification_log').delete().match(logKey)
