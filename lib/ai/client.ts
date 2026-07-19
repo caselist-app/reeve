@@ -1,8 +1,19 @@
 import Anthropic from '@anthropic-ai/sdk'
 
-export const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-})
+// Lazily constructed: the SDK throws immediately if the key is missing, and
+// a module-level instantiation runs at import time, including during Next.js's
+// build-time page data collection where no request (and no real env) is
+// present. Deferring to first use keeps a build green without a real key.
+let anthropicClient: Anthropic | null = null
+
+export function getAnthropicClient(): Anthropic {
+  if (!anthropicClient) {
+    anthropicClient = new Anthropic({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+    })
+  }
+  return anthropicClient
+}
 
 // Model selection follows the cost model from the brief:
 // Haiku for simple crew lookups (zero context synthesis needed).

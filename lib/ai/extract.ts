@@ -1,4 +1,4 @@
-import { anthropic, MODELS } from '@/lib/ai/client'
+import { getAnthropicClient, MODELS } from '@/lib/ai/client'
 import { EMAIL_EXTRACTION_SYSTEM_PROMPT } from '@/lib/ai/prompts'
 import { logAiCall } from '@/lib/ai/log'
 
@@ -44,7 +44,7 @@ export async function extractEmailForward(
 ): Promise<ExtractionProposal> {
   const start = Date.now()
 
-  const response = await anthropic.messages.create({
+  const response = await getAnthropicClient().messages.create({
     model: MODELS.sonnet,
     max_tokens: 2048,
     // System as an array enables prompt caching.

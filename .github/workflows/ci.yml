@@ -1,0 +1,67 @@
+name: CI
+
+# Runs on every push and every pull request. This is the enforcement layer
+# for the "pnpm build / pnpm lint / pnpm typecheck must pass before merge"
+# rule in CLAUDE.md. Before this workflow existed, that rule depended on
+# someone remembering to run it locally. Now it's a status check GitHub can
+# block merges on (set that up once in Settings > Branches > main > require
+# status checks to pass, and tick this workflow).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel any older run for the same branch/PR when a new commit lands,
+# so CI doesn't queue up stale runs on a fast-moving branch.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Typecheck, lint, build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Build
+        run: pnpm build
+        env:
+          # next build only needs these to complete a production build, it
+          # does not need working Supabase/Stripe/Resend/etc credentials:
+          # none of Reeve's routes call out to those services during the
+          # build step itself (no generateStaticParams that hits Supabase,
+          # no build-time data fetching). If a future page adds real
+          # build-time fetching against an external service, add the real
+          # secret via repo Settings > Secrets and reference it here instead
+          # of a placeholder.
+          NEXT_PUBLIC_APP_URL: https://reeve.example.com
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-anon-key' }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY || 'placeholder-service-role-key' }}
+          NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ${{ secrets.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || 'pk_test_placeholder' }}
+          NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: ${{ secrets.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || '' }}

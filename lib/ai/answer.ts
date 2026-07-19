@@ -1,4 +1,4 @@
-import { anthropic, MODELS } from '@/lib/ai/client'
+import { getAnthropicClient, MODELS } from '@/lib/ai/client'
 import { CREW_QA_SYSTEM_PROMPT } from '@/lib/ai/prompts'
 import { assembleTourContext } from '@/lib/ai/context'
 import { logAiCall } from '@/lib/ai/log'
@@ -59,7 +59,7 @@ export async function answerCrewQuestion(
 
   // Tool use enforces the output schema. Claude cannot return free-form text
   // outside the tool call structure, which prevents hallucinated formatting.
-  const response = await anthropic.messages.create({
+  const response = await getAnthropicClient().messages.create({
     model,
     max_tokens: 512,
     // System as an array enables prompt caching. The block is marked ephemeral
