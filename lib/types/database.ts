@@ -461,6 +461,13 @@ export type Database = {
       }
       day_sheets: {
         Row: {
+          catering_breakfast_end: string | null
+          catering_breakfast_start: string | null
+          catering_dinner_end: string | null
+          catering_dinner_start: string | null
+          catering_lunch_end: string | null
+          catering_lunch_start: string | null
+          catering_type: string
           changeover: string | null
           created_at: string
           curfew: string | null
@@ -482,6 +489,13 @@ export type Database = {
           vip: string | null
         }
         Insert: {
+          catering_breakfast_end?: string | null
+          catering_breakfast_start?: string | null
+          catering_dinner_end?: string | null
+          catering_dinner_start?: string | null
+          catering_lunch_end?: string | null
+          catering_lunch_start?: string | null
+          catering_type?: string
           changeover?: string | null
           created_at?: string
           curfew?: string | null
@@ -503,6 +517,13 @@ export type Database = {
           vip?: string | null
         }
         Update: {
+          catering_breakfast_end?: string | null
+          catering_breakfast_start?: string | null
+          catering_dinner_end?: string | null
+          catering_dinner_start?: string | null
+          catering_lunch_end?: string | null
+          catering_lunch_start?: string | null
+          catering_type?: string
           changeover?: string | null
           created_at?: string
           curfew?: string | null
