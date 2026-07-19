@@ -53,9 +53,13 @@ export interface RenderedEmail {
 
 // Simpler than RenderedWhatsApp: no template-kind distinction, since Telegram
 // has no approval process and no positional-variable substitution to manage.
+// documentUrl is the same signed Supabase Storage URL the WhatsApp renderer
+// attaches as headerDocument; when present the adapter sends a document with
+// body as its caption instead of a plain message.
 export interface RenderedTelegram {
   body: string
   buttons?: TelegramButton[]
+  documentUrl?: string
 }
 
 export interface NotificationDef<D> {
