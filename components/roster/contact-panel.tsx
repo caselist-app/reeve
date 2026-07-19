@@ -212,7 +212,8 @@ export function ContactPanel({ contactId, tourContext, onSuccess }: Props) {
             const fields = [
               { label: 'Email', value: contact.contact_email, mono: false, copyable: true },
               { label: 'Phone', value: contact.contact_phone, mono: true, copyable: true },
-              { label: 'Preferred channel', value: contact.preferred_channel ? contact.preferred_channel.charAt(0).toUpperCase() + contact.preferred_channel.slice(1) : null, mono: false, copyable: false },
+              { label: 'Operational channel', value: contact.operational_channel ? contact.operational_channel.charAt(0).toUpperCase() + contact.operational_channel.slice(1) : null, mono: false, copyable: false },
+              { label: 'Formal emails', value: contact.email_enabled ? 'Enabled' : null, mono: false, copyable: false },
               { label: 'Telegram', value: contact.telegram_chat_id ? (contact.telegram_username ? `Connected as @${contact.telegram_username}` : 'Connected') : null, mono: false, copyable: false },
               { label: 'Home city', value: contact.home_city, mono: false, copyable: false },
               { label: 'T-shirt', value: contact.tshirt_size, mono: false, copyable: false },

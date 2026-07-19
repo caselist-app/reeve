@@ -154,7 +154,11 @@ export function ContactDetail({ contact, tours }: Props) {
         <DataField label="Email" value={contact.contact_email} />
         <DataField label="Phone" value={contact.contact_phone} mono />
         <DataField label="WhatsApp" value={contact.whatsapp_number} mono />
-        <DataField label="Preferred channel" value={contact.preferred_channel} />
+        <DataField
+          label="Operational channel"
+          value={contact.operational_channel ? contact.operational_channel.charAt(0).toUpperCase() + contact.operational_channel.slice(1) : null}
+        />
+        <DataField label="Formal emails" value={contact.email_enabled ? 'Enabled' : 'Disabled'} />
         <DataField
           label="Telegram"
           value={contact.telegram_chat_id ? (contact.telegram_username ? `Connected as @${contact.telegram_username}` : 'Connected') : null}
