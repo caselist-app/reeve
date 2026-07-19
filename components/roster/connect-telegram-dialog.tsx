@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Check, Copy } from 'lucide-react'
 import { createTelegramLinkToken } from '@/lib/actions/contacts'
 import {
@@ -31,28 +31,34 @@ export function ConnectTelegramDialog({ contactId, contactName, open, onOpenChan
   const [pending, setPending] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  function handleOpenChange(next: boolean) {
-    onOpenChange(next)
-    if (next) {
-      void generate()
-    } else {
+  // The parent opens this dialog by flipping `open` directly (a menu item
+  // sets state, it doesn't go through Radix), and Radix only calls
+  // onOpenChange for its own close-triggered transitions (Escape, overlay
+  // click). So generation can't live in onOpenChange, it has to watch the
+  // `open` prop itself to fire on every open regardless of who changed it.
+  useEffect(() => {
+    if (!open) {
       setDeepLink(null)
       setError(null)
       setCopied(false)
+      return
     }
-  }
-
-  async function generate() {
+    let cancelled = false
     setPending(true)
     setError(null)
-    const result = await createTelegramLinkToken(contactId)
-    if (result.error) {
-      setError(result.error)
-    } else if (result.deepLink) {
-      setDeepLink(result.deepLink)
+    void createTelegramLinkToken(contactId).then((result) => {
+      if (cancelled) return
+      if (result.error) {
+        setError(result.error)
+      } else if (result.deepLink) {
+        setDeepLink(result.deepLink)
+      }
+      setPending(false)
+    })
+    return () => {
+      cancelled = true
     }
-    setPending(false)
-  }
+  }, [open, contactId])
 
   async function handleCopy() {
     if (!deepLink) return
@@ -62,7 +68,7 @@ export function ConnectTelegramDialog({ contactId, contactName, open, onOpenChan
   }
 
   return (
-    <AlertDialog open={open} onOpenChange={handleOpenChange}>
+    <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Connect {contactName} on Telegram</AlertDialogTitle>
@@ -76,8 +82,8 @@ export function ConnectTelegramDialog({ contactId, contactName, open, onOpenChan
         {error && <p className="text-sm text-destructive">{error}</p>}
 
         {deepLink && (
-          <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2">
-            <code className="flex-1 truncate text-sm">{deepLink}</code>
+          <div className="flex items-center gap-2 overflow-hidden rounded-md border bg-muted/40 px-3 py-2">
+            <code className="min-w-0 flex-1 truncate text-sm">{deepLink}</code>
             <Button
               type="button"
               size="icon"
