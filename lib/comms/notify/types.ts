@@ -1,6 +1,7 @@
 import type { QuickReplyButton } from '@/lib/comms/whatsapp'
 import type { EmailAttachment } from '@/lib/comms/email'
 import type { MorningMessageData } from '@/lib/comms/templates/morning-message'
+import type { BoardingPassNotificationData } from '@/lib/comms/templates/boarding-pass'
 
 // A notification can leave on one or both of these. SMS was retired; new
 // channels (push, etc.) slot in by extending this union and the adapters.
@@ -22,6 +23,7 @@ export type NotificationType =
 // compiler to demand both a WhatsApp and an email renderer for it.
 export interface NotificationDataMap {
   morning_message: MorningMessageData
+  boarding_pass: BoardingPassNotificationData
 }
 
 export type ImplementedType = keyof NotificationDataMap

@@ -1,5 +1,6 @@
 import { renderMorningMessage } from '@/lib/comms/templates/morning-message'
 import { renderMorningMessageEmail } from '@/lib/comms/templates/morning-message-email'
+import { renderBoardingPassMessage, renderBoardingPassEmail } from '@/lib/comms/templates/boarding-pass'
 import type { ImplementedType, NotificationDataMap, NotificationDef } from './types'
 
 // One entry per implemented notification type. Typed as a full record over
@@ -24,5 +25,38 @@ export const registry: Registry = {
       subject: `${d.venue_name} - ${d.show_date}`,
       html: renderMorningMessageEmail(d),
     }),
+  },
+
+  boarding_pass: {
+    timeCritical: false,
+    whatsapp: (d) => ({
+      kind: 'template',
+      templateName: process.env.WHATSAPP_TEMPLATE_BOARDING_PASS ?? '',
+      bodyParams: [renderBoardingPassMessage(d)],
+      ...(d.signedUrl ? { headerDocument: { link: d.signedUrl, filename: 'boarding-pass.pdf' } } : {}),
+    }),
+    email: async (d) => {
+      const attachments: Array<{ filename: string; content: Buffer | string }> = []
+
+      // Fetch the PDF from the signed URL so it can be attached directly.
+      // The signed URL is pre-computed by the job with enough TTL to cover send time.
+      if (d.signedUrl) {
+        try {
+          const res = await fetch(d.signedUrl)
+          if (res.ok) {
+            const buf = Buffer.from(await res.arrayBuffer())
+            attachments.push({ filename: 'boarding-pass.pdf', content: buf.toString('base64') })
+          }
+        } catch {
+          // Non-fatal: the email sends without the attachment rather than failing.
+        }
+      }
+
+      return {
+        subject: `Boarding pass: ${d.leg_label}`,
+        html: renderBoardingPassEmail(d),
+        attachments,
+      }
+    },
   },
 }
