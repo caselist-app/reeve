@@ -1,6 +1,7 @@
 import { renderMorningMessage } from '@/lib/comms/templates/morning-message'
 import { renderMorningMessageEmail } from '@/lib/comms/templates/morning-message-email'
 import { renderBoardingPassMessage, renderBoardingPassEmail } from '@/lib/comms/templates/boarding-pass'
+import { buildChangeMessage } from '@/lib/comms/templates/change-alert'
 import type { ImplementedType, NotificationDataMap, NotificationDef } from './types'
 
 // One entry per implemented notification type. Typed as a full record over
@@ -24,6 +25,19 @@ export const registry: Registry = {
     email: (d) => ({
       subject: `${d.venue_name} - ${d.show_date}`,
       html: renderMorningMessageEmail(d),
+    }),
+  },
+
+  change_alert: {
+    timeCritical: false,
+    whatsapp: (d) => ({
+      kind: 'template',
+      templateName: process.env.WHATSAPP_TEMPLATE_BROADCAST ?? '',
+      bodyParams: [d.message],
+    }),
+    email: (d) => ({
+      subject: 'Change update',
+      html: `<p>${d.message.replace(/\n/g, '<br>')}</p>`,
     }),
   },
 

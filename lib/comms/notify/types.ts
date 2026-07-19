@@ -24,6 +24,7 @@ export type NotificationType =
 export interface NotificationDataMap {
   morning_message: MorningMessageData
   boarding_pass: BoardingPassNotificationData
+  change_alert: { message: string }
 }
 
 export type ImplementedType = keyof NotificationDataMap
