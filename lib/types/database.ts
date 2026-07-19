@@ -276,6 +276,8 @@ export type Database = {
           photo_url: string | null
           preferred_channel: string
           sms_number: string | null
+          telegram_chat_id: number | null
+          telegram_username: string | null
           tshirt_size: string | null
           updated_at: string
           whatsapp_number: string | null
@@ -308,6 +310,8 @@ export type Database = {
           photo_url?: string | null
           preferred_channel?: string
           sms_number?: string | null
+          telegram_chat_id?: number | null
+          telegram_username?: string | null
           tshirt_size?: string | null
           updated_at?: string
           whatsapp_number?: string | null
@@ -340,6 +344,8 @@ export type Database = {
           photo_url?: string | null
           preferred_channel?: string
           sms_number?: string | null
+          telegram_chat_id?: number | null
+          telegram_username?: string | null
           tshirt_size?: string | null
           updated_at?: string
           whatsapp_number?: string | null
