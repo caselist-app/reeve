@@ -3,7 +3,8 @@ import { registry } from './registry'
 import { resolveChannels } from './channels'
 import { sendWhatsAppRendered } from './adapters/whatsapp'
 import { sendEmailRendered } from './adapters/email'
-import type { Channel, ImplementedType, NotificationDataMap, Recipient, RenderedWhatsApp, RenderedEmail } from './types'
+import { sendTelegramRendered } from './adapters/telegram'
+import type { Channel, ImplementedType, NotificationDataMap, Recipient, RenderedWhatsApp, RenderedEmail, RenderedTelegram } from './types'
 
 export type NotifyInput<T extends ImplementedType> = {
   tourId: string
@@ -42,18 +43,20 @@ export async function notify<T extends ImplementedType>(
   const admin = createAdminClient()
   const def = registry[input.type]
 
-  // Identity and channel preference live on the contact (Brief 20).
+  // Identity and channel preference live on the contact (Brief 20, Brief 24).
   const { data: personRow } = await admin
     .from('people')
-    .select('contacts(name, whatsapp_number, contact_email, preferred_channel)')
+    .select('contacts(name, whatsapp_number, telegram_chat_id, contact_email, operational_channel, email_enabled)')
     .eq('id', input.personId)
     .single()
 
   const contact = personRow?.contacts as {
     name: string
     whatsapp_number: string | null
+    telegram_chat_id: number | null
     contact_email: string | null
-    preferred_channel: 'whatsapp' | 'email' | 'both'
+    operational_channel: 'whatsapp' | 'telegram' | null
+    email_enabled: boolean
   } | null
 
   if (!contact) return { personId: input.personId, channels: [] }
@@ -62,8 +65,10 @@ export async function notify<T extends ImplementedType>(
     personId: input.personId,
     name: contact.name,
     whatsappNumber: contact.whatsapp_number,
+    telegramChatId: contact.telegram_chat_id,
     email: contact.contact_email,
-    preferredChannel: contact.preferred_channel ?? 'whatsapp',
+    operationalChannel: contact.operational_channel,
+    emailEnabled: contact.email_enabled,
   }
 
   // resolveChannels now filters by renderer availability in addition to address,
@@ -83,10 +88,11 @@ export async function notify<T extends ImplementedType>(
     artistSlug = tour?.artists?.slug ?? null
   }
 
-  // One entry per channel. Adding a new channel (e.g. Telegram) means one new
-  // key here and a new adapter; no changes to the loop below.
-  // Non-null assertions on whatsapp_number and email are safe: resolveChannels
-  // already verified the address exists before including the channel.
+  // One entry per channel. Adding a new channel means one new key here and a
+  // new adapter; no changes to the loop below.
+  // Non-null assertions on whatsapp_number, telegram_chat_id, and email are
+  // safe: resolveChannels already verified the address exists before
+  // including the channel.
   const SENDERS: Record<
     Channel,
     (r: Recipient, rendered: unknown) => Promise<{ providerMessageId: string | null; skipped?: true }>
@@ -95,6 +101,8 @@ export async function notify<T extends ImplementedType>(
       sendWhatsAppRendered(r.whatsappNumber!, rendered as RenderedWhatsApp),
     email: (r, rendered) =>
       sendEmailRendered(r.email!, rendered as RenderedEmail, artistSlug),
+    telegram: (r, rendered) =>
+      sendTelegramRendered(r.telegramChatId!, rendered as RenderedTelegram),
   }
 
   const outcomes: ChannelOutcome[] = []
@@ -127,7 +135,9 @@ export async function notify<T extends ImplementedType>(
       // before including a channel. The SENDERS map handles the actual dispatch.
       const rendered = channel === 'whatsapp'
         ? await def.whatsapp!(input.data)
-        : await def.email!(input.data)
+        : channel === 'telegram'
+          ? await def.telegram!(input.data)
+          : await def.email!(input.data)
 
       const result = await SENDERS[channel](recipient, rendered)
 
