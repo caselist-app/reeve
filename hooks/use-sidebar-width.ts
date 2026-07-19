@@ -15,7 +15,7 @@ function persist(width: number) {
   document.cookie = `${COOKIE_KEY}=${width}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax`
 }
 
-export function useSidebarWidth(initialWidth: number) {
+export function useSidebarWidth(initialWidth: number, collapsed: boolean = false) {
   const [width, setWidthState] = useState(initialWidth)
   const [isDragging, setIsDragging] = useState(false)
   const startX = useRef(0)
@@ -29,6 +29,10 @@ export function useSidebarWidth(initialWidth: number) {
 
   const onDragStart = useCallback(
     (e: React.MouseEvent) => {
+      // A 64px collapsed rail isn't draggable; only the collapse toggle is
+      // interactive on that edge. The last expanded width stays untouched
+      // in the cookie so expanding again restores it exactly.
+      if (collapsed) return
       e.preventDefault()
       startX.current = e.clientX
       startWidth.current = width
@@ -52,7 +56,7 @@ export function useSidebarWidth(initialWidth: number) {
       document.addEventListener('mousemove', onMouseMove)
       document.addEventListener('mouseup', onMouseUp)
     },
-    [width, setWidth],
+    [width, setWidth, collapsed],
   )
 
   return { width, isDragging, onDragStart }
