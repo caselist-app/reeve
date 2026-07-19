@@ -2,6 +2,7 @@ import type { QuickReplyButton } from '@/lib/comms/whatsapp'
 import type { EmailAttachment } from '@/lib/comms/email'
 import type { MorningMessageData } from '@/lib/comms/templates/morning-message'
 import type { BoardingPassNotificationData } from '@/lib/comms/templates/boarding-pass'
+import type { OpenerData, ShowInfoData, CateringData, WrapData } from '@/lib/comms/templates/day-blocks'
 
 // A notification can leave on one or both of these. SMS was retired; new
 // channels (push, etc.) slot in by extending this union and the adapters.
@@ -17,6 +18,10 @@ export type NotificationType =
   | 'hotel_details'
   | 'bus_call'
   | 'lobby_call'
+  | 'opener'
+  | 'show_information'
+  | 'catering'
+  | 'wrap'
 
 // The data each notification type renders from. Entries are added as each type
 // is built; the registry is keyed off this, so adding a type here forces the
@@ -25,6 +30,10 @@ export interface NotificationDataMap {
   morning_message: MorningMessageData
   boarding_pass: BoardingPassNotificationData
   change_alert: { message: string }
+  opener: OpenerData
+  show_information: ShowInfoData
+  catering: CateringData
+  wrap: WrapData
 }
 
 export type ImplementedType = keyof NotificationDataMap
