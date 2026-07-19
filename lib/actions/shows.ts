@@ -227,12 +227,18 @@ export async function updateDaySheet(
     'curfew',
     'load_out',
     'hotel_departure',
+    'catering_breakfast_start',
+    'catering_breakfast_end',
+    'catering_lunch_start',
+    'catering_lunch_end',
+    'catering_dinner_start',
+    'catering_dinner_end',
   ] as const
 
   const converted: Record<string, string | null> = {}
 
   for (const field of TIME_FIELDS) {
-    const val = parsed.data[field]
+    const val = parsed.data[field as keyof typeof parsed.data] as string | null | undefined
     if (!val) {
       converted[field] = null
     } else if (timezone) {
@@ -242,6 +248,9 @@ export async function updateDaySheet(
       converted[field] = `${show.date}T${val}:00.000Z`
     }
   }
+
+  // catering_type is a text column, not a timestamptz: stored as-is.
+  converted.catering_type = parsed.data.catering_type
 
   // Cast required: the Supabase client rejects index-signature types.
   // All keys in converted are valid day_sheets columns.
