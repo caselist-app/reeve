@@ -262,20 +262,23 @@ export type Database = {
           default_role: string | null
           default_wage_currency: string | null
           dietary: string | null
+          email_enabled: boolean
           emergency_contact_name: string | null
           emergency_contact_phone: string | null
           home_city: string | null
           id: string
           name: string
           notes: string | null
+          operational_channel: string | null
           passport_country: string | null
           passport_expiry: string | null
           passport_first_names: string | null
           passport_number: string | null
           passport_surname: string | null
           photo_url: string | null
-          preferred_channel: string
           sms_number: string | null
+          telegram_chat_id: number | null
+          telegram_username: string | null
           tshirt_size: string | null
           updated_at: string
           whatsapp_number: string | null
@@ -294,20 +297,23 @@ export type Database = {
           default_role?: string | null
           default_wage_currency?: string | null
           dietary?: string | null
+          email_enabled?: boolean
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
           home_city?: string | null
           id?: string
           name: string
           notes?: string | null
+          operational_channel?: string | null
           passport_country?: string | null
           passport_expiry?: string | null
           passport_first_names?: string | null
           passport_number?: string | null
           passport_surname?: string | null
           photo_url?: string | null
-          preferred_channel?: string
           sms_number?: string | null
+          telegram_chat_id?: number | null
+          telegram_username?: string | null
           tshirt_size?: string | null
           updated_at?: string
           whatsapp_number?: string | null
@@ -326,20 +332,23 @@ export type Database = {
           default_role?: string | null
           default_wage_currency?: string | null
           dietary?: string | null
+          email_enabled?: boolean
           emergency_contact_name?: string | null
           emergency_contact_phone?: string | null
           home_city?: string | null
           id?: string
           name?: string
           notes?: string | null
+          operational_channel?: string | null
           passport_country?: string | null
           passport_expiry?: string | null
           passport_first_names?: string | null
           passport_number?: string | null
           passport_surname?: string | null
           photo_url?: string | null
-          preferred_channel?: string
           sms_number?: string | null
+          telegram_chat_id?: number | null
+          telegram_username?: string | null
           tshirt_size?: string | null
           updated_at?: string
           whatsapp_number?: string | null
@@ -1223,6 +1232,48 @@ export type Database = {
             columns: ["tour_id"]
             isOneToOne: false
             referencedRelation: "tours"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      telegram_link_tokens: {
+        Row: {
+          account_id: string
+          contact_id: string
+          created_at: string
+          expires_at: string
+          token: string
+          used_at: string | null
+        }
+        Insert: {
+          account_id: string
+          contact_id: string
+          created_at?: string
+          expires_at?: string
+          token?: string
+          used_at?: string | null
+        }
+        Update: {
+          account_id?: string
+          contact_id?: string
+          created_at?: string
+          expires_at?: string
+          token?: string
+          used_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "telegram_link_tokens_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "telegram_link_tokens_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
             referencedColumns: ["id"]
           },
         ]

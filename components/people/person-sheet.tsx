@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -22,7 +23,9 @@ import {
 } from '@/components/ui/select'
 
 type PersonType = 'artist' | 'crew' | 'management' | 'support'
-type Channel = 'whatsapp' | 'email' | 'both' | ''
+// Empty string represents no operational channel yet, a real state for a
+// brand-new contact with no WhatsApp number and no Telegram link.
+type OperationalChannel = 'whatsapp' | 'telegram' | ''
 
 const CURRENCIES = ['GBP', 'USD', 'EUR', 'AUD', 'CAD', 'CHF', 'DKK', 'NOK', 'SEK', 'JPY', 'NZD']
 
@@ -50,9 +53,11 @@ export function PersonSheet({
   const [personType, setPersonType] = useState<PersonType>(
     (person?.person_type as PersonType) ?? defaultType
   )
-  const [preferredChannel, setPreferredChannel] = useState<Channel>(
-    (person?.contacts.preferred_channel as Channel) ?? ''
+  const [operationalChannel, setOperationalChannel] = useState<OperationalChannel>(
+    (person?.contacts.operational_channel as OperationalChannel) ?? ''
   )
+  const [emailEnabled, setEmailEnabled] = useState(person?.contacts.email_enabled ?? false)
+  const canUseTelegram = !!person?.contacts.telegram_chat_id
   const [perDiemCurrency, setPerDiemCurrency] = useState(crewDetail?.per_diem_currency ?? 'GBP')
   const [wageCurrency, setWageCurrency] = useState(crewDetail?.wage_currency ?? 'GBP')
 
@@ -72,7 +77,8 @@ export function PersonSheet({
       role: str('role'),
       contact_email: str('contact_email'),
       contact_phone: str('contact_phone'),
-      preferred_channel: (preferredChannel || undefined) as 'whatsapp' | 'email' | 'both' | undefined,
+      operational_channel: (operationalChannel || null) as 'whatsapp' | 'telegram' | null,
+      email_enabled: emailEnabled,
       whatsapp_number: str('whatsapp_number'),
       sms_number: str('sms_number'),
       emergency_contact_name: str('emergency_contact_name'),
@@ -190,18 +196,19 @@ export function PersonSheet({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-2">
-            <Label>Preferred channel</Label>
+            <Label>Operational channel</Label>
             <Select
-              value={preferredChannel}
-              onValueChange={(v) => setPreferredChannel(v as Channel)}
+              value={operationalChannel}
+              onValueChange={(v) => setOperationalChannel(v as OperationalChannel)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="None" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                <SelectItem value="email">Email</SelectItem>
-                <SelectItem value="both">Both</SelectItem>
+                <SelectItem value="telegram" disabled={!canUseTelegram}>
+                  Telegram{!canUseTelegram ? ' (connect first)' : ''}
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -218,6 +225,20 @@ export function PersonSheet({
               placeholder="+447700900123"
             />
           </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 rounded-lg border px-4 py-3">
+          <div className="space-y-0.5">
+            <Label htmlFor={`${formId}-email_enabled`}>Also send formal emails</Label>
+            <p className="text-xs text-muted-foreground">
+              Riders and advancing documents, independent of the operational channel above.
+            </p>
+          </div>
+          <Switch
+            id={`${formId}-email_enabled`}
+            checked={emailEnabled}
+            onCheckedChange={setEmailEnabled}
+          />
         </div>
 
         <div className="space-y-2">

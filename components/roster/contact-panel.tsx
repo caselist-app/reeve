@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useTransition, useEffect } from 'react'
-import { MoreHorizontal, Pencil, Trash2 } from 'lucide-react'
+import { MoreHorizontal, Pencil, Trash2, Send } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Tables } from '@/lib/types/database'
 import { passportStatus, formatExpiry } from '@/lib/roster/passport'
@@ -10,6 +10,7 @@ import type { TourMembership } from '@/lib/actions/contacts'
 import type { ContactTourContext } from '@/stores/side-panel-store'
 import { useSidePanel } from '@/stores/side-panel-store'
 import { PanelShell } from '@/components/layout/panel-shell'
+import { ConnectTelegramDialog } from '@/components/roster/connect-telegram-dialog'
 import { Button } from '@/components/ui/button'
 import { ListRow } from '@/components/ui/list-row'
 import { Separator } from '@/components/ui/separator'
@@ -49,6 +50,7 @@ export function ContactPanel({ contactId, tourContext, onSuccess }: Props) {
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [telegramOpen, setTelegramOpen] = useState(false)
   const [pending, startTransition] = useTransition()
 
   useEffect(() => {
@@ -106,6 +108,12 @@ export function ContactPanel({ contactId, tourContext, onSuccess }: Props) {
             <Pencil className="mr-2 h-4 w-4" />
             Edit
           </DropdownMenuItem>
+          {!contact.telegram_chat_id && (
+            <DropdownMenuItem onSelect={() => setTelegramOpen(true)}>
+              <Send className="mr-2 h-4 w-4" />
+              Connect Telegram
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
             className="text-destructive focus:text-destructive"
             onSelect={() => setDeleteOpen(true)}
@@ -115,6 +123,13 @@ export function ContactPanel({ contactId, tourContext, onSuccess }: Props) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+
+      <ConnectTelegramDialog
+        contactId={contact.id}
+        contactName={contact.name}
+        open={telegramOpen}
+        onOpenChange={setTelegramOpen}
+      />
 
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
@@ -197,7 +212,9 @@ export function ContactPanel({ contactId, tourContext, onSuccess }: Props) {
             const fields = [
               { label: 'Email', value: contact.contact_email, mono: false, copyable: true },
               { label: 'Phone', value: contact.contact_phone, mono: true, copyable: true },
-              { label: 'Preferred channel', value: contact.preferred_channel ? contact.preferred_channel.charAt(0).toUpperCase() + contact.preferred_channel.slice(1) : null, mono: false, copyable: false },
+              { label: 'Operational channel', value: contact.operational_channel ? contact.operational_channel.charAt(0).toUpperCase() + contact.operational_channel.slice(1) : null, mono: false, copyable: false },
+              { label: 'Formal emails', value: contact.email_enabled ? 'Enabled' : null, mono: false, copyable: false },
+              { label: 'Telegram', value: contact.telegram_chat_id ? (contact.telegram_username ? `Connected as @${contact.telegram_username}` : 'Connected') : null, mono: false, copyable: false },
               { label: 'Home city', value: contact.home_city, mono: false, copyable: false },
               { label: 'T-shirt', value: contact.tshirt_size, mono: false, copyable: false },
               { label: 'Date of birth', value: contact.date_of_birth ? new Date(contact.date_of_birth).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : null, mono: false, copyable: false },

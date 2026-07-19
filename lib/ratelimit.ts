@@ -10,6 +10,15 @@ export const whatsappAiRatelimit = new Ratelimit({
   prefix: 'rl:wa_ai',
 })
 
+// Per-chat sliding window: 20 free-text Telegram messages per hour.
+// Same limit and reasoning as whatsappAiRatelimit, separate prefix so the two
+// channels don't share a bucket for a contact linked on both.
+export const telegramAiRatelimit = new Ratelimit({
+  redis,
+  limiter: Ratelimit.slidingWindow(20, '1 h'),
+  prefix: 'rl:tg_ai',
+})
+
 // Per-email sliding window: 5 OTP requests per 10 minutes.
 // Prevents enumeration and abuse of the magic-link endpoint.
 export const otpRatelimit = new Ratelimit({

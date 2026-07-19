@@ -13,7 +13,7 @@ export default async function RosterPage() {
     // Full record loads when the contact sheet opens.
     supabase
       .from('contacts')
-      .select('id, account_id, name, photo_url, contact_email, whatsapp_number, sms_number, contact_phone, preferred_channel, home_city, tshirt_size, dietary, allergies, date_of_birth, passport_expiry, passport_country, passport_first_names, passport_surname, default_role, default_person_type, notes, created_at, updated_at')
+      .select('id, account_id, name, photo_url, contact_email, whatsapp_number, sms_number, contact_phone, operational_channel, email_enabled, telegram_chat_id, telegram_username, home_city, tshirt_size, dietary, allergies, date_of_birth, passport_expiry, passport_country, passport_first_names, passport_surname, default_role, default_person_type, notes, created_at, updated_at')
       .eq('account_id', user.id)
       .order('name'),
     // people RLS scopes to the caller's tours, so this is every membership the

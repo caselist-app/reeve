@@ -165,3 +165,53 @@ export function wrapBodyParams(d: WrapData): string[] {
       return [curfew]
   }
 }
+
+// --- Telegram renderers ---
+// Genuinely multi-line plain text, no newline-in-variable restriction and no
+// template approval to work around. Same wording as the approved WhatsApp
+// template bodies above, built directly rather than through positional
+// substitution. Reuses the same selection data; only the formatting differs.
+
+export function openerTelegram(d: OpenerData): string {
+  return `Good morning, ${d.person_first_name}.\n\n${d.artist_name} @ ${d.venue_name}, ${d.show_date}.`
+}
+
+export function showInfoTelegram(d: ShowInfoData): string {
+  const t = (iso: string | null) => formatBlockTime(iso, d.timezone)
+  switch (d.variant) {
+    case 'full':
+      return `Load in: ${t(d.load_in)}\nSoundcheck: ${t(d.soundcheck)}\nChangeover: ${t(d.changeover)}\nShow: ${t(d.headliner_on)}.`
+    case 'no_soundcheck':
+      return `Load in: ${t(d.load_in)}\nChangeover: ${t(d.changeover)}\nShow: ${t(d.headliner_on)}.`
+    case 'no_changeover':
+      return `Load in: ${t(d.load_in)}\nSoundcheck: ${t(d.soundcheck)}\nShow: ${t(d.headliner_on)}.`
+    case 'minimal':
+      return `Load in: ${t(d.load_in)}\nShow: ${t(d.headliner_on)}.`
+  }
+}
+
+export function cateringTelegram(d: CateringData): string {
+  const r = (start: string | null, end: string | null) => timeRange(start, end, d.timezone)
+  switch (d.variant) {
+    case 'full':
+      return `Breakfast: ${r(d.catering_breakfast_start, d.catering_breakfast_end)}\nLunch: ${r(d.catering_lunch_start, d.catering_lunch_end)}\nDinner: ${r(d.catering_dinner_start, d.catering_dinner_end)}.`
+    case 'no_breakfast':
+      return `Lunch: ${r(d.catering_lunch_start, d.catering_lunch_end)}\nDinner: ${r(d.catering_dinner_start, d.catering_dinner_end)}.`
+    case 'buyout':
+      return "Today's show is a buyout. Sort your own food, keep receipts if needed."
+  }
+}
+
+export function wrapTelegram(d: WrapData): string {
+  const tz = d.timezone
+  const curfew = formatBlockTime(d.curfew, tz)
+  switch (d.variant) {
+    case 'travel': {
+      const leg = d.onwardLeg!
+      const mode = leg.mode.charAt(0).toUpperCase() + leg.mode.slice(1)
+      return `Curfew: ${curfew}\n\nOnward: ${mode} to ${leg.destination ?? 'TBC'}, departing ${formatBlockTime(leg.depart_at, tz)}.`
+    }
+    case 'static':
+      return `Curfew: ${curfew}.`
+  }
+}

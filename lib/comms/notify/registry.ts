@@ -2,10 +2,10 @@ import { renderMorningMessageEmail } from '@/lib/comms/templates/morning-message
 import { renderBoardingPassMessage, renderBoardingPassEmail } from '@/lib/comms/templates/boarding-pass'
 import { buildChangeMessage } from '@/lib/comms/templates/change-alert'
 import {
-  openerTemplateName, openerBodyParams,
-  showInfoTemplateName, showInfoBodyParams,
-  cateringTemplateName, cateringBodyParams,
-  wrapTemplateName, wrapBodyParams,
+  openerTemplateName, openerBodyParams, openerTelegram,
+  showInfoTemplateName, showInfoBodyParams, showInfoTelegram,
+  cateringTemplateName, cateringBodyParams, cateringTelegram,
+  wrapTemplateName, wrapBodyParams, wrapTelegram,
 } from '@/lib/comms/templates/day-blocks'
 import type { ImplementedType, NotificationDataMap, NotificationDef } from './types'
 
@@ -39,12 +39,13 @@ export const registry: Registry = {
       subject: 'Change update',
       html: `<p>${d.message.replace(/\n/g, '<br>')}</p>`,
     }),
+    telegram: (d) => ({ body: d.message }),
   },
 
-  // --- Show-day blocks (WhatsApp-only: no email() renderer) ---
+  // --- Show-day blocks (WhatsApp/Telegram only: no email() renderer) ---
   // Each block fires independently based on what data exists for the day.
-  // resolveChannels drops the WhatsApp channel for any block whose renderer
-  // is absent, so email-only contacts receive only the morning_message digest.
+  // resolveChannels drops a channel for any block whose renderer is absent,
+  // so email-only contacts receive only the morning_message digest.
 
   opener: {
     timeCritical: false,
@@ -53,6 +54,7 @@ export const registry: Registry = {
       templateName: openerTemplateName(),
       bodyParams: openerBodyParams(d),
     }),
+    telegram: (d) => ({ body: openerTelegram(d) }),
   },
 
   show_information: {
@@ -62,6 +64,7 @@ export const registry: Registry = {
       templateName: showInfoTemplateName(d.variant),
       bodyParams: showInfoBodyParams(d),
     }),
+    telegram: (d) => ({ body: showInfoTelegram(d) }),
   },
 
   catering: {
@@ -71,6 +74,7 @@ export const registry: Registry = {
       templateName: cateringTemplateName(d.variant),
       bodyParams: cateringBodyParams(d),
     }),
+    telegram: (d) => ({ body: cateringTelegram(d) }),
   },
 
   wrap: {
@@ -80,6 +84,7 @@ export const registry: Registry = {
       templateName: wrapTemplateName(d.variant),
       bodyParams: wrapBodyParams(d),
     }),
+    telegram: (d) => ({ body: wrapTelegram(d) }),
   },
 
   boarding_pass: {
@@ -89,6 +94,10 @@ export const registry: Registry = {
       templateName: process.env.WHATSAPP_TEMPLATE_BOARDING_PASS ?? '',
       bodyParams: [renderBoardingPassMessage(d)],
       ...(d.signedUrl ? { headerDocument: { link: d.signedUrl, filename: 'boarding-pass.pdf' } } : {}),
+    }),
+    telegram: (d) => ({
+      body: renderBoardingPassMessage(d),
+      ...(d.signedUrl ? { documentUrl: d.signedUrl } : {}),
     }),
     email: async (d) => {
       const attachments: Array<{ filename: string; content: Buffer | string }> = []

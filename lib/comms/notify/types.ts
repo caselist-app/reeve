@@ -1,12 +1,13 @@
 import type { QuickReplyButton } from '@/lib/comms/whatsapp'
+import type { TelegramButton } from '@/lib/comms/telegram'
 import type { EmailAttachment } from '@/lib/comms/email'
 import type { MorningMessageData } from '@/lib/comms/templates/morning-message'
 import type { BoardingPassNotificationData } from '@/lib/comms/templates/boarding-pass'
 import type { OpenerData, ShowInfoData, CateringData, WrapData } from '@/lib/comms/templates/day-blocks'
 
-// A notification can leave on one or both of these. SMS was retired; new
-// channels (push, etc.) slot in by extending this union and the adapters.
-export type Channel = 'whatsapp' | 'email'
+// A notification can leave on one or more of these. SMS was retired; new
+// channels slot in by extending this union and the adapters.
+export type Channel = 'whatsapp' | 'email' | 'telegram'
 
 // Every notification the service can send. A type is "implemented" once it has
 // a data shape in NotificationDataMap and an entry in the registry.
@@ -50,23 +51,42 @@ export interface RenderedEmail {
   attachments?: EmailAttachment[]
 }
 
+// Simpler than RenderedWhatsApp: no template-kind distinction, since Telegram
+// has no approval process and no positional-variable substitution to manage.
+// documentUrl is the same signed Supabase Storage URL the WhatsApp renderer
+// attaches as headerDocument; when present the adapter sends a document with
+// body as its caption instead of a plain message.
+export interface RenderedTelegram {
+  body: string
+  buttons?: TelegramButton[]
+  documentUrl?: string
+}
+
 export interface NotificationDef<D> {
-  // Time-critical nudges (bus_call, lobby_call) prefer WhatsApp regardless of
-  // the person's preference; email is used only when they have no number.
+  // Time-critical nudges (bus_call, lobby_call) prefer whichever real-time
+  // channel (WhatsApp or Telegram) the person has an address for, regardless
+  // of their operational-channel choice; email is used only when they have
+  // neither.
   timeCritical: boolean
-  // Renderers are optional: block types are WhatsApp-only (no email() renderer),
-  // and resolveChannels drops a channel when its renderer is absent.
+  // Renderers are optional: block types are WhatsApp/Telegram-only (no
+  // email() renderer), and resolveChannels drops a channel when its renderer
+  // is absent.
   whatsapp?(data: D): RenderedWhatsApp | Promise<RenderedWhatsApp>
   email?(data: D): RenderedEmail | Promise<RenderedEmail>
+  telegram?(data: D): RenderedTelegram | Promise<RenderedTelegram>
 }
 
 // The recipient, resolved through the people -> contacts join. Identity and
-// channel preference live on the contact (Brief 20); person_id is the tour
-// membership the notification is keyed to.
+// channel preference live on the contact (Brief 20). operationalChannel and
+// emailEnabled are independent (Brief 24): a contact can have an operational
+// channel, formal emails, both, or neither. person_id is the tour membership
+// the notification is keyed to.
 export interface Recipient {
   personId: string
   name: string
   whatsappNumber: string | null
+  telegramChatId: number | null
   email: string | null
-  preferredChannel: 'whatsapp' | 'email' | 'both'
+  operationalChannel: 'whatsapp' | 'telegram' | null
+  emailEnabled: boolean
 }

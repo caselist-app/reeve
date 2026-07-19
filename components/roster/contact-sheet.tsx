@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
+import { Switch } from '@/components/ui/switch'
 import {
   Select,
   SelectContent,
@@ -22,7 +23,9 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
-type Channel = 'whatsapp' | 'email' | 'both'
+// Empty string represents no operational channel yet, a real state for a
+// brand-new contact with no WhatsApp number and no Telegram link.
+type OperationalChannel = 'whatsapp' | 'telegram' | ''
 type PersonType = 'artist' | 'crew' | 'management' | 'support'
 
 const CURRENCIES = ['GBP', 'USD', 'EUR', 'AUD', 'CAD', 'CHF', 'DKK', 'NOK', 'SEK', 'JPY', 'NZD']
@@ -63,9 +66,11 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
       : (contact?.default_wage_currency ?? 'GBP')
 
   // Panel unmounts between opens so initial state is always fresh.
-  const [preferredChannel, setPreferredChannel] = useState<Channel>(
-    (contact?.preferred_channel as Channel) ?? 'whatsapp'
+  const [operationalChannel, setOperationalChannel] = useState<OperationalChannel>(
+    (contact?.operational_channel as OperationalChannel) ?? ''
   )
+  const [emailEnabled, setEmailEnabled] = useState(contact?.email_enabled ?? false)
+  const canUseTelegram = !!contact?.telegram_chat_id
   const [personType, setPersonType] = useState<PersonType>(initialPersonType)
   const [perDiemCurrency, setPerDiemCurrency] = useState(initialPerDiemCurrency)
   const [wageCurrency, setWageCurrency] = useState(initialWageCurrency)
@@ -85,7 +90,8 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
       name: (fd.get('name') as string) ?? '',
       contact_email: str('contact_email'),
       contact_phone: str('contact_phone'),
-      preferred_channel: preferredChannel,
+      operational_channel: operationalChannel || null,
+      email_enabled: emailEnabled,
       whatsapp_number: str('whatsapp_number'),
       sms_number: str('sms_number'),
       emergency_contact_name: str('emergency_contact_name'),
@@ -317,13 +323,17 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-2">
-            <Label>Preferred channel</Label>
-            <Select value={preferredChannel} onValueChange={(v) => setPreferredChannel(v as Channel)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+            <Label>Operational channel</Label>
+            <Select
+              value={operationalChannel}
+              onValueChange={(v) => setOperationalChannel(v as OperationalChannel)}
+            >
+              <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                <SelectItem value="email">Email</SelectItem>
-                <SelectItem value="both">Both</SelectItem>
+                <SelectItem value="telegram" disabled={!canUseTelegram}>
+                  Telegram{!canUseTelegram ? ' (connect first)' : ''}
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -339,6 +349,20 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
               placeholder="+447700900123"
             />
           </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-4 rounded-lg border px-4 py-3">
+          <div className="space-y-0.5">
+            <Label htmlFor={`${formId}-email_enabled`}>Also send formal emails</Label>
+            <p className="text-xs text-muted-foreground">
+              Riders and advancing documents, independent of the operational channel above.
+            </p>
+          </div>
+          <Switch
+            id={`${formId}-email_enabled`}
+            checked={emailEnabled}
+            onCheckedChange={setEmailEnabled}
+          />
         </div>
 
         <div className="space-y-2">

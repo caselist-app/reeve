@@ -17,7 +17,12 @@ export const personSchema = z.object({
     .union([z.string().email('Enter a valid email address'), z.literal('')])
     .optional(),
   contact_phone: z.string().optional(),
-  preferred_channel: z.enum(['whatsapp', 'email', 'both']).optional(),
+  // Nullable: a brand-new contact with no WhatsApp number and no Telegram
+  // link yet has no operational channel, a real state, not an error.
+  operational_channel: z.enum(['whatsapp', 'telegram']).nullable().optional(),
+  // Independent of the operational channel: email serves a different purpose
+  // (formal riders and advancing documents), not the day-to-day stream.
+  email_enabled: z.boolean().optional(),
   // Empty string is treated as no number; any non-empty value must be E.164.
   whatsapp_number: z.preprocess(
     (v) => (v === '' ? undefined : v),
