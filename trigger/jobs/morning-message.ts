@@ -85,14 +85,10 @@ export const morningMessageSchedule = schedules.task({
     if (!show) return { skipped: true, reason: 'no_show_today', date: today }
 
     // Fetch the day sheet for block selection and rendering.
+    // Single literal string required for Supabase to infer column types.
     const { data: daySheet } = await admin
       .from('day_sheets')
-      .select(
-        'load_in, soundcheck, changeover, headliner_on, curfew, doors,' +
-        'catering_type, catering_breakfast_start, catering_breakfast_end,' +
-        'catering_lunch_start, catering_lunch_end,' +
-        'catering_dinner_start, catering_dinner_end'
-      )
+      .select('load_in, soundcheck, changeover, headliner_on, curfew, doors, catering_type, catering_breakfast_start, catering_breakfast_end, catering_lunch_start, catering_lunch_end, catering_dinner_start, catering_dinner_end')
       .eq('show_id', show.id)
       .maybeSingle()
 
