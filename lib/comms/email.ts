@@ -148,6 +148,83 @@ export async function provisionTourEmailDomain(artistSlug: string): Promise<void
   }
 }
 
+// Deletes every Cloudflare DNS record belonging to an artist's subdomain.
+// Matches the exact record shape provisionTourEmailDomain writes: the DKIM
+// TXT, the SPF MX and TXT pair, and the receiving MX, all named either
+// {artistSlug}.{EMAIL_ROOT_DOMAIN} or ending in .{artistSlug}.{EMAIL_ROOT_DOMAIN}.
+// Non-throwing: an orphaned record is a quota nuisance, not worth blocking
+// artist deletion over.
+async function deleteCloudflareDnsRecordsForSlug(artistSlug: string): Promise<void> {
+  const token = process.env.CLOUDFLARE_API_TOKEN
+  const zoneId = process.env.CLOUDFLARE_ZONE_ID
+  if (!token || !zoneId) {
+    console.warn('[deleteCloudflareDnsRecordsForSlug] CLOUDFLARE_API_TOKEN or CLOUDFLARE_ZONE_ID not set, skipping DNS cleanup')
+    return
+  }
+
+  const exactMatch = `${artistSlug}.${EMAIL_ROOT_DOMAIN}`
+  const suffix = `.${artistSlug}.${EMAIL_ROOT_DOMAIN}`
+
+  const listRes = await fetch(
+    `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records?per_page=100`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
+  const listJson = await listRes.json() as {
+    success: boolean
+    result?: Array<{ id: string; name: string }>
+    errors?: Array<{ code: number; message: string }>
+  }
+
+  if (!listJson.success || !listJson.result) {
+    console.error('[deleteCloudflareDnsRecordsForSlug] Failed to list DNS records:', listJson.errors)
+    return
+  }
+
+  const toDelete = listJson.result.filter((r) => r.name === exactMatch || r.name.endsWith(suffix))
+
+  for (const record of toDelete) {
+    const delRes = await fetch(
+      `https://api.cloudflare.com/client/v4/zones/${zoneId}/dns_records/${record.id}`,
+      { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } }
+    )
+    if (!delRes.ok) {
+      console.error(`[deleteCloudflareDnsRecordsForSlug] Failed to delete record ${record.name} (${record.id}): ${delRes.status}`)
+    }
+  }
+}
+
+// Deprovisions an artist's Resend sending domain and its Cloudflare DNS
+// records. The inverse of provisionTourEmailDomain. Call this when an artist
+// is deleted so orphaned records don't sit in the zone forever eating into
+// the per-zone DNS record quota (200 records on Cloudflare's Free plan for
+// zones created after 2024-09-01). Non-throwing, same posture as
+// provisionTourEmailDomain: a failed cleanup degrades to a stray record, not
+// a blocked deletion.
+export async function deprovisionTourEmailDomain(artistSlug: string): Promise<void> {
+  const domain = `${artistSlug}.${EMAIL_ROOT_DOMAIN}`
+
+  const { data: listData, error: listError } = await getResend().domains.list()
+  if (listError) {
+    console.error(`[deprovisionTourEmailDomain] Failed to list domains:`, listError)
+    return
+  }
+
+  const existing = listData?.data.find((d) => d.name === domain)
+  if (!existing) {
+    // Provisioning never succeeded for this artist, or already removed. Still
+    // worth clearing any stray DNS records that might exist independently.
+    await deleteCloudflareDnsRecordsForSlug(artistSlug)
+    return
+  }
+
+  await deleteCloudflareDnsRecordsForSlug(artistSlug)
+
+  const { error: removeError } = await getResend().domains.remove(existing.id)
+  if (removeError) {
+    console.error(`[deprovisionTourEmailDomain] Failed to remove domain ${domain}:`, removeError)
+  }
+}
+
 // Resolves the from address for a tour.
 // localPart defaults to 'advancing' (formal documents); operational mail passes
 // 'crew'. Falls back to the shared {localPart}@tourwithreeve.com when artist_slug is null.

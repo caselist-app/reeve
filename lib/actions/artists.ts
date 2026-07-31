@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { artistSchema } from '@/lib/validators/artist'
-import { provisionTourEmailDomain } from '@/lib/comms/email'
+import { provisionTourEmailDomain, deprovisionTourEmailDomain } from '@/lib/comms/email'
 
 export type ArtistActionState = { error: string | null; artistId?: string }
 
@@ -53,10 +53,11 @@ export async function deleteArtistAction(artistId: string): Promise<void> {
   const user = await requireUser()
   const supabase = await createClient()
 
-  // Verify ownership before touching anything.
+  // Verify ownership before touching anything. slug is fetched here because
+  // it is needed to deprovision the email domain after the row is gone.
   const { data: artist, error: fetchError } = await supabase
     .from('artists')
-    .select('id')
+    .select('id, slug')
     .eq('id', artistId)
     .eq('account_id', user.id)
     .single()
@@ -86,6 +87,17 @@ export async function deleteArtistAction(artistId: string): Promise<void> {
 
   if (artistError) {
     throw new Error(artistError.message)
+  }
+
+  // Clean up the Resend domain and Cloudflare DNS records now that the
+  // artist is gone. Non-blocking: a failed cleanup leaves a stray domain
+  // and a handful of DNS records, not a broken deletion.
+  if (artist.slug) {
+    try {
+      await deprovisionTourEmailDomain(artist.slug)
+    } catch (err) {
+      console.error('[deleteArtist] Failed to deprovision email domain:', err)
+    }
   }
 
   redirect('/')
