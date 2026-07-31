@@ -79,6 +79,14 @@ interface AirLabsAirlineResponse {
   icao_code: string | null
 }
 
+interface AirLabsAirportResponse {
+  name: string
+  iata_code: string | null
+  icao_code: string | null
+  city: string | null
+  country_code: string | null
+}
+
 interface AirLabsErrorEnvelope {
   error: { message: string; code: string }
 }
@@ -207,6 +215,88 @@ export async function lookupFlightByNumber(flightIata: string): Promise<Normaliz
   return normalizeFlight(envelope.response)
 }
 
+// Route search for the TM who knows the airline and the two airports but not
+// the flight number ("Find by route"). Unlike lookupFlightByNumber, /schedules
+// accepts dep_iata + arr_iata + airline_iata together and returns every
+// matching departure on the current near-term board (verified live: BNE-HKG
+// on Cathay Pacific returned two distinct flight numbers). Same "up to ~10
+// hours ahead" ceiling as the rest of the schedules endpoint applies here -
+// this only surfaces flights happening soon, not ones booked weeks out.
+export async function searchFlightsByRoute(params: {
+  airlineIata: string
+  depIata: string
+  arrIata: string
+}): Promise<NormalizedFlightLookup[]> {
+  const envelope = await callAirLabs<AirLabsFlightResponse[]>('schedules', {
+    airline_iata: params.airlineIata,
+    dep_iata: params.depIata,
+    arr_iata: params.arrIata,
+  })
+  if (!envelope) return []
+  return envelope.response.map(normalizeFlight)
+}
+
+interface AirLabsRouteResponse {
+  airline_iata: string | null
+  flight_iata: string | null
+  flight_number: string | null
+  dep_iata: string | null
+  dep_time: string | null // "HH:MM", departure airport's own local time
+  arr_iata: string | null
+  arr_time: string | null // "HH:MM", arrival airport's own local time
+  duration: number | null // minutes
+  days: string[] | null // lowercase 3-letter day codes: sun, mon, tue, ...
+}
+
+export interface NormalizedRouteTimetableEntry {
+  flightIata: string
+  flightNumber: string | null
+  depIata: string | null
+  depTimeLocal: string | null
+  arrIata: string | null
+  arrTimeLocal: string | null
+  durationMinutes: number | null
+  days: string[]
+}
+
+// The Routes DB ("/routes"), not the same endpoint as searchFlightsByRoute's
+// "/schedules". This one is explicitly NOT real-time: AirLabs' own docs
+// describe it as a static, regularly-updated timetable ("use data from
+// Airline Routes Database to predict flight schedules for the distant
+// future"), which is exactly what a TM needs when they know the airline,
+// route, and a future date but not the flight number - "Find by route"
+// above only works within ~10 hours of departure because it queries the
+// live board, not a timetable. Each entry's `days` tells you which days of
+// the week that flight number typically operates, letting a caller match
+// it against a specific future date's weekday. No live status, no gates:
+// this is a schedule template, same category of data as
+// lookupFlightByNumber's borrowed time-of-day, not a live lookup.
+export async function searchRouteTimetable(params: {
+  airlineIata: string
+  depIata: string
+  arrIata: string
+}): Promise<NormalizedRouteTimetableEntry[]> {
+  const envelope = await callAirLabs<AirLabsRouteResponse[]>('routes', {
+    airline_iata: params.airlineIata,
+    dep_iata: params.depIata,
+    arr_iata: params.arrIata,
+  })
+  if (!envelope) return []
+
+  return envelope.response
+    .filter((r): r is AirLabsRouteResponse & { flight_iata: string } => !!r.flight_iata)
+    .map((r) => ({
+      flightIata: r.flight_iata,
+      flightNumber: r.flight_number,
+      depIata: r.dep_iata,
+      depTimeLocal: r.dep_time,
+      arrIata: r.arr_iata,
+      arrTimeLocal: r.arr_time,
+      durationMinutes: r.duration,
+      days: (r.days ?? []).map((d) => d.toLowerCase()),
+    }))
+}
+
 export interface NormalizedAirline {
   iataCode: string | null
   icaoCode: string | null
@@ -237,4 +327,43 @@ export async function fetchAllAirlines(): Promise<NormalizedAirline[]> {
   }
 
   return airlines
+}
+
+export interface NormalizedAirport {
+  iataCode: string | null
+  icaoCode: string | null
+  name: string
+  city: string | null
+  countryCode: string | null
+}
+
+// Fetches the full AirLabs airport database (no filter param = all
+// airports), same defensive has_more pagination loop as fetchAllAirlines -
+// the /airports endpoint documents no limit/offset params either, so this
+// is not confirmed to paginate but follows the same meta shape if it does.
+export async function fetchAllAirports(): Promise<NormalizedAirport[]> {
+  const airports: NormalizedAirport[] = []
+  let offset = 0
+
+  for (;;) {
+    const params: Record<string, string> = {}
+    if (offset > 0) params.offset = String(offset)
+    const envelope = await callAirLabs<AirLabsAirportResponse[]>('airports', params)
+    if (!envelope) break
+
+    for (const a of envelope.response) {
+      airports.push({
+        iataCode: a.iata_code,
+        icaoCode: a.icao_code,
+        name: a.name,
+        city: a.city,
+        countryCode: a.country_code,
+      })
+    }
+
+    if (!envelope.request.has_more) break
+    offset += envelope.response.length
+  }
+
+  return airports
 }

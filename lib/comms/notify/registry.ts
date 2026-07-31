@@ -42,6 +42,20 @@ export const registry: Registry = {
     telegram: (d) => ({ body: d.message }),
   },
 
+  // Brief 31 (AirLabs): delay/cancellation/gate/terminal change alerts.
+  // timeCritical, like bus_call/lobby_call: disruption info for a flight
+  // already on the schedule is core value, not an optional broadcast, so it
+  // bypasses operational-channel preference for whichever real-time channel
+  // the person has. Telegram only for now (production-verified, Brief 24);
+  // whatsapp() needs an approved Meta template outside the 24h reply window,
+  // which the brief explicitly says not to block on. No email() renderer:
+  // this is a real-time nudge, not a formal document, same reasoning as the
+  // day-blocks below.
+  flight_status_alert: {
+    timeCritical: true,
+    telegram: (d) => ({ body: d.message }),
+  },
+
   // --- Show-day blocks (WhatsApp/Telegram only: no email() renderer) ---
   // Each block fires independently based on what data exists for the day.
   // resolveChannels drops a channel for any block whose renderer is absent,

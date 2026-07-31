@@ -149,6 +149,39 @@ export type Database = {
         }
         Relationships: []
       }
+      airports_reference: {
+        Row: {
+          city: string | null
+          country_code: string | null
+          created_at: string
+          iata_code: string
+          icao_code: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          city?: string | null
+          country_code?: string | null
+          created_at?: string
+          iata_code: string
+          icao_code?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          city?: string | null
+          country_code?: string | null
+          created_at?: string
+          iata_code?: string
+          icao_code?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       artists: {
         Row: {
           account_id: string

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { MoreHorizontal, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatFlightNumber } from '@/lib/utils/format-flight-number'
+import { placeName } from '@/lib/utils/place-name'
 import { EditPanel } from '@/components/schedule/edit-panel'
 import { AirlineLogo } from '@/components/schedule/airline-logo'
 import { Input } from '@/components/ui/input'
@@ -84,25 +85,15 @@ function formatDateOnly(iso: string | null, tz: string): string {
   return new Date(iso).toLocaleString('en-GB', { timeZone: tz, weekday: 'short', day: 'numeric', month: 'short' })
 }
 
-// Strips the trailing "(BNE)" and "Airport"/"International Airport" suffix
-// AirLabs-derived origin/destination strings carry (see add-flight-form.tsx's
-// commit step), down to a plain place name for the compact route line. Falls
-// back to the IATA code if the stored string is empty.
-function placeName(full: string | null, iata: string | null): string {
-  if (!full) return iata ?? ''
-  const stripped = full
-    .replace(/\s*\([^)]*\)\s*$/, '')
-    .replace(/\s+(International\s+)?Airport$/i, '')
-    .trim()
-  return stripped || iata || full
-}
-
-const FLIGHT_STATUS_TEXT: Record<string, { label: string; className: string }> = {
+// standalone: true means the label is already a complete statement ("Landed",
+// "Cancelled") and shouldn't be prefixed with "Departs " the way "On Time" /
+// "Delayed" are ("Departs On Time" reads fine, "Departs Landed" doesn't).
+const FLIGHT_STATUS_TEXT: Record<string, { label: string; className: string; standalone?: boolean }> = {
   scheduled: { label: 'On Time', className: 'text-green-600' },
   delayed:   { label: 'Delayed', className: 'text-amber-600' },
-  cancelled: { label: 'Cancelled', className: 'text-red-600' },
-  departed:  { label: 'Departed', className: 'text-blue-600' },
-  landed:    { label: 'Landed', className: 'text-green-600' },
+  cancelled: { label: 'Cancelled', className: 'text-red-600', standalone: true },
+  departed:  { label: 'Departed', className: 'text-blue-600', standalone: true },
+  landed:    { label: 'Landed', className: 'text-green-600', standalone: true },
 }
 
 function DeleteMenu({ segmentId, modeLabel }: { segmentId: string; modeLabel: string }) {
@@ -232,8 +223,14 @@ function FlightCard({ segment, timezone }: { segment: Segment; timezone: string 
           </span>
           {statusInfo ? (
             <span className="text-xs">
-              <span className="text-muted-foreground">Departs </span>
-              <span className={cn('font-semibold', statusInfo.className)}>{statusInfo.label}</span>
+              {!statusInfo.standalone && <span className="text-muted-foreground">Departs </span>}
+              <span className={cn(
+                'font-semibold',
+                statusInfo.className,
+                statusInfo.standalone && 'text-[11px]'
+              )}>
+                {statusInfo.label}
+              </span>
             </span>
           ) : (
             <span className="text-[11px] text-muted-foreground">{formatDateOnly(segment.depart_at, timezone)}</span>

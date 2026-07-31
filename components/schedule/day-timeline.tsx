@@ -1,6 +1,7 @@
 import { TimelineCard } from '@/components/schedule/timeline-card'
 import { DayHeader } from '@/components/schedule/day-header'
 import { formatFlightNumber } from '@/lib/utils/format-flight-number'
+import { placeName } from '@/lib/utils/place-name'
 import type { DayRecords } from '@/lib/schedule/day-records'
 
 interface DayTimelineProps {
@@ -165,7 +166,15 @@ export async function DayTimeline({ records, tourId, tourDateId, date, timezone,
 
   for (const seg of segments) {
     const label = MODE_LABELS[seg.mode] ?? seg.mode
-    const title = [seg.origin, seg.destination].filter(Boolean).join(' to ') || label
+    // Flight title is just city names ("Brisbane to Hong Kong"), stripped of
+    // "Airport"/IATA-code suffix - the full airport names are already
+    // redundant once the compact icon/time row below shows the codes.
+    const title =
+      seg.mode === 'flight'
+        ? [placeName(seg.origin, seg.origin_iata), placeName(seg.destination, seg.destination_iata)]
+            .filter(Boolean)
+            .join(' to ') || label
+        : [seg.origin, seg.destination].filter(Boolean).join(' to ') || label
     // Flight subtitle is just the flight number ("CX 150"); the logo already
     // identifies the airline, and full carrier name plus code was redundant.
     // Other modes keep carrier + reference as before.
