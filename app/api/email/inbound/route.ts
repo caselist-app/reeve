@@ -4,6 +4,12 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { tasks } from '@trigger.dev/sdk/v3'
 import { redis } from '@/lib/redis'
 
+// Same root domain as lib/comms/email.ts. Read independently here rather than
+// imported, since this is a route module and the two call sites never drift
+// as long as both read the one env var.
+const EMAIL_ROOT_DOMAIN = process.env.EMAIL_ROOT_DOMAIN ?? 'tourwithreeve.com'
+const INBOUND_RECIPIENT_RE = new RegExp(`advancing@([^.]+)\\.${EMAIL_ROOT_DOMAIN.replace(/\./g, '\\.')}`)
+
 // Resend signs webhooks with Svix. The secret is base64-encoded with a
 // "whsec_" prefix. The signed content is "{svix-id}.{svix-timestamp}.{body}".
 // We also reject timestamps older than 5 minutes to block replay attacks.
@@ -48,7 +54,7 @@ function verifySvixSignature(
 
 // Receives forwarded emails from the TM.
 // The TM forwards a tech pack, hotel confirmation, or flight itinerary to
-// advancing@{artist_slug}.yourreeve.com. Resend delivers it here via email.received webhook.
+// advancing@{artist_slug}.tourwithreeve.com. Resend delivers it here via email.received webhook.
 // Rule: verify Svix signature, fetch body from Resend API, store raw row, enqueue job, return 200 fast.
 // The extraction job proposes rows; nothing is written to the spine until the TM confirms.
 export async function POST(request: NextRequest) {
@@ -109,9 +115,9 @@ export async function POST(request: NextRequest) {
   }
 
   // The recipient address tells us which tour this is for.
-  // advancing@{artist_slug}.yourreeve.com -> look up artist by slug, then route to most recent active tour.
+  // advancing@{artist_slug}.tourwithreeve.com -> look up artist by slug, then route to most recent active tour.
   const toAddress = toAddresses[0] ?? ''
-  const slugMatch = toAddress.match(/advancing@([^.]+)\.yourreeve\.com/)
+  const slugMatch = toAddress.match(INBOUND_RECIPIENT_RE)
   const artistSlug = slugMatch?.[1]
 
   if (!artistSlug) {
