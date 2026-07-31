@@ -2,6 +2,10 @@ import { randomBytes } from 'crypto'
 import { Resend } from 'resend'
 import { createAdminClient } from '@/lib/supabase/admin'
 
+// The root domain for all branded tour email. Every artist subdomain and every
+// from-address is derived from this. Set once in env, never hardcoded per call.
+const EMAIL_ROOT_DOMAIN = process.env.EMAIL_ROOT_DOMAIN ?? 'tourwithreeve.com'
+
 // Lazily constructed: the Resend SDK throws immediately if the key is
 // missing, and a module-level instantiation runs at import time, including
 // during Next.js's build-time page data collection where no request (and no
@@ -81,13 +85,13 @@ async function syncDnsToCloudflare(
 }
 
 // Provisions a Resend sending domain for a tour at creation time.
-// The sending address for the tour becomes advancing@{slug}.yourreeve.com.
+// The sending address for the tour becomes advancing@{slug}.tourwithreeve.com.
 // If the domain already exists in Resend (artist has a prior tour with the
 // same slug), the existing domain is reused and no DNS changes are needed.
 // Logs errors but does not throw: a failed provision degrades to the fallback
 // address gracefully rather than blocking tour creation.
 export async function provisionTourEmailDomain(artistSlug: string): Promise<void> {
-  const domain = `${artistSlug}.yourreeve.com`
+  const domain = `${artistSlug}.${EMAIL_ROOT_DOMAIN}`
 
   // Check whether the domain is already provisioned in Resend.
   // The list API returns all domains for the account.
@@ -146,13 +150,13 @@ export async function provisionTourEmailDomain(artistSlug: string): Promise<void
 
 // Resolves the from address for a tour.
 // localPart defaults to 'advancing' (formal documents); operational mail passes
-// 'crew'. Falls back to the shared {localPart}@yourreeve.com when artist_slug is null.
+// 'crew'. Falls back to the shared {localPart}@tourwithreeve.com when artist_slug is null.
 export function tourFromAddress(
   artistSlug: string | null | undefined,
   localPart = 'advancing'
 ): string {
-  if (!artistSlug) return `${localPart}@yourreeve.com`
-  return `${localPart}@${artistSlug}.yourreeve.com`
+  if (!artistSlug) return `${localPart}@${EMAIL_ROOT_DOMAIN}`
+  return `${localPart}@${artistSlug}.${EMAIL_ROOT_DOMAIN}`
 }
 
 export type EmailAttachment = {
@@ -164,7 +168,7 @@ export type SendEmailParams = {
   to: string
   subject: string
   html: string
-  // The artist slug determines the from domain: {local_part}@{slug}.yourreeve.com.
+  // The artist slug determines the from domain: {local_part}@{slug}.tourwithreeve.com.
   // Provisioned in Resend at tour creation.
   artist_slug: string | null | undefined
   // From local-part. Defaults to 'advancing' (formal document stream).
