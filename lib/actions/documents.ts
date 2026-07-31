@@ -6,7 +6,7 @@ import { generateShareToken } from '@/lib/comms/email'
 import { sendRiderEmailJob } from '@/trigger/jobs/send-rider-email'
 import { advanceReminderJob } from '@/trigger/jobs/advance-reminder'
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://reeve.me'
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://tourwithreeve.com'
 
 export type SendRiderParams = {
   tourId: string
