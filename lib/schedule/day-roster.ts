@@ -20,12 +20,12 @@ export async function fetchDayRoster(
   const [{ data: transportPeople }, { data: hotelPeople }] = await Promise.all([
     supabase
       .from('transport_assignments')
-      .select('people(id, name, person_type)')
+      .select('people(id, person_type, contacts(name))')
       .eq('tour_id', tourId)
       .in('segment_id', segmentIds),
     supabase
       .from('room_assignments')
-      .select('people(id, name, person_type)')
+      .select('people(id, person_type, contacts(name))')
       .eq('tour_id', tourId)
       .in('hotel_stay_id', hotelStayIds),
   ])
@@ -33,8 +33,10 @@ export async function fetchDayRoster(
   const rosterMap = new Map<string, RosterPerson>()
   for (const row of [...(transportPeople ?? []), ...(hotelPeople ?? [])]) {
     const p = Array.isArray(row.people) ? row.people[0] : row.people
-    if (p && !rosterMap.has(p.id)) {
-      rosterMap.set(p.id, { id: p.id, name: p.name, person_type: p.person_type })
+    if (!p) continue
+    const contact = Array.isArray(p.contacts) ? p.contacts[0] : p.contacts
+    if (contact?.name && !rosterMap.has(p.id)) {
+      rosterMap.set(p.id, { id: p.id, name: contact.name, person_type: p.person_type })
     }
   }
   return Array.from(rosterMap.values())
