@@ -23,6 +23,7 @@ export type NotificationType =
   | 'show_information'
   | 'catering'
   | 'wrap'
+  | 'flight_status_alert'
 
 // The data each notification type renders from. Entries are added as each type
 // is built; the registry is keyed off this, so adding a type here forces the
@@ -35,6 +36,10 @@ export interface NotificationDataMap {
   show_information: ShowInfoData
   catering: CateringData
   wrap: WrapData
+  // Brief 31 (AirLabs): built entirely in trigger/jobs/flight-status-check.ts
+  // (the message already describes exactly what changed), same shape as
+  // change_alert deliberately - no separate structured fields needed yet.
+  flight_status_alert: { message: string }
 }
 
 export type ImplementedType = keyof NotificationDataMap

@@ -24,6 +24,9 @@ export type DaySegment = Pick<
   Tables<'transport_segments'>,
   | 'id' | 'mode' | 'origin' | 'destination' | 'depart_at' | 'arrive_at'
   | 'carrier_operator' | 'vehicle_or_flight_no' | 'booking_reference' | 'status'
+  // Brief 31 (AirLabs): flight-only live tracking fields.
+  | 'origin_iata' | 'destination_iata' | 'flight_status'
+  | 'actual_depart_at' | 'actual_arrive_at' | 'gate' | 'terminal' | 'last_tracked_at'
 >
 
 export type DayHotel = Pick<
@@ -75,7 +78,7 @@ const SHOW_SELECT = `
 `
 
 const SEGMENT_SELECT =
-  'id, mode, origin, destination, depart_at, arrive_at, carrier_operator, vehicle_or_flight_no, booking_reference, status'
+  'id, mode, origin, destination, depart_at, arrive_at, carrier_operator, vehicle_or_flight_no, booking_reference, status, origin_iata, destination_iata, flight_status, actual_depart_at, actual_arrive_at, gate, terminal, last_tracked_at'
 
 const HOTEL_SELECT =
   'id, name, address, check_in_date, check_in_time, check_out_date, check_out_time, wifi_network, wifi_password'

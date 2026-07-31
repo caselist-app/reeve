@@ -1,7 +1,17 @@
 'use client'
 
+import { ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSchedulePanel, type CardDescriptor } from '@/stores/schedule-panel-store'
+import { AirlineLogo } from '@/components/schedule/airline-logo'
+
+interface FlightTimes {
+  originIata: string | null
+  originTime: string
+  destinationIata: string | null
+  destinationTime: string
+  live: boolean
+}
 
 interface TimelineCardProps {
   time: string          // formatted time string to display on the left
@@ -10,11 +20,18 @@ interface TimelineCardProps {
   subtitle?: string     // secondary line
   accent: string        // Tailwind border-left colour class
   card: CardDescriptor  // what to set as activeCard on click
+  // Flight segments only: AirLabs serves logos from a static, IATA-code-keyed
+  // URL, so day-timeline.tsx (a Server Component) computes this from the
+  // segment's flight number and passes it straight through as a plain string.
+  logoIataCode?: string | null
+  // Flight segments only: renders as "• BNE 12:20  HKG 19:20" after the
+  // subtitle (which is just the flight number for flights, e.g. "CX 150").
+  flightTimes?: FlightTimes
 }
 
 // Minimal 'use client' wrapper so timeline cards can trigger panel state
 // while the parent day-timeline.tsx stays a Server Component.
-export function TimelineCard({ time, label, title, subtitle, accent, card }: TimelineCardProps) {
+export function TimelineCard({ time, label, title, subtitle, accent, card, logoIataCode, flightTimes }: TimelineCardProps) {
   const { activeCard, setActiveCard } = useSchedulePanel()
   const isActive = activeCard
     ? JSON.stringify(activeCard) === JSON.stringify(card)
@@ -58,7 +75,41 @@ export function TimelineCard({ time, label, title, subtitle, accent, card }: Tim
         </div>
         <p className="text-sm font-medium truncate">{title}</p>
         {subtitle && (
-          <p className="text-xs text-muted-foreground truncate mt-0.5">{subtitle}</p>
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground truncate mt-0.5">
+            {logoIataCode && <AirlineLogo iataCode={logoIataCode} />}
+            <span className="truncate">{subtitle}</span>
+            {flightTimes && (
+              <>
+                <span aria-hidden>•</span>
+                <span className="flex items-center gap-3 truncate">
+                  <span className="flex items-center gap-1.5">
+                    <span className={cn(
+                      'flex h-5 w-5 shrink-0 items-center justify-center rounded-full',
+                      flightTimes.live ? 'bg-green-500/10 text-green-600' : 'bg-muted-foreground/10 text-muted-foreground'
+                    )}>
+                      <ArrowUpRight className="h-3 w-3" />
+                    </span>
+                    <span>{flightTimes.originIata}</span>
+                    <span className={cn('font-bold', flightTimes.live ? 'text-green-600' : 'text-foreground')}>
+                      {flightTimes.originTime}
+                    </span>
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <span className={cn(
+                      'flex h-5 w-5 shrink-0 items-center justify-center rounded-full',
+                      flightTimes.live ? 'bg-green-500/10 text-green-600' : 'bg-muted-foreground/10 text-muted-foreground'
+                    )}>
+                      <ArrowDownRight className="h-3 w-3" />
+                    </span>
+                    <span>{flightTimes.destinationIata}</span>
+                    <span className={cn('font-bold', flightTimes.live ? 'text-green-600' : 'text-foreground')}>
+                      {flightTimes.destinationTime}
+                    </span>
+                  </span>
+                </span>
+              </>
+            )}
+          </p>
         )}
       </div>
     </button>

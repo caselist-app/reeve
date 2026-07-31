@@ -90,6 +90,18 @@ export async function createTransportSegment(
     carrier_operator?: string | null
     vehicle_or_flight_no?: string | null
     booking_reference?: string | null
+    // Brief 31 (AirLabs): populated only for flight segments added through the
+    // Add Flight flow, and only when the AirLabs lookup's own date matched the
+    // TM's chosen date (see lib/actions/flight-lookup.ts). Left null otherwise
+    // so the live tracking job's diff logic has nothing stale to compare against.
+    origin_iata?: string | null
+    destination_iata?: string | null
+    flight_status?: string | null
+    gate?: string | null
+    terminal?: string | null
+    actual_depart_at?: string | null
+    actual_arrive_at?: string | null
+    last_tracked_at?: string | null
   },
 ): Promise<TransportActionState> {
   await requireUser()
@@ -149,6 +161,31 @@ export async function updateTransportSegment(
   void bustTourContextCache(existing.tour_id)
   revalidatePath(`/tours/${existing.tour_id}/schedule`)
   return { error: null, segmentId }
+}
+
+// Deletes a transport segment outright. Used by the schedule edit panel's
+// delete menu. RLS (owns_tour) is the real authorization gate; the ownership
+// select below exists only so a not-found/not-owned segment returns a clean
+// error instead of a silent no-op delete.
+export async function deleteTransportSegment(segmentId: string): Promise<TransportActionState> {
+  await requireUser()
+
+  const supabase = await createClient()
+
+  const { data: existing } = await supabase
+    .from('transport_segments')
+    .select('tour_id')
+    .eq('id', segmentId)
+    .single()
+
+  if (!existing) return { error: 'Segment not found.' }
+
+  const { error } = await supabase.from('transport_segments').delete().eq('id', segmentId)
+  if (error) return { error: error.message }
+
+  void bustTourContextCache(existing.tour_id)
+  revalidatePath(`/tours/${existing.tour_id}/schedule`)
+  return { error: null }
 }
 
 // Called after the TM uploads a boarding pass against a transport_assignment.

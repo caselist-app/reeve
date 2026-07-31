@@ -119,6 +119,69 @@ export type Database = {
           },
         ]
       }
+      airlines_reference: {
+        Row: {
+          created_at: string
+          iata_code: string | null
+          icao_code: string | null
+          id: string
+          logo_url: string | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          iata_code?: string | null
+          icao_code?: string | null
+          id?: string
+          logo_url?: string | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          iata_code?: string | null
+          icao_code?: string | null
+          id?: string
+          logo_url?: string | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      airports_reference: {
+        Row: {
+          city: string | null
+          country_code: string | null
+          created_at: string
+          iata_code: string
+          icao_code: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          city?: string | null
+          country_code?: string | null
+          created_at?: string
+          iata_code: string
+          icao_code?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          city?: string | null
+          country_code?: string | null
+          created_at?: string
+          iata_code?: string
+          icao_code?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       artists: {
         Row: {
           account_id: string
@@ -1464,6 +1527,8 @@ export type Database = {
       }
       transport_segments: {
         Row: {
+          actual_arrive_at: string | null
+          actual_depart_at: string | null
           arrive_at: string | null
           book_url: string | null
           booking_reference: string | null
@@ -1472,20 +1537,28 @@ export type Database = {
           created_at: string
           depart_at: string | null
           destination: string | null
+          destination_iata: string | null
           details_json: Json
           door_to_site_at: string | null
           driver_contact: string | null
+          flight_status: string | null
+          gate: string | null
           id: string
+          last_tracked_at: string | null
           mode: string
           origin: string | null
+          origin_iata: string | null
           source_provider: string | null
           status: string
+          terminal: string | null
           tour_date_id: string | null
           tour_id: string
           updated_at: string
           vehicle_or_flight_no: string | null
         }
         Insert: {
+          actual_arrive_at?: string | null
+          actual_depart_at?: string | null
           arrive_at?: string | null
           book_url?: string | null
           booking_reference?: string | null
@@ -1494,20 +1567,28 @@ export type Database = {
           created_at?: string
           depart_at?: string | null
           destination?: string | null
+          destination_iata?: string | null
           details_json?: Json
           door_to_site_at?: string | null
           driver_contact?: string | null
+          flight_status?: string | null
+          gate?: string | null
           id?: string
+          last_tracked_at?: string | null
           mode: string
           origin?: string | null
+          origin_iata?: string | null
           source_provider?: string | null
           status?: string
+          terminal?: string | null
           tour_date_id?: string | null
           tour_id: string
           updated_at?: string
           vehicle_or_flight_no?: string | null
         }
         Update: {
+          actual_arrive_at?: string | null
+          actual_depart_at?: string | null
           arrive_at?: string | null
           book_url?: string | null
           booking_reference?: string | null
@@ -1516,14 +1597,20 @@ export type Database = {
           created_at?: string
           depart_at?: string | null
           destination?: string | null
+          destination_iata?: string | null
           details_json?: Json
           door_to_site_at?: string | null
           driver_contact?: string | null
+          flight_status?: string | null
+          gate?: string | null
           id?: string
+          last_tracked_at?: string | null
           mode?: string
           origin?: string | null
+          origin_iata?: string | null
           source_provider?: string | null
           status?: string
+          terminal?: string | null
           tour_date_id?: string | null
           tour_id?: string
           updated_at?: string
