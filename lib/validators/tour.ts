@@ -36,23 +36,6 @@ export const TOUR_TIMEZONES: { value: string; label: string }[] = [
   { value: 'Africa/Johannesburg', label: 'Johannesburg (SAST)' },
 ]
 
-export const tourInsertSchema = z.object({
-  account_id: z.string().uuid(),
-  name: z.string().min(1),
-  artist_id: z.string().uuid(),
-  start_date: z.string().nullable().optional(),
-  end_date: z.string().nullable().optional(),
-  territory: z.string().nullable().optional(),
-  status: z.enum(['planning', 'active', 'completed', 'archived']).optional(),
-  base_currency: z.string().length(3).optional(),
-  timezone: z.string().nullable().optional(),
-})
-
-export const tourUpdateSchema = tourInsertSchema.partial()
-
-export type TourInsert = z.infer<typeof tourInsertSchema>
-export type TourUpdate = z.infer<typeof tourUpdateSchema>
-
 // Action-facing schema: what the tour form sends to createTourAction / updateTourAction.
 // account_id and status are set server-side; they are not part of this schema.
 export const tourSchema = z.object({

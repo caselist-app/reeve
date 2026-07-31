@@ -23,10 +23,3 @@ export function formatExpiry(expiry: string | null): string {
     year: 'numeric',
   })
 }
-
-export const PASSPORT_CLASS: Record<PassportStatus, string> = {
-  none: 'text-muted-foreground',
-  expired: 'text-destructive font-medium',
-  soon: 'text-amber-600 font-medium',
-  ok: '',
-}

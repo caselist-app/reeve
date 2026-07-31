@@ -40,13 +40,6 @@ export const TRANSPORT_VARIANT: Record<string, StatusVariant> = {
   cancelled: 'default',
 }
 
-export const TOUR_STATUS_VARIANT: Record<string, StatusVariant> = {
-  planning: 'default',
-  active: 'success',
-  completed: 'default',
-  archived: 'default',
-}
-
 // 'none' and 'ok' are intentionally absent — no badge when passport is fine or not set.
 export const PASSPORT_VARIANT: Record<string, StatusVariant> = {
   soon: 'warning',

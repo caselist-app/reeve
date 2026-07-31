@@ -4,7 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 export type AiCallLogParams = {
   tour_id: string
   model: string
-  trigger_case: 'crew_qa' | 'email_extraction' | 'logistics_synthesis'
+  trigger_case: 'crew_qa' | 'email_extraction'
   input_tokens: number
   output_tokens: number
   cache_read_tokens: number

@@ -19,7 +19,7 @@ import type { ShowInfoVariant, CateringVariant, WrapVariant, WrapOnwardLeg } fro
 
 // Shared time formatter used by all block renderers.
 // Accepts a UTC ISO string and returns HH:MM in the given IANA timezone.
-export function formatBlockTime(iso: string | null, tz: string): string {
+function formatBlockTime(iso: string | null, tz: string): string {
   if (!iso) return 'TBC'
   return new Date(iso).toLocaleTimeString('en-GB', {
     hour: '2-digit',
