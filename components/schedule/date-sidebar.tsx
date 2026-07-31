@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { parseLocation } from '@/lib/schedule/format'
+import { datePrefetch, DESKTOP_PREFETCH_WINDOW } from '@/lib/schedule/prefetch'
 import { AddDayButton } from './add-day-button'
 
 interface ShowRef {
@@ -97,6 +98,10 @@ export function DateSidebar({ tourId, dates, defaultDate }: DateSidebarProps) {
   // date clicks without re-rendering the (persistent) layout.
   const selectedDate = useSearchParams().get('date') ?? defaultDate
 
+  // Anchor for the prefetch window. -1 when the selected date is off-calendar,
+  // which disables windowed prefetching rather than warming an arbitrary run.
+  const selectedIndex = dates.findIndex((d) => d.date === selectedDate)
+
   return (
     <div className="w-[230px] shrink-0 border-r border-border flex flex-col overflow-hidden">
       {/* Spine header: quiet label plus a secondary control to add a day. */}
@@ -111,7 +116,7 @@ export function DateSidebar({ tourId, dates, defaultDate }: DateSidebarProps) {
         <p className="px-3 pt-4 text-xs text-muted-foreground">No days added yet.</p>
       ) : (
         <div className="flex-1 overflow-y-auto p-2">
-          {dates.map((d) => {
+          {dates.map((d, i) => {
             const isSelected = d.date === selectedDate
             const chip = chipClass(d.day_type)
             const { day, month } = chipDate(d.date)
@@ -121,6 +126,7 @@ export function DateSidebar({ tourId, dates, defaultDate }: DateSidebarProps) {
               <Link
                 key={d.id}
                 href={`/tours/${tourId}/schedule?date=${d.date}`}
+                prefetch={datePrefetch(i, selectedIndex, DESKTOP_PREFETCH_WINDOW)}
                 className={cn(
                   'flex items-center gap-2.5 rounded-lg px-1.5 py-1.5 transition-colors',
                   isSelected ? 'bg-muted' : 'hover:bg-muted/50',
