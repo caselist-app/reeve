@@ -1,12 +1,9 @@
-import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
-import { getScheduleShell, defaultScheduleDate } from '@/lib/schedule/schedule-shell'
-import { DateSidebar } from '@/components/schedule/date-sidebar'
-import { SidebarSkeleton } from '@/components/schedule/schedule-skeleton'
+import { getScheduleShell } from '@/lib/schedule/schedule-shell'
 
-// The date sidebar lives in the layout so Next.js preserves it across ?date=
-// navigations: clicking a date re-renders only the page (the day content),
-// while the sidebar stays mounted. The highlight updates client-side.
+// The Dates list itself now renders in the app/(app)/@secondaryPanel slot
+// (app/(app)/@secondaryPanel/tours/[id]/schedule/layout.tsx) as its own
+// standalone card, not inline here. This layout just guards the route.
 export default async function ScheduleLayout({
   children,
   params,
@@ -15,19 +12,9 @@ export default async function ScheduleLayout({
   params: Promise<{ id: string }>
 }) {
   const { id } = await params
-  const { tour, dates } = await getScheduleShell(id)
+  const { tour } = await getScheduleShell(id)
 
   if (!tour) redirect('/')
 
-  return (
-    <div className="flex h-full overflow-hidden">
-      {/* DateSidebar hidden below lg; replaced by DateStrip in the page on mobile. */}
-      <div className="hidden lg:contents">
-        <Suspense fallback={<SidebarSkeleton />}>
-          <DateSidebar tourId={id} dates={dates} defaultDate={defaultScheduleDate(dates)} />
-        </Suspense>
-      </div>
-      {children}
-    </div>
-  )
+  return <div className="flex h-full overflow-hidden">{children}</div>
 }

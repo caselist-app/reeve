@@ -10,7 +10,17 @@ const DEFAULT_SIDEBAR_WIDTH = 220
 const MIN_SIDEBAR_WIDTH = 180
 const MAX_SIDEBAR_WIDTH = 320
 
-export default async function AppLayout({ children }: { children: React.ReactNode }) {
+export default async function AppLayout({
+  children,
+  secondaryPanel,
+}: {
+  children: React.ReactNode
+  // Populated by the app/(app)/@secondaryPanel slot. Most routes render
+  // nothing here (see @secondaryPanel/default.tsx); routes that need a
+  // standalone, always-visible panel next to main content (e.g. the schedule
+  // Dates list) supply it via their own @secondaryPanel override.
+  secondaryPanel: React.ReactNode
+}) {
   const user = await requireUser()
   const supabase = await createClient()
 
@@ -62,8 +72,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       {/* Mobile: sidebar rendered inside a drawer opened by the hamburger. */}
       <MobileNavDrawer tours={tours ?? []} lastTourId={lastTourId} />
 
-      {/* AppContent owns the main card and the side panel, both animated. */}
-      <AppContent>{children}</AppContent>
+      {/* AppContent owns the main card, the secondary panel, and the side panel. */}
+      <AppContent secondaryPanel={secondaryPanel}>{children}</AppContent>
 
       {/* Command palette, mounts once, listens for Cmd+K globally */}
       <CommandPalette />

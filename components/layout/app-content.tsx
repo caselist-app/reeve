@@ -1,20 +1,29 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { usePathname } from 'next/navigation'
 import * as SheetPrimitive from '@radix-ui/react-dialog'
 import { cn } from '@/lib/utils'
 import { useSidePanel } from '@/stores/side-panel-store'
 import { ActivePanel } from '@/components/layout/active-panel'
 import { MobileTopBar } from '@/components/layout/mobile-top-bar'
 import { useIsMobile } from '@/hooks/use-is-mobile'
+import { hasSecondaryPanel } from '@/lib/layout/secondary-panel-routes'
 
 interface AppContentProps {
   children: React.ReactNode
+  // Route-supplied standalone panel (e.g. the schedule Dates list), rendered
+  // as its own card to the left of main. null on routes that don't use it.
+  secondaryPanel?: React.ReactNode
 }
 
-export function AppContent({ children }: AppContentProps) {
+export function AppContent({ children, secondaryPanel }: AppContentProps) {
   const { isOpen, close } = useSidePanel()
   const isMobile = useIsMobile()
+  const pathname = usePathname()
+  // Deterministic visibility gate: see lib/layout/secondary-panel-routes.ts
+  // for why pathname, not just the secondaryPanel prop, decides this.
+  const showSecondaryPanel = Boolean(secondaryPanel) && hasSecondaryPanel(pathname)
 
   // Keep the panel in the DOM for 200ms after isOpen goes false so the
   // exit animation completes before the component unmounts.
@@ -90,10 +99,21 @@ export function AppContent({ children }: AppContentProps) {
   return (
     <div
       className={cn(
-        'flex flex-1 py-2 pr-2 min-h-0 overflow-hidden transition-[gap] duration-200 ease-out',
-        showPanel ? 'gap-2' : 'gap-0',
+        'flex flex-1 py-2 pr-2 min-h-0 overflow-hidden transition-[gap,padding] duration-200 ease-out',
+        showPanel || showSecondaryPanel ? 'gap-2' : 'gap-0',
+        showSecondaryPanel ? 'pl-2' : 'pl-0',
       )}
     >
+      {/* Secondary panel: route-supplied, always-visible card (e.g. schedule
+          Dates). Hidden below lg, same breakpoint the schedule route already
+          uses to swap the sidebar for the horizontal date strip. Gated on
+          pathname, not just the prop, see showSecondaryPanel above. */}
+      {showSecondaryPanel && (
+        <div className="hidden lg:flex w-[230px] shrink-0 h-full flex-col bg-background border border-border rounded-3xl overflow-hidden">
+          {secondaryPanel}
+        </div>
+      )}
+
       <main
         className={cn(
           'min-w-0 bg-background border border-border rounded-3xl overflow-y-auto overflow-x-hidden transition-[flex] duration-200 ease-out',
