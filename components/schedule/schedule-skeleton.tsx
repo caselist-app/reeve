@@ -4,7 +4,7 @@
 
 export function SidebarSkeleton() {
   return (
-    <div className="w-[230px] shrink-0 border-r border-border flex flex-col overflow-hidden animate-pulse">
+    <div className="h-full flex flex-col overflow-hidden animate-pulse">
       <div className="flex shrink-0 items-center justify-between px-4 pt-4 pb-2">
         <div className="h-3 w-10 rounded bg-muted" />
         <div className="h-5 w-5 rounded bg-muted" />

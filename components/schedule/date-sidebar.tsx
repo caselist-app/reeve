@@ -98,7 +98,7 @@ export function DateSidebar({ tourId, dates, defaultDate }: DateSidebarProps) {
   const selectedDate = useSearchParams().get('date') ?? defaultDate
 
   return (
-    <div className="w-[230px] shrink-0 border-r border-border flex flex-col overflow-hidden">
+    <div className="h-full flex flex-col overflow-hidden">
       {/* Spine header: quiet label plus a secondary control to add a day. */}
       <div className="flex shrink-0 items-center justify-between px-4 pt-4 pb-2">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
