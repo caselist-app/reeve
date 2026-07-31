@@ -23,45 +23,6 @@ export type MorningMessageData = {
   hotel_checkout: string | null
 }
 
-// Formats a UTC timestamptz ISO string into HH:MM in the given IANA timezone.
-function formatTime(iso: string | null, tz: string): string {
-  if (!iso) return 'TBC'
-  return new Date(iso).toLocaleTimeString('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: tz,
-  })
-}
-
-export function renderMorningMessage(data: MorningMessageData): string {
-  const tz = data.timezone
-  const lines: string[] = [
-    `Good morning ${data.person_first_name}.`,
-    ``,
-    `*${data.venue_name}* - ${data.show_date}`,
-    ``,
-  ]
-
-  if (data.hotel_name && data.hotel_checkout) {
-    lines.push(`Hotel checkout: ${data.hotel_checkout} (${data.hotel_name})`)
-    lines.push(``)
-  }
-
-  lines.push(`Load in: ${formatTime(data.load_in, tz)}`)
-
-  if (data.soundcheck) {
-    lines.push(`Soundcheck: ${formatTime(data.soundcheck, tz)}`)
-  }
-
-  lines.push(`Doors: ${formatTime(data.doors, tz)}`)
-  lines.push(`On stage: ${formatTime(data.headliner_on, tz)}`)
-  lines.push(`Curfew: ${formatTime(data.curfew, tz)}`)
-  lines.push(``)
-  lines.push(`Reply /itinerary for full day details or /travel for your transport.`)
-
-  return lines.join('\n')
-}
-
 export async function buildMorningMessageData(
   person_id: string,
   show_id: string,

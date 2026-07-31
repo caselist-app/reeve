@@ -62,32 +62,6 @@ export async function updateDayEvent(
   return { error: null, eventId }
 }
 
-export async function deleteDayEvent(
-  eventId: string,
-): Promise<DayEventActionState> {
-  await requireUser()
-
-  const supabase = await createClient()
-
-  const { data: existing } = await supabase
-    .from('day_events')
-    .select('tour_id')
-    .eq('id', eventId)
-    .single()
-
-  if (!existing) return { error: 'Event not found.' }
-
-  const { error } = await supabase
-    .from('day_events')
-    .delete()
-    .eq('id', eventId)
-
-  if (error) return { error: error.message }
-
-  revalidatePath(`/tours/${existing.tour_id}/schedule`)
-  return { error: null }
-}
-
 // Upserts the __day_notes__ sentinel row for non-show days.
 // Used by the day info panel notes textarea.
 export async function upsertDayNotes(

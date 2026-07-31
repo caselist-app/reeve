@@ -25,18 +25,3 @@ export function parseCity(address: string | null): string {
   const loc = parseLocation(address)
   return loc.split(',')[0]?.trim() ?? ''
 }
-
-// Relative day label vs today, evaluated in the tour timezone.
-export function relativeDay(dateStr: string, timezone: string): string {
-  // en-CA renders YYYY-MM-DD, which is what we compare on.
-  const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: timezone })
-  const today = Date.parse(`${todayStr}T00:00:00Z`)
-  const target = Date.parse(`${dateStr}T00:00:00Z`)
-  const diffDays = Math.round((target - today) / 86_400_000)
-
-  if (diffDays === 0) return 'Today'
-  if (diffDays === 1) return 'Tomorrow'
-  if (diffDays === -1) return 'Yesterday'
-  if (diffDays > 1) return `in ${diffDays} days`
-  return `${Math.abs(diffDays)} days ago`
-}

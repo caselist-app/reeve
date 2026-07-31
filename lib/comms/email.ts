@@ -147,7 +147,7 @@ export async function provisionTourEmailDomain(artistSlug: string): Promise<void
 // Resolves the from address for a tour.
 // localPart defaults to 'advancing' (formal documents); operational mail passes
 // 'crew'. Falls back to the shared {localPart}@yourreeve.com when artist_slug is null.
-export function tourFromAddress(
+function tourFromAddress(
   artistSlug: string | null | undefined,
   localPart = 'advancing'
 ): string {

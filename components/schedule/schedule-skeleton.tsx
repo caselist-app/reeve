@@ -81,14 +81,3 @@ export function DayContentSkeleton() {
     </div>
   )
 }
-
-// The full three-column shell, used as the route-level loading fallback before
-// the page itself has rendered.
-export function ScheduleSkeleton() {
-  return (
-    <div className="flex h-full overflow-hidden">
-      <SidebarSkeleton />
-      <DayContentSkeleton />
-    </div>
-  )
-}

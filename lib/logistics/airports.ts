@@ -217,7 +217,7 @@ export const AIRPORTS: Airport[] = [
 ]
 
 // Haversine formula: returns distance in kilometres between two lat/lng pairs.
-export function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371
   const dLat = ((lat2 - lat1) * Math.PI) / 180
   const dLng = ((lng2 - lng1) * Math.PI) / 180
