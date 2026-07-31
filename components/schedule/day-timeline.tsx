@@ -1,5 +1,6 @@
 import { TimelineCard } from '@/components/schedule/timeline-card'
 import { DayHeader } from '@/components/schedule/day-header'
+import { formatFlightNumber } from '@/lib/utils/format-flight-number'
 import type { DayRecords } from '@/lib/schedule/day-records'
 
 interface DayTimelineProps {
@@ -152,10 +153,39 @@ export async function DayTimeline({ records, tourId, tourDateId, date, timezone,
     ground: 'Ground',
     hire: 'Hire car',
   }
+  // Flight numbers are stored as "CX150" (airline IATA code + digits, per the
+  // Add Flight flow and the older manual entry form). AirLabs serves airline
+  // logos from a static URL keyed by that same code, no API call involved.
+  const FLIGHT_CODE_PATTERN = /^([A-Za-z]{2,3})\d+/
+  function logoIataCodeFor(seg: (typeof segments)[number]): string | null {
+    if (seg.mode !== 'flight' || !seg.vehicle_or_flight_no) return null
+    const match = seg.vehicle_or_flight_no.match(FLIGHT_CODE_PATTERN)
+    return match ? match[1].toUpperCase() : null
+  }
+
   for (const seg of segments) {
     const label = MODE_LABELS[seg.mode] ?? seg.mode
     const title = [seg.origin, seg.destination].filter(Boolean).join(' to ') || label
-    const subtitle = [seg.carrier_operator, seg.vehicle_or_flight_no].filter(Boolean).join(' ')
+    // Flight subtitle is just the flight number ("CX 150"); the logo already
+    // identifies the airline, and full carrier name plus code was redundant.
+    // Other modes keep carrier + reference as before.
+    const subtitle =
+      seg.mode === 'flight'
+        ? formatFlightNumber(seg.vehicle_or_flight_no)
+        : [seg.carrier_operator, seg.vehicle_or_flight_no].filter(Boolean).join(' ')
+    const flightTimes =
+      seg.mode === 'flight'
+        ? {
+            originIata: seg.origin_iata,
+            originTime: formatTime(seg.depart_at, timezone),
+            destinationIata: seg.destination_iata,
+            destinationTime: formatTime(seg.arrive_at, timezone),
+            // Same rule as the flight edit panel: only stamped once the
+            // AirLabs lookup's date matched the TM's chosen date, or the
+            // live tracking job (Commit 6) has polled it.
+            live: !!seg.last_tracked_at,
+          }
+        : undefined
     items.push({
       key: `transport-${seg.id}`,
       sortKey: sortKey(seg.depart_at, date),
@@ -168,6 +198,8 @@ export async function DayTimeline({ records, tourId, tourDateId, date, timezone,
           subtitle={subtitle || undefined}
           accent="border-teal-500"
           card={{ type: 'transport', segmentId: seg.id }}
+          logoIataCode={logoIataCodeFor(seg)}
+          flightTimes={flightTimes}
         />
       ),
     })

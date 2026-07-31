@@ -18,10 +18,20 @@ export const seedAirlinesReferenceJob = task({
   id: 'seed-airlines-reference',
   run: async () => {
     const admin = createAdminClient()
-    const airlines = await fetchAllAirlines()
+    const allAirlines = await fetchAllAirlines()
+
+    // Only IATA-coded airlines are usable by this feature at all: the Add
+    // Flight flow constructs flight_iata as `${airlineIataCode}${number}` to
+    // query AirLabs, so an airline with no IATA code can never resolve to a
+    // real lookup. AirLabs' database is ~6,500 entries deep, most of them
+    // small/historic/military operators with no IATA code - keeping them
+    // out of the cache entirely (rather than just deprioritising them in
+    // search ranking) is both correct and a much smaller table to ship to
+    // the client on every Add Flight open.
+    const airlines = allAirlines.filter((a) => a.iataCode)
 
     if (airlines.length === 0) {
-      return { seeded: 0 }
+      return { seeded: 0, skipped: allAirlines.length }
     }
 
     const { error: deleteError } = await admin

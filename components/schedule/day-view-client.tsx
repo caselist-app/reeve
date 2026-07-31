@@ -52,6 +52,8 @@ export interface DayPanelData {
     Tables<'transport_segments'>,
     | 'id' | 'mode' | 'origin' | 'destination' | 'depart_at' | 'arrive_at'
     | 'carrier_operator' | 'vehicle_or_flight_no' | 'booking_reference' | 'status'
+    | 'origin_iata' | 'destination_iata' | 'flight_status'
+    | 'actual_depart_at' | 'actual_arrive_at' | 'gate' | 'terminal' | 'last_tracked_at'
   >>
   hotels: Array<Pick<
     Tables<'hotel_stays'>,

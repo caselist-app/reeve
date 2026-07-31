@@ -45,3 +45,21 @@ export const PASSPORT_VARIANT: Record<string, StatusVariant> = {
   soon: 'warning',
   expired: 'danger',
 }
+
+// AirLabs-derived live status (Brief 31), distinct from TRANSPORT_VARIANT's
+// booking-lifecycle status above - never conflate the two columns.
+export const FLIGHT_STATUS_VARIANT: Record<string, StatusVariant> = {
+  scheduled: 'default',
+  delayed: 'warning',
+  cancelled: 'danger',
+  departed: 'info',
+  landed: 'success',
+}
+
+export const FLIGHT_STATUS_LABEL: Record<string, string> = {
+  scheduled: 'On time',
+  delayed: 'Delayed',
+  cancelled: 'Cancelled',
+  departed: 'Departed',
+  landed: 'Landed',
+}
