@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { DeleteArtistDialog } from '@/components/artists/delete-artist-dialog'
+import { tourFromAddress } from '@/lib/comms/email'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -32,7 +33,7 @@ export default async function ArtistSettingsPage({ params }: Props) {
         <h1 className="text-2xl font-semibold">{artist.name}</h1>
         {artist.slug && (
           <p className="mt-1 text-sm text-muted-foreground">
-            advancing@{artist.slug}.yourreeve.com
+            {tourFromAddress(artist.slug)}
           </p>
         )}
       </div>

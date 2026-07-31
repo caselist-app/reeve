@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     // Return the confirmation response Meta expects
     const confirmationCode = `reeve-deletion-${userId}-${Date.now()}`
     return NextResponse.json({
-      url: `https://yourreeve.com/data-deletion?code=${confirmationCode}`,
+      url: `${process.env.NEXT_PUBLIC_APP_URL ?? 'https://tourwithreeve.com'}/data-deletion?code=${confirmationCode}`,
       confirmation_code: confirmationCode,
     })
   } catch {

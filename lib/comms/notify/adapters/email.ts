@@ -2,7 +2,7 @@ import { sendEmail } from '@/lib/comms/email'
 import type { RenderedEmail } from '../types'
 
 // Operational mail uses the 'crew' local-part on the tour's branded subdomain
-// (crew@{slug}.yourreeve.com), keeping its sending reputation separate from
+// (crew@{slug}.tourwithreeve.com), keeping its sending reputation separate from
 // the formal 'advancing' stream.
 const OPERATIONAL_LOCAL_PART = 'crew'
 
