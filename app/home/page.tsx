@@ -10,7 +10,7 @@ export const metadata: Metadata = {
     title: 'Reeve. The operating system for the people who run tours.',
     description:
       'Routing, travel, day sheets and crew comms, pushed to the right person over WhatsApp. One flat price. Unlimited crew.',
-    url: 'https://yourreeve.com/home',
+    url: 'https://tourwithreeve.com/home',
     siteName: 'Reeve',
     type: 'website',
   },

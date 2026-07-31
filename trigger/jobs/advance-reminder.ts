@@ -73,7 +73,7 @@ export const advanceReminderJob = task({
       return { skipped: true, reason: 'tour_not_found' }
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://reeve.me'
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://tourwithreeve.com'
     const shareUrl = `${appUrl}/a/${share.share_token}`
     const artistName = tour.artists?.name ?? tour.name
 
