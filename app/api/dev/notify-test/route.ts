@@ -46,7 +46,8 @@ export async function POST(request: NextRequest) {
   if (provisionSlug) {
     try {
       await provisionTourEmailDomain(provisionSlug)
-      return NextResponse.json({ ok: true, provisioned: `${provisionSlug}.yourreeve.com` })
+      const emailRootDomain = process.env.EMAIL_ROOT_DOMAIN ?? 'tourwithreeve.com'
+      return NextResponse.json({ ok: true, provisioned: `${provisionSlug}.${emailRootDomain}` })
     } catch (err) {
       return NextResponse.json(
         { ok: false, error: err instanceof Error ? err.message : String(err) },
