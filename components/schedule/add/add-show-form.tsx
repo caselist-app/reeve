@@ -1,11 +1,11 @@
 'use client'
 
-import { useTransition, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { createShow } from '@/lib/actions/shows'
+import { useEntityForm } from '@/hooks/use-entity-form'
+import { readForm } from '@/lib/forms/read-form'
 
 interface AddShowFormProps {
   tourId: string
@@ -15,30 +15,22 @@ interface AddShowFormProps {
 }
 
 export function AddShowForm({ tourId, date, onBack, onSuccess }: AddShowFormProps) {
-  const router = useRouter()
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
-
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-
-    startTransition(async () => {
-      const result = await createShow(tourId, {
-        date,
-        venue_name: fd.get('venue_name') as string,
-        address:    (fd.get('address') as string) || null,
-        load_in_at: (fd.get('load_in_at') as string) || null,
-        curfew_at:  (fd.get('curfew_at') as string) || null,
+  const { submit, pending, error } = useEntityForm({
+    refreshOnSuccess: true,
+    onSuccess,
+    action: (fd) => {
+      const data = readForm(fd, {
+        venue_name: 'requiredString',
+        address: 'string',
+        load_in_at: 'string',
+        curfew_at: 'string',
       })
-      if (result.error) { setError(result.error); return }
-      router.refresh()
-      onSuccess()
-    })
-  }
+      return createShow(tourId, { date, ...data })
+    },
+  })
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
+    <form onSubmit={submit} className="space-y-3">
       <div className="space-y-1">
         <Label className="text-xs">Venue name</Label>
         <Input name="venue_name" placeholder="The Roundhouse" required className="h-7 text-xs" />

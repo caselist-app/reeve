@@ -1,12 +1,13 @@
 'use client'
 
-import { useTransition, useState } from 'react'
 import { PanelShell } from '@/components/layout/panel-shell'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { updateHotelStay } from '@/lib/actions/hotels'
 import type { Tables } from '@/lib/types/database'
+import { useEntityForm } from '@/hooks/use-entity-form'
+import { readForm } from '@/lib/forms/read-form'
 
 type Stay = Pick<
   Tables<'hotel_stays'>,
@@ -21,35 +22,25 @@ interface HotelPanelProps {
 }
 
 export function HotelPanel({ stay }: HotelPanelProps) {
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
-
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setSaved(false)
-    const fd = new FormData(e.currentTarget)
-
-    startTransition(async () => {
-      const result = await updateHotelStay(stay.id, {
-        name:           (fd.get('name') as string) || null,
-        address:        (fd.get('address') as string) || null,
-        check_in_date:  (fd.get('check_in_date') as string) || null,
-        check_in_time:  (fd.get('check_in_time') as string) || null,
-        check_out_date: (fd.get('check_out_date') as string) || null,
-        check_out_time: (fd.get('check_out_time') as string) || null,
-        wifi_network:   (fd.get('wifi_network') as string) || null,
-        wifi_password:  (fd.get('wifi_password') as string) || null,
+  const { submit, pending, error, saved } = useEntityForm({
+    action: (fd) => {
+      const data = readForm(fd, {
+        name: 'string',
+        address: 'string',
+        check_in_date: 'string',
+        check_in_time: 'string',
+        check_out_date: 'string',
+        check_out_time: 'string',
+        wifi_network: 'string',
+        wifi_password: 'string',
       })
-      if (result.error) { setError(result.error); return }
-      setError(null)
-      setSaved(true)
-    })
-  }
+      return updateHotelStay(stay.id, data)
+    },
+  })
 
   return (
     <PanelShell title={stay.name ?? 'Hotel'} description={stay.address ?? undefined}>
-      <form onSubmit={handleSubmit} className="space-y-3">
+      <form onSubmit={submit} className="space-y-3">
         <div className="space-y-1">
           <Label className="text-xs">Hotel name</Label>
           <Input name="name" defaultValue={stay.name ?? ''} className="h-7 text-xs" />

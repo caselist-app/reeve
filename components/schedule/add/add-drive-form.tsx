@@ -1,13 +1,14 @@
 'use client'
 
-import { useTransition, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { createTransportSegment } from '@/lib/actions/transport'
 import { getDriveTime } from '@/lib/actions/drive-time'
 import { fromDatetimeLocal } from '@/lib/schedule/datetime'
+import { useEntityForm } from '@/hooks/use-entity-form'
+import { readForm } from '@/lib/forms/read-form'
 
 interface AddDriveFormProps {
   tourId: string
@@ -19,9 +20,6 @@ interface AddDriveFormProps {
 }
 
 export function AddDriveForm({ tourId, tourDateId, date, timezone, onBack, onSuccess }: AddDriveFormProps) {
-  const router = useRouter()
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
   const [computedArrival, setComputedArrival] = useState<string>('')
   const [computing, setComputing] = useState(false)
 
@@ -36,43 +34,39 @@ export function AddDriveForm({ tourId, tourDateId, date, timezone, onBack, onSuc
     }
   }
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-
-    startTransition(async () => {
-      const departLocal = fd.get('depart_at') as string
-      const departUtc = fromDatetimeLocal(departLocal || null, timezone)
+  const { submit, pending, error } = useEntityForm({
+    refreshOnSuccess: true,
+    onSuccess,
+    action: async (fd) => {
+      const data = readForm(fd, {
+        origin: 'string',
+        destination: 'string',
+        depart_at: 'string',
+      })
+      const departUtc = fromDatetimeLocal(data.depart_at, timezone)
 
       // If no computed arrival yet, compute now before saving.
       let arriveUtc: string | null = null
       if (computedArrival) {
         arriveUtc = computedArrival
-      } else {
-        const origin = fd.get('origin') as string
-        const dest = fd.get('destination') as string
-        if (origin && dest && departLocal) {
-          const dr = await getDriveTime(origin, dest, departLocal, timezone)
-          arriveUtc = dr.arrive_at ?? null
-        }
+      } else if (data.origin && data.destination && data.depart_at) {
+        const dr = await getDriveTime(data.origin, data.destination, data.depart_at, timezone)
+        arriveUtc = dr.arrive_at ?? null
       }
 
-      const result = await createTransportSegment(tourId, {
+      return createTransportSegment(tourId, {
         tour_date_id: tourDateId,
-        mode:         'ground',
-        origin:       (fd.get('origin') as string) || null,
-        destination:  (fd.get('destination') as string) || null,
-        depart_at:    departUtc,
-        arrive_at:    arriveUtc,
+        mode: 'ground',
+        origin: data.origin,
+        destination: data.destination,
+        depart_at: departUtc,
+        arrive_at: arriveUtc,
       })
-      if (result.error) { setError(result.error); return }
-      router.refresh()
-      onSuccess()
-    })
-  }
+    },
+  })
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
+    <form onSubmit={submit} className="space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">From</Label>

@@ -1,6 +1,5 @@
 'use client'
 
-import { useTransition, useState } from 'react'
 import { PanelShell } from '@/components/layout/panel-shell'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -9,6 +8,8 @@ import { Button } from '@/components/ui/button'
 import { updateDayEvent } from '@/lib/actions/day-events'
 import type { Tables } from '@/lib/types/database'
 import { fromDatetimeLocal, toDatetimeLocal } from '@/lib/schedule/datetime'
+import { useEntityForm } from '@/hooks/use-entity-form'
+import { readForm } from '@/lib/forms/read-form'
 
 type DayEvent = Pick<
   Tables<'day_events'>,
@@ -21,32 +22,28 @@ interface EventPanelProps {
 }
 
 export function EventPanel({ event, timezone }: EventPanelProps) {
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
-
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setSaved(false)
-    const fd = new FormData(e.currentTarget)
-
-    startTransition(async () => {
-      const result = await updateDayEvent(event.id, {
-        title:     (fd.get('title') as string) || undefined,
-        starts_at: fromDatetimeLocal((fd.get('starts_at') as string) || null, timezone),
-        ends_at:   fromDatetimeLocal((fd.get('ends_at') as string) || null, timezone),
-        location:  (fd.get('location') as string) || null,
-        notes:     (fd.get('notes') as string) || null,
+  const { submit, pending, error, saved } = useEntityForm({
+    action: (fd) => {
+      const data = readForm(fd, {
+        title: 'stringOrUndefined',
+        starts_at: 'string',
+        ends_at: 'string',
+        location: 'string',
+        notes: 'string',
       })
-      if (result.error) { setError(result.error); return }
-      setError(null)
-      setSaved(true)
-    })
-  }
+      return updateDayEvent(event.id, {
+        title: data.title,
+        starts_at: fromDatetimeLocal(data.starts_at, timezone),
+        ends_at: fromDatetimeLocal(data.ends_at, timezone),
+        location: data.location,
+        notes: data.notes,
+      })
+    },
+  })
 
   return (
     <PanelShell title={event.title} description="Event">
-      <form onSubmit={handleSubmit} className="space-y-3">
+      <form onSubmit={submit} className="space-y-3">
         <div className="space-y-1">
           <Label className="text-xs">Title</Label>
           <Input name="title" defaultValue={event.title} required className="h-7 text-xs" />

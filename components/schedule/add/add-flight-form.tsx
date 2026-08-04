@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useTransition, type ReactNode } from 'react'
+import { useState, useEffect, useMemo, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { AirlineLogo } from '@/components/schedule/airline-logo'
 import { Input } from '@/components/ui/input'
@@ -20,6 +20,9 @@ import { formatFlightNumber } from '@/lib/utils/format-flight-number'
 import { rankSearch } from '@/lib/utils/rank-search'
 import type { NormalizedFlightLookup, NormalizedRouteTimetableEntry } from '@/lib/logistics/adapters/airlabs'
 import { fromDatetimeLocal } from '@/lib/schedule/datetime'
+import { ManualFlightForm } from '@/components/schedule/add/manual-flight-form'
+import { FlightChips, highlightMatch, type Airline } from '@/components/schedule/add/flight-form-ui'
+import { timeOfDay, detectFlightCode, weekdayCodeFor, STATUS_LABEL } from '@/components/schedule/add/flight-form-helpers'
 
 interface AddFlightFormProps {
   tourId: string
@@ -30,73 +33,8 @@ interface AddFlightFormProps {
   onSuccess: () => void
 }
 
-type Airline = { iataCode: string | null; icaoCode: string | null; name: string }
 type Airport = { iataCode: string; icaoCode: string | null; name: string; city: string | null }
 type Step = 'search' | 'date' | 'card' | 'reference' | 'route' | 'manual'
-
-// dep_time_local / arr_time_local are "YYYY-MM-DD HH:MM"; take HH:MM.
-function timeOfDay(local: string | null): string {
-  return local ? local.slice(11, 16) : '00:00'
-}
-
-function highlightMatch(text: string, query: string): ReactNode {
-  if (!query) return text
-  const idx = text.toLowerCase().indexOf(query.toLowerCase())
-  if (idx === -1) return text
-  return (
-    <>
-      {text.slice(0, idx)}
-      <span className="font-semibold text-foreground">{text.slice(idx, idx + query.length)}</span>
-      {text.slice(idx + query.length)}
-    </>
-  )
-}
-
-// Detects "CX150", "cx 150", "CX-150": a 2-3 letter airline code immediately
-// (optionally with a space/dash) followed by digits.
-function detectFlightCode(input: string): { code: string; number: string } | null {
-  const m = input.trim().match(/^([A-Za-z]{2,3})\s*-?\s*(\d{1,4})$/)
-  if (!m) return null
-  return { code: m[1].toUpperCase(), number: m[2] }
-}
-
-function FlightChips({
-  airline,
-  flightNumber,
-  onEditAirline,
-  onFlightNumberChange,
-}: {
-  airline: Airline | null
-  flightNumber: string
-  onEditAirline: () => void
-  onFlightNumberChange: (v: string) => void
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <button
-        type="button"
-        onClick={onEditAirline}
-        className="rounded-full border border-border px-2 py-1 text-[11px] hover:bg-muted/60"
-      >
-        {airline?.iataCode ?? airline?.name ?? 'Airline'}
-      </button>
-      <Input
-        value={flightNumber}
-        onChange={(e) => onFlightNumberChange(e.target.value.replace(/\D/g, ''))}
-        placeholder="Number"
-        className="h-6 w-20 text-xs"
-      />
-    </div>
-  )
-}
-
-const STATUS_LABEL: Record<string, string> = {
-  scheduled: 'Departs On Time',
-  delayed: 'Delayed',
-  cancelled: 'Cancelled',
-  departed: 'Departed',
-  landed: 'Landed',
-}
 
 export function AddFlightForm({ tourId, tourDateId, date, timezone, onBack, onSuccess }: AddFlightFormProps) {
   const router = useRouter()
@@ -365,11 +303,6 @@ export function AddFlightForm({ tourId, tourDateId, date, timezone, onBack, onSu
       }
       setTimetableResults(result.results)
     })
-  }
-
-  const DAY_CODES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
-  function weekdayCodeFor(dateStr: string): string {
-    return DAY_CODES[new Date(`${dateStr}T00:00:00`).getDay()]
   }
 
   // Timetable entries are a static schedule, not a live lookup - AirLabs'
@@ -929,100 +862,4 @@ export function AddFlightForm({ tourId, tourDateId, date, timezone, onBack, onSu
   }
 
   return null
-}
-
-// Manual fallback: "Find by route" (origin/destination without a flight
-// number), or the TM just wants to type everything by hand. Same shape as
-// the flat form this file replaced - no AirLabs involved.
-function ManualFlightForm({
-  tourId,
-  tourDateId,
-  date,
-  timezone,
-  onBack,
-  onSuccess,
-}: {
-  tourId: string
-  tourDateId: string
-  date: string
-  timezone: string
-  onBack: () => void
-  onSuccess: () => void
-}) {
-  const router = useRouter()
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
-
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-
-    startTransition(async () => {
-      const result = await createTransportSegment(tourId, {
-        tour_date_id: tourDateId,
-        mode: 'flight',
-        origin: (fd.get('origin') as string) || null,
-        destination: (fd.get('destination') as string) || null,
-        depart_at: fromDatetimeLocal((fd.get('depart_at') as string) || null, timezone),
-        arrive_at: fromDatetimeLocal((fd.get('arrive_at') as string) || null, timezone),
-        carrier_operator: (fd.get('carrier_operator') as string) || null,
-        vehicle_or_flight_no: (fd.get('vehicle_or_flight_no') as string) || null,
-        booking_reference: (fd.get('booking_reference') as string) || null,
-      })
-      if (result.error) {
-        setError(result.error)
-        return
-      }
-      router.refresh()
-      onSuccess()
-    })
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="space-y-3">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label className="text-xs">Airline</Label>
-          <Input name="carrier_operator" placeholder="BA" className="h-7 text-xs" />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Flight number</Label>
-          <Input name="vehicle_or_flight_no" placeholder="BA0123" className="h-7 text-xs" />
-        </div>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label className="text-xs">From</Label>
-          <Input name="origin" placeholder="LHR" className="h-7 text-xs" />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">To</Label>
-          <Input name="destination" placeholder="CDG" className="h-7 text-xs" />
-        </div>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label className="text-xs">Departs</Label>
-          <Input name="depart_at" type="datetime-local" defaultValue={`${date}T07:00`} className="h-7 text-xs" />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Arrives</Label>
-          <Input name="arrive_at" type="datetime-local" className="h-7 text-xs" />
-        </div>
-      </div>
-      <div className="space-y-1">
-        <Label className="text-xs">Booking reference</Label>
-        <Input name="booking_reference" placeholder="ABC123" className="h-7 text-xs" />
-      </div>
-      {error && <p className="text-xs text-destructive">{error}</p>}
-      <div className="flex gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={onBack} className="flex-1">
-          Back
-        </Button>
-        <Button type="submit" size="sm" disabled={pending} className="flex-1">
-          {pending ? 'Adding...' : 'Add flight'}
-        </Button>
-      </div>
-    </form>
-  )
 }

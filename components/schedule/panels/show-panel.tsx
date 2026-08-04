@@ -1,6 +1,6 @@
 'use client'
 
-import { useTransition, useState } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useSidePanel } from '@/stores/side-panel-store'
 import { PanelShell } from '@/components/layout/panel-shell'
@@ -19,6 +19,8 @@ import {
 } from '@/components/ui/alert-dialog'
 import { updateDaySheet, deleteShow } from '@/lib/actions/shows'
 import type { Tables } from '@/lib/types/database'
+import { useEntityForm } from '@/hooks/use-entity-form'
+import { readForm } from '@/lib/forms/read-form'
 
 type DaySheet = Pick<
   Tables<'day_sheets'>,
@@ -82,11 +84,9 @@ const SECTIONS = [
 ]
 
 export function ShowPanel({ showId, venueName, timezone, daySheet }: ShowPanelProps) {
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const router = useRouter()
   const { close } = useSidePanel()
 
@@ -94,35 +94,28 @@ export function ShowPanel({ showId, venueName, timezone, daySheet }: ShowPanelPr
     setDeleting(true)
     const result = await deleteShow(showId)
     setDeleting(false)
-    if (result.error) { setError(result.error); return }
+    if (result.error) { setDeleteError(result.error); return }
     setDeleteOpen(false)
     close()
     router.refresh()
   }
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setSaved(false)
-    const fd = new FormData(e.currentTarget)
-
-    const data: Record<string, string | null> = {}
-    for (const section of SECTIONS) {
-      for (const { key } of section.fields) {
-        data[key] = (fd.get(key) as string) || null
-      }
-    }
-
-    startTransition(async () => {
-      const result = await updateDaySheet(showId, data as Parameters<typeof updateDaySheet>[1])
-      if (result.error) { setError(result.error); return }
-      setError(null)
-      setSaved(true)
-    })
-  }
+  const { submit, pending, error, saved } = useEntityForm({
+    action: (fd) => {
+      // Day sheet fields are a dynamic list (SECTIONS), not a fixed shape, so
+      // the field-name-to-kind map is built from it rather than written out
+      // by hand. Every field reads as plain 'string' (null when blank).
+      const shape = Object.fromEntries(
+        SECTIONS.flatMap((section) => section.fields.map(({ key }) => [key, 'string' as const]))
+      )
+      const data = readForm(fd, shape)
+      return updateDaySheet(showId, data as Parameters<typeof updateDaySheet>[1])
+    },
+  })
 
   return (
     <PanelShell title={venueName} description="Day sheet">
-      <form onSubmit={handleSubmit} className="space-y-5">
+      <form onSubmit={submit} className="space-y-5">
         {SECTIONS.map((section) => (
           <div key={section.title}>
             <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
@@ -144,7 +137,7 @@ export function ShowPanel({ showId, venueName, timezone, daySheet }: ShowPanelPr
           </div>
         ))}
 
-        {error && <p className="text-xs text-destructive">{error}</p>}
+        {(error || deleteError) && <p className="text-xs text-destructive">{error || deleteError}</p>}
         <Button type="submit" size="sm" disabled={pending} className="w-full">
           {pending ? 'Saving...' : 'Save'}
         </Button>

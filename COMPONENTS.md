@@ -60,6 +60,16 @@ Adding or renaming a day-sheet field (load-in, curfew, etc.) requires updating a
 - `components/people/person-sheet.tsx` vs `components/roster/contact-sheet.tsx`: the roster one is live and canonical, the people one is likely dead.
 - `components/schedule/schedule-view.tsx` (tour-level schedule list, own hardcoded colors) vs `components/schedule/date-sidebar.tsx` (day-view Dates panel, CLAUDE.md's documented chip colors). These two have different, unreconciled color maps for the same day types. Confirm which is actually live before copying either one's color logic.
 
+## Form submission: every form goes through `useEntityForm`
+
+Every form that calls a server action goes through `hooks/use-entity-form.ts`. Never hand-roll `useTransition` plus an error `useState` plus `router.refresh()`. Never read `FormData` with an `fd.get(name) as string` cast: use `lib/forms/read-form.ts`'s `readForm(fd, shape)` instead, which gives every field a single, reviewed conversion (`'string'`, `'stringOrUndefined'`, `'requiredString'`, `'number'`, `'numberOrUndefined'`).
+
+`useEntityForm({ action, onSuccess, refreshOnSuccess })` owns pending state, error state, the submit handler, and the success path. `action` reads the FormData (via `readForm`) and calls the server action; it can do async work first (a drive-time lookup, a Zod parse) as long as it resolves to something with `error`. `refreshOnSuccess` defaults to `false`: add forms that create a new timeline item pass `true` so the server-rendered timeline picks it up; edit panels that mutate a row already rendered inside their own panel state leave it `false` and rely on the hook's `saved` flag to flash "Saved." instead. See `components/schedule/add/add-hotel-form.tsx` (simple add form), `components/schedule/panels/event-panel.tsx` (simple edit panel), and `components/shows/show-form.tsx` or `components/roster/contact-sheet.tsx` (multi-branch submit logic, still funnelled through one `action`) for the range of real usage.
+
+Genuine exceptions exist and are fine: a control that mutates on a plain button click with no `<form>` (`transport-panel.tsx`'s `BookingReferenceField`, saving one field from a controlled input) has nothing for `useEntityForm` to wrap, since there's no `FormData` to read. A multi-step wizard driven by many small button-click mutations across steps, not one field-name-to-server-action submission (`add-flight-form.tsx`'s search wizard, planner workspaces, the command palette), is also a legitimate `useTransition` holdout. What is not an exception: a real `<form onSubmit>` with named fields and one server action call, no matter how large.
+
+**Known gap, tracked, not yet closed:** as of Brief 32 Phase 2, `useEntityForm`/`readForm` cover the forms the brief's audit named by number (the five schedule add-forms, the four schedule panels, `add-flight-form.tsx`'s wizard split out its manual-entry form, `show-form.tsx`, `contact-sheet.tsx`). Roughly 27 other files still hand-roll the old pattern (`settings-form.tsx`, `new-tour-form.tsx`, `rehearsal-form.tsx`, `day-sheet-form.tsx`, the planner and roster panels, and others) and were out of this pass's explicit scope, not confirmed exceptions. Migrate a file to `useEntityForm` the next time you touch it for an unrelated reason, don't leave it as the pattern to copy for a new form.
+
 ## When building a new form or panel
 
 1. Pick the right panel system (global or secondary) per the table above, not a new one.
@@ -67,3 +77,8 @@ Adding or renaming a day-sheet field (load-in, curfew, etc.) requires updating a
 3. Validate through a Zod schema in `lib/validators/`, matching the existing `showSchema`/`contactSchema` pattern.
 4. If the form touches a datetime, check which of the four existing tz-handling approaches actually matches the column before picking one.
 5. Never apply the card token to the panel component itself, `PanelShell` already sits inside one. See "app-content.tsx owns every card wrapper" above.
+6. Wire the submit path through `useEntityForm` and `readForm`, per "Form submission" above. Don't hand-roll `useTransition` for a new form; that is exactly the pattern Brief 32 removed.
+
+## The third-occurrence rule
+
+The second time a pattern is written by hand, note it in a comment. The third time, extract it into a shared file (`hooks/`, `lib/`, or `components/ui/`) and write the rule here. Don't document a duplicated pattern as the approved approach to follow, which is how the pre-Brief-32 bottom-sheet and form-boilerplate duplication both got institutionalised in this file.

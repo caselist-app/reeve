@@ -32,6 +32,8 @@ import { updateTransportSegment, deleteTransportSegment } from '@/lib/actions/tr
 import { useSidePanel } from '@/stores/side-panel-store'
 import type { Tables } from '@/lib/types/database'
 import { fromDatetimeLocal, toDatetimeLocal } from '@/lib/schedule/datetime'
+import { useEntityForm } from '@/hooks/use-entity-form'
+import { readForm } from '@/lib/forms/read-form'
 
 type Segment = Pick<
   Tables<'transport_segments'>,
@@ -276,36 +278,31 @@ function FlightCard({ segment, timezone }: { segment: Segment; timezone: string 
 }
 
 function EditableSegmentForm({ segment, timezone }: { segment: Segment; timezone: string }) {
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
-
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setSaved(false)
-    const fd = new FormData(e.currentTarget)
-
-    const departLocal = fd.get('depart_at') as string
-    const arriveLocal = fd.get('arrive_at') as string
-
-    startTransition(async () => {
-      const result = await updateTransportSegment(segment.id, {
-        origin:               (fd.get('origin') as string) || null,
-        destination:          (fd.get('destination') as string) || null,
-        depart_at:            fromDatetimeLocal(departLocal || null, timezone),
-        arrive_at:            fromDatetimeLocal(arriveLocal || null, timezone),
-        carrier_operator:     (fd.get('carrier_operator') as string) || null,
-        vehicle_or_flight_no: (fd.get('vehicle_or_flight_no') as string) || null,
-        booking_reference:    (fd.get('booking_reference') as string) || null,
+  const { submit, pending, error, saved } = useEntityForm({
+    action: (fd) => {
+      const data = readForm(fd, {
+        origin: 'string',
+        destination: 'string',
+        depart_at: 'string',
+        arrive_at: 'string',
+        carrier_operator: 'string',
+        vehicle_or_flight_no: 'string',
+        booking_reference: 'string',
       })
-      if (result.error) { setError(result.error); return }
-      setError(null)
-      setSaved(true)
-    })
-  }
+      return updateTransportSegment(segment.id, {
+        origin: data.origin,
+        destination: data.destination,
+        depart_at: fromDatetimeLocal(data.depart_at, timezone),
+        arrive_at: fromDatetimeLocal(data.arrive_at, timezone),
+        carrier_operator: data.carrier_operator,
+        vehicle_or_flight_no: data.vehicle_or_flight_no,
+        booking_reference: data.booking_reference,
+      })
+    },
+  })
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
+    <form onSubmit={submit} className="space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">From</Label>

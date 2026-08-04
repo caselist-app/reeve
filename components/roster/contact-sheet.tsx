@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useId, useTransition } from 'react'
+import { useState, useId } from 'react'
 import { createContact, updateContact } from '@/lib/actions/contacts'
 import { addPerson, updatePersonTerms } from '@/lib/actions/people'
 import { contactSchema } from '@/lib/validators/contact'
@@ -22,6 +22,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { useEntityForm } from '@/hooks/use-entity-form'
+import { readForm } from '@/lib/forms/read-form'
 
 // Empty string represents no operational channel yet, a real state for a
 // brand-new contact with no WhatsApp number and no Telegram link.
@@ -38,11 +40,16 @@ interface Props {
   onSuccess: (contactId?: string) => void
 }
 
+// Everything this form's three submit paths (add-with-tour-context,
+// edit-with-tour-context, roster-only create/update) can resolve to. Each
+// path calls a different server action (or two in parallel, for the edit
+// path), so this is where they're unified into the one shape useEntityForm
+// needs.
+type ContactSheetResult = { error: string | null; id?: string }
+
 export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
   const formId = useId()
   const { close } = useSidePanel()
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
 
   const isEditing = contact !== null
   const hasTourContext = tourContext !== undefined
@@ -77,131 +84,134 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
 
   const isCrewInTourContext = hasTourContext && personType === 'crew'
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setError(null)
+  const { submit, pending, error } = useEntityForm<ContactSheetResult>({
+    onSuccess: (result) => {
+      close()
+      onSuccess(result.id)
+    },
+    action: async (fd): Promise<ContactSheetResult> => {
+      const strFields = readForm(fd, {
+        contact_email: 'stringOrUndefined',
+        contact_phone: 'stringOrUndefined',
+        whatsapp_number: 'stringOrUndefined',
+        sms_number: 'stringOrUndefined',
+        emergency_contact_name: 'stringOrUndefined',
+        emergency_contact_phone: 'stringOrUndefined',
+        dietary: 'stringOrUndefined',
+        allergies: 'stringOrUndefined',
+        home_city: 'stringOrUndefined',
+        passport_first_names: 'stringOrUndefined',
+        passport_surname: 'stringOrUndefined',
+        passport_number: 'stringOrUndefined',
+        passport_expiry: 'stringOrUndefined',
+        passport_country: 'stringOrUndefined',
+        date_of_birth: 'stringOrUndefined',
+        tshirt_size: 'stringOrUndefined',
+        notes: 'stringOrUndefined',
+        tour_role: 'stringOrUndefined',
+        default_role: 'stringOrUndefined',
+        name: 'requiredString',
+      })
+      const numFields = readForm(fd, {
+        per_diem_rate: 'numberOrUndefined',
+        daily_wage_rate: 'numberOrUndefined',
+        default_per_diem_rate: 'numberOrUndefined',
+        default_daily_wage_rate: 'numberOrUndefined',
+      })
 
-    const fd = new FormData(e.currentTarget)
-    const str = (key: string) => (fd.get(key) as string) || undefined
-    const num = (key: string) => (fd.get(key) ? Number(fd.get(key)) : undefined)
+      // Identity fields common to both paths.
+      const identityRaw = {
+        name: strFields.name,
+        contact_email: strFields.contact_email,
+        contact_phone: strFields.contact_phone,
+        operational_channel: operationalChannel || null,
+        email_enabled: emailEnabled,
+        whatsapp_number: strFields.whatsapp_number,
+        sms_number: strFields.sms_number,
+        emergency_contact_name: strFields.emergency_contact_name,
+        emergency_contact_phone: strFields.emergency_contact_phone,
+        dietary: strFields.dietary,
+        allergies: strFields.allergies,
+        home_city: strFields.home_city,
+        passport_first_names: strFields.passport_first_names,
+        passport_surname: strFields.passport_surname,
+        passport_number: strFields.passport_number,
+        passport_expiry: strFields.passport_expiry,
+        passport_country: strFields.passport_country,
+        date_of_birth: strFields.date_of_birth,
+        tshirt_size: strFields.tshirt_size,
+        notes: strFields.notes,
+      }
 
-    // Identity fields common to both paths.
-    const identityRaw = {
-      name: (fd.get('name') as string) ?? '',
-      contact_email: str('contact_email'),
-      contact_phone: str('contact_phone'),
-      operational_channel: operationalChannel || null,
-      email_enabled: emailEnabled,
-      whatsapp_number: str('whatsapp_number'),
-      sms_number: str('sms_number'),
-      emergency_contact_name: str('emergency_contact_name'),
-      emergency_contact_phone: str('emergency_contact_phone'),
-      dietary: str('dietary'),
-      allergies: str('allergies'),
-      home_city: str('home_city'),
-      passport_first_names: str('passport_first_names'),
-      passport_surname: str('passport_surname'),
-      passport_number: str('passport_number'),
-      passport_expiry: str('passport_expiry'),
-      passport_country: str('passport_country'),
-      date_of_birth: str('date_of_birth'),
-      tshirt_size: str('tshirt_size'),
-      notes: str('notes'),
-    }
+      // Tour terms only used when tourContext is present.
+      const tourRole = strFields.tour_role ?? null
+      const crewDetailRaw = isCrewInTourContext
+        ? {
+            per_diem_rate: numFields.per_diem_rate,
+            per_diem_currency: perDiemCurrency || undefined,
+            daily_wage_rate: numFields.daily_wage_rate,
+            wage_currency: wageCurrency || undefined,
+          }
+        : undefined
 
-    // Tour terms only used when tourContext is present.
-    const tourRole = str('tour_role') ?? null
-    const crewDetailRaw = isCrewInTourContext
-      ? {
-          per_diem_rate: num('per_diem_rate'),
-          per_diem_currency: perDiemCurrency || undefined,
-          daily_wage_rate: num('daily_wage_rate'),
-          wage_currency: wageCurrency || undefined,
+      if (hasTourContext) {
+        // Add mode: create a new contact and tour membership in one shot.
+        if (tourContext.mode === 'add') {
+          const personRaw = {
+            ...identityRaw,
+            person_type: personType,
+            role: tourRole ?? undefined,
+            // Seed the contact's defaults from the tour terms so future
+            // tours pre-fill correctly.
+            default_person_type: personType,
+            default_role: tourRole ?? undefined,
+          }
+
+          const result = await addPerson(tourContext.tourId, personRaw as Parameters<typeof addPerson>[1], crewDetailRaw)
+          return { error: result.error, id: result.personId }
         }
-      : undefined
 
-    if (hasTourContext) {
-      // Add mode: create a new contact and tour membership in one shot.
-      if (tourContext.mode === 'add') {
-        const personRaw = {
+        // Edit mode: update identity on the contact, tour terms on people/crew_detail.
+        const parsedIdentity = contactSchema.safeParse({
           ...identityRaw,
-          person_type: personType,
-          role: tourRole ?? undefined,
-          // Seed the contact's defaults from the tour terms so future tours
-          // pre-fill correctly.
           default_person_type: personType,
           default_role: tourRole ?? undefined,
+        })
+        if (!parsedIdentity.success) {
+          return { error: parsedIdentity.error.issues[0].message }
         }
 
-        startTransition(async () => {
-          const result = await addPerson(tourContext.tourId, personRaw as Parameters<typeof addPerson>[1], crewDetailRaw)
-          if (result.error) {
-            setError(result.error)
-          } else {
-            close()
-            onSuccess(result.personId)
-          }
-        })
-        return
-      }
-
-      // Edit mode: update identity on the contact, tour terms on people/crew_detail.
-      const parsedIdentity = contactSchema.safeParse({
-        ...identityRaw,
-        default_person_type: personType,
-        default_role: tourRole ?? undefined,
-      })
-      if (!parsedIdentity.success) {
-        setError(parsedIdentity.error.issues[0].message)
-        return
-      }
-
-      startTransition(async () => {
         const [identityResult, termsResult] = await Promise.all([
           updateContact(contact!.id, parsedIdentity.data),
           updatePersonTerms(tourContext.personId, personType, tourRole, crewDetailRaw),
         ])
         const err = identityResult.error ?? termsResult.error
-        if (err) {
-          setError(err)
-        } else {
-          close()
-          onSuccess(contact!.id)
-        }
-      })
-      return
-    }
+        return { error: err ?? null, id: contact!.id }
+      }
 
-    // Roster-only path: create or update the contact with default pay fields.
-    const raw = {
-      ...identityRaw,
-      default_person_type: personType,
-      default_role: str('default_role'),
-      default_per_diem_rate: num('default_per_diem_rate'),
-      default_per_diem_currency: perDiemCurrency || undefined,
-      default_daily_wage_rate: num('default_daily_wage_rate'),
-      default_wage_currency: wageCurrency || undefined,
-    }
+      // Roster-only path: create or update the contact with default pay fields.
+      const raw = {
+        ...identityRaw,
+        default_person_type: personType,
+        default_role: strFields.default_role,
+        default_per_diem_rate: numFields.default_per_diem_rate,
+        default_per_diem_currency: perDiemCurrency || undefined,
+        default_daily_wage_rate: numFields.default_daily_wage_rate,
+        default_wage_currency: wageCurrency || undefined,
+      }
 
-    const parsed = contactSchema.safeParse(raw)
-    if (!parsed.success) {
-      setError(parsed.error.issues[0].message)
-      return
-    }
+      const parsed = contactSchema.safeParse(raw)
+      if (!parsed.success) {
+        return { error: parsed.error.issues[0].message }
+      }
 
-    startTransition(async () => {
       const result = isEditing
         ? await updateContact(contact.id, parsed.data)
         : await createContact(parsed.data)
 
-      if (result.error) {
-        setError(result.error)
-      } else {
-        close()
-        onSuccess(result.contactId)
-      }
-    })
-  }
+      return { error: result.error, id: result.contactId }
+    },
+  })
 
   const title = hasTourContext
     ? tourContext.mode === 'add'
@@ -229,7 +239,7 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
         </Button>
       }
     >
-      <form id={formId} onSubmit={handleSubmit} className="space-y-4 pb-8">
+      <form id={formId} onSubmit={submit} className="space-y-4 pb-8">
         <div className="space-y-2">
           <Label htmlFor={`${formId}-name`}>Name</Label>
           <Input id={`${formId}-name`} name="name" defaultValue={contact?.name} required />
