@@ -96,6 +96,7 @@ Commit all three together (migration, code using it, regenerated types) in one c
 - Every server action that does use the admin (service role) client must first verify tour ownership via the RLS client, then scope all admin queries with `.eq('tour_id', tourId)`.
 - RLS scopes rows by tour, it does not check that two ids in one payload belong to the same tour. Any action taking more than one entity id verifies they share a tour_id first.
 - Never issue a Supabase `.in()` with an empty array. Guard the call and resolve { data: [] }. Return early if every id array is empty. Reference: lib/schedule/day-roster.ts.
+- Filtering on an embedded table requires !inner. A plain embed does not filter parent rows, it only nulls the nested object, and the top level cannot be ordered by an embedded column. To get the next or nearest record, select from the table you are ranking (filter and order on the top level) and inner-join the join table to scope it. Reference: lib/comms/templates/travel.ts.
 - Parallelise independent queries with Promise.all. Never chain awaits that do not depend on each other.
 - Heavy client components not visible on first paint load via next/dynamic with ssr: false. Reference: components/nav/lazy-command-palette.tsx.
 - Every env var the code reads is listed in .env.example, including optional ones.

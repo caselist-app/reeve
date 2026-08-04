@@ -11,45 +11,36 @@ export async function renderHotel(
 
   const today = new Date().toISOString().split('T')[0]
 
-  const { data: assignment } = await admin
-    .from('room_assignments')
+  // Query the stays, not the assignments. A PostgREST filter on an embedded
+  // resource does not filter the parent rows, and the top level cannot be
+  // ordered by an embedded column, so filtering room_assignments on
+  // hotel_stays.check_in_date returned an arbitrary assignment and rendered
+  // "No upcoming hotel" whenever that one happened to be in the past. Same bug
+  // the travel render had. See lib/comms/templates/travel.ts.
+  const { data: stays } = await admin
+    .from('hotel_stays')
     .select(`
-      room_tier,
-      room_type,
-      hotel_stays (
-        name,
-        address,
-        phone,
-        check_in_date,
-        check_in_time,
-        check_out_date,
-        check_out_time,
-        wifi_network,
-        wifi_password,
-        confirmation_number
+      name,
+      address,
+      phone,
+      check_in_date,
+      check_in_time,
+      check_out_date,
+      check_out_time,
+      wifi_network,
+      wifi_password,
+      confirmation_number,
+      room_assignments!inner (
+        person_id
       )
     `)
-    .eq('person_id', person_id)
     .eq('tour_id', tour_id)
-    .gte('hotel_stays.check_in_date', today)
-    .order('hotel_stays.check_in_date', { ascending: true })
+    .eq('room_assignments.person_id', person_id)
+    .gte('check_in_date', today)
+    .order('check_in_date', { ascending: true })
     .limit(1)
-    .single()
 
-  if (!assignment) return 'No upcoming hotel on this tour.'
-
-  const hotel = assignment.hotel_stays as {
-    name: string | null
-    address: string | null
-    phone: string | null
-    check_in_date: string | null
-    check_in_time: string | null
-    check_out_date: string | null
-    check_out_time: string | null
-    wifi_network: string | null
-    wifi_password: string | null
-    confirmation_number: string | null
-  } | null
+  const hotel = stays?.[0]
 
   if (!hotel?.name) return 'No upcoming hotel on this tour.'
 
