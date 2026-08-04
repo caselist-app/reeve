@@ -58,11 +58,13 @@ Twilio                          WhatsApp and SMS fallback
 ## Commands
 
 ```bash
+pnpm check            # all five gates in CI's order. This is the one to run before asking for a merge.
 pnpm dev              # local dev server
 pnpm build            # production build (must pass before merge)
 pnpm lint             # eslint, must be clean
 pnpm typecheck        # tsc --noEmit, must be clean
 pnpm check:conventions # the rules below that CI can enforce, must be clean
+pnpm test             # unit tests, no Docker needed
 pnpm types:gen        # regenerate lib/types/database.ts from Supabase (see Database workflow)
 
 # Supabase (the only ways schema reaches the database)
