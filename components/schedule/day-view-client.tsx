@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from 'react'
 import { Plus, MoreHorizontal, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import * as SheetPrimitive from '@radix-ui/react-dialog'
+import { BottomSheet, BottomSheetClose } from '@/components/ui/bottom-sheet'
 import { cn } from '@/lib/utils'
 import { useSidePanel } from '@/stores/side-panel-store'
 import { useIsMobile } from '@/hooks/use-is-mobile'
@@ -239,54 +239,40 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
 
       {/* Bottom-sheet for the day-info panel on mobile (venue, roster, notes). */}
       {isMobile && (
-        <SheetPrimitive.Root open={dayInfoOpen} onOpenChange={setDayInfoOpen}>
-          <SheetPrimitive.Portal>
-            <SheetPrimitive.Overlay className="fixed inset-0 z-50 bg-black/60 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-            <SheetPrimitive.Content className="fixed inset-x-0 bottom-0 z-50 flex flex-col max-h-[80dvh] rounded-t-xl border-t border-border bg-background pb-[env(safe-area-inset-bottom)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom duration-300">
-              <SheetPrimitive.Title className="sr-only">Day info</SheetPrimitive.Title>
-              <div className="flex shrink-0 items-center justify-between px-4 py-3 border-b border-border">
-                <span className="text-sm font-semibold">Day info</span>
-                <div className="flex items-center gap-1">
-                  {dayMeta && (
-                    <DayOptionsMenu
-                      onEdit={() => { setDayInfoOpen(false); handleEditDay() }}
-                      onDelete={() => { setDayInfoOpen(false); setDeleteDialogOpen(true) }}
-                      triggerClassName="h-9 w-9"
-                    />
-                  )}
-                  <SheetPrimitive.Close
-                    className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
-                    aria-label="Close"
-                  >
-                    <X className="h-4 w-4" />
-                  </SheetPrimitive.Close>
-                </div>
-              </div>
-              <div className="flex-1 overflow-y-auto">
-                {dayInfoPanel}
-              </div>
-            </SheetPrimitive.Content>
-          </SheetPrimitive.Portal>
-        </SheetPrimitive.Root>
+        <BottomSheet open={dayInfoOpen} onOpenChange={setDayInfoOpen} title="Day info" titleClassName="sr-only">
+          <div className="flex shrink-0 items-center justify-between px-4 py-3 border-b border-border">
+            <span className="text-sm font-semibold">Day info</span>
+            <div className="flex items-center gap-1">
+              {dayMeta && (
+                <DayOptionsMenu
+                  onEdit={() => { setDayInfoOpen(false); handleEditDay() }}
+                  onDelete={() => { setDayInfoOpen(false); setDeleteDialogOpen(true) }}
+                  triggerClassName="h-9 w-9"
+                />
+              )}
+              <BottomSheetClose
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </BottomSheetClose>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {dayInfoPanel}
+          </div>
+        </BottomSheet>
       )}
 
       {/* Mobile category picker: opened by the FAB. Choosing a category opens
           the add form in the global side panel (a full-width takeover on
           mobile), same as it does from the desktop popover. */}
       {isMobile && (
-        <SheetPrimitive.Root open={pickerOpen} onOpenChange={setPickerOpen}>
-          <SheetPrimitive.Portal>
-            <SheetPrimitive.Overlay className="fixed inset-0 z-50 bg-black/60 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-            <SheetPrimitive.Content className="fixed inset-x-0 bottom-0 z-50 flex flex-col max-h-[80dvh] rounded-t-xl border-t border-border bg-background pb-[env(safe-area-inset-bottom)] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom duration-300">
-              <SheetPrimitive.Title className="px-4 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                Add to day
-              </SheetPrimitive.Title>
-              <div className="px-2 pb-2">
-                <AddPicker onSelect={handleCategorySelect} />
-              </div>
-            </SheetPrimitive.Content>
-          </SheetPrimitive.Portal>
-        </SheetPrimitive.Root>
+        <BottomSheet open={pickerOpen} onOpenChange={setPickerOpen} title="Add to day">
+          <div className="px-2 pb-2">
+            <AddPicker onSelect={handleCategorySelect} />
+          </div>
+        </BottomSheet>
       )}
     </>
   )

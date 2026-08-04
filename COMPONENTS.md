@@ -20,7 +20,11 @@ Do not add the card token to a panel component. Doing so draws a card inside a c
 
 If a panel needs to look like a standalone card, the fix is to render it as a sibling of `<main>` in `app-content.tsx`, not to give it a border where it stands.
 
-Never use shadcn `Sheet`, `Drawer`, or `Dialog` for an in-page panel. `components/ui/sheet.tsx` is dead code, do not import it. Mobile slide-in/bottom-sheet behavior is hand-built directly against `@radix-ui/react-dialog` (aliased `SheetPrimitive`) in `day-view-client.tsx`, `app-content.tsx`, and `mobile-nav-drawer.tsx` — follow that existing pattern for a new mobile sheet, do not add a fifth implementation or resurrect `sheet.tsx`.
+Never use shadcn `Sheet`, `Drawer`, or `Dialog` for an in-page panel. `components/ui/sheet.tsx` is dead code, do not import it (it does not exist in the repo; don't resurrect it).
+
+For a bottom-anchored mobile sheet, use `components/ui/bottom-sheet.tsx` (wraps `@radix-ui/react-dialog` directly, with a `titleClassName` prop for sheets that render their own header row, and a `maxHeight` prop). Both of `day-view-client.tsx`'s sheets (day info, add-to-day picker) go through it. Never hand-roll a new `SheetPrimitive.Root`/`Portal`/`Overlay`/`Content` block for a bottom sheet; that duplication is exactly what this component replaced (Brief 32 Phase 4).
+
+`app-content.tsx` (mobile global-panel takeover, slides in from the right) and `mobile-nav-drawer.tsx` (main nav, slides in from the left) also wrap `@radix-ui/react-dialog` directly, and legitimately don't go through `BottomSheet`: they're edge drawers, not bottom sheets, each is a single non-duplicated instance in its own file, and forcing them through a component named and shaped for bottom anchoring would be a false abstraction, the same reason `command-palette.tsx` (a centred modal) stays on its own. `@radix-ui/react-dialog` is imported in exactly four files for this reason: `bottom-sheet.tsx`, `app-content.tsx`, `mobile-nav-drawer.tsx`, `command-palette.tsx`. If a second bottom-anchored, left-drawer, or right-drawer instance shows up anywhere, that's the third-occurrence signal (see below) to extract that shape too, not to bend `BottomSheet` to fit it.
 
 `AlertDialog` (`components/ui/alert-dialog.tsx`) is the one legitimate dialog primitive. Use it only for blocking yes/no destructive confirmations. Never repurpose it as an in-page panel.
 
