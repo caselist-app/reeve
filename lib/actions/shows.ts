@@ -223,12 +223,22 @@ export async function updateShow(
       ...(dateChanged ? { tour_date_id: nextTourDateId } : {}),
       // Clear the hub cache whenever the address changes so the planner UI
       // shows "Resolving..." until the job completes.
+      //
+      // venue_lat and venue_lng go with it. They were left behind, and both
+      // planners treat a stored geocode as authoritative rather than
+      // re-geocoding, so correcting a venue address left hotel and transport
+      // search running against the coordinates of the old one. Nothing about
+      // that is visible: the address on screen is the corrected one, the hub
+      // re-resolves, and the results are simply for somewhere else. Of the
+      // three fields this clears, it is the only one with no symptom.
       ...(addressChanged
         ? {
             hub_resolved_at: null,
             transport_hub_iata: null,
             transport_hub_rail: null,
             hub_ground_minutes: null,
+            venue_lat: null,
+            venue_lng: null,
           }
         : {}),
     })
