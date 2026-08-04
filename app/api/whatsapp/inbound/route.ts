@@ -26,7 +26,10 @@ export async function POST(request: NextRequest) {
   const rawBody = await request.text()
 
   // Verify Meta signature using the App Secret. Fail closed if the secret is unset.
-  const appSecret = process.env.WHATSAPP_APP_SECRET
+  // One Meta app, one secret: this is the same value app/api/data-deletion/route.ts
+  // reads. It was previously duplicated here under the name WHATSAPP_APP_SECRET,
+  // which meant whichever name was left unset made that endpoint reject everything.
+  const appSecret = process.env.META_APP_SECRET
   if (!appSecret) {
     return NextResponse.json({ error: 'Webhook not configured' }, { status: 401 })
   }
