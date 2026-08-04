@@ -90,6 +90,7 @@ Commit all three together (migration, code using it, regenerated types) in one c
 ## General hard rules
 - Server Components by default. Use 'use client' only for state, effects, or browser APIs.
 - Server actions for mutations. Write API routes only for webhooks, cron, Stripe callbacks, and inbound provider hooks.
+- A server action behind an uncontrolled form must call revalidatePath. React 19 resets the form to its defaultValue after the action succeeds, so without a revalidate the reset restores stale server data and a successful save appears to fail. useEntityForm covers this via router.refresh(); raw useActionState forms do not. Scope to the layout if the value also renders above the route.
 - Every server action calls `requireUser()` as its first statement. No exceptions. Server actions are publicly POSTable.
 - Always use Supabase RLS. The service role key is server-side admin only (webhooks, cron, Trigger.dev jobs), never client code.
 - Server actions use the RLS client (`createClient()` from lib/supabase/server). owns_tour() is the authorization gate. Reference: lib/logistics/plan.ts, lib/logistics/hotels.ts.

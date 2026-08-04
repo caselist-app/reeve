@@ -205,6 +205,7 @@ Prompt caching is not optional. Every call to Claude must include `cache_control
 - TypeScript strict mode. No `any`. Use `unknown` and narrow.
 - Server Components by default. Use `'use client'` only for state, effects, or browser APIs.
 - Server actions for mutations. Write API routes only for webhooks, cron, Stripe callbacks, and inbound provider hooks.
+- **A server action behind an uncontrolled form must revalidate, or the save will look like it failed.** React 19 resets a form to its `defaultValue` after a form action succeeds, on the documented assumption that `defaultValue` is the canonical value the server just sent back. If the action does not call `revalidatePath`, the server component still holds the old data and the reset restores it, so the value visibly snaps back until a manual reload. Forms on `useEntityForm` are covered because the hook calls `router.refresh()`; forms using `useActionState` directly are not. Scope the revalidate to the layout when the edited value also renders above the route, for example a tour name in `components/nav/tour-selector.tsx`. Found 2026-08-04 in `updateTourAction`, which was the only action file in the repo with no revalidate.
 - Named exports for components. Default exports only for Next.js page, layout, and route files.
 - Functional components and hooks only. No class components.
 - Tailwind utility classes only. No `.css` files unless unavoidable. Merge classes with `cn()` from `@/lib/utils`.
