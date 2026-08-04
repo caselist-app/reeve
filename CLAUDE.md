@@ -99,31 +99,27 @@ Commit all three together (migration file, any code using the new schema, regene
 
 ## Day view pattern (the primary TM working surface)
 
-The schedule day view is the main place a TM works. It is a three-column layout:
+The schedule day view is the main place a TM works. The date sidebar is its own standalone card; main is a single card holding the timeline and day info side by side, with no divider between them. Neither ever swaps for anything: detail and add forms open in the global side panel instead (see "Panel and card visual language" below).
 
 ```
-┌─────────────────┬──────────────────────────────────┬──────────────────┐
-│  Date sidebar   │  Day timeline                    │  Right panel     │
-│  230px fixed    │  flex-1                          │  260px fixed     │
-│  (own card)     │                                  │                  │
-└─────────────────┴──────────────────────────────────┴──────────────────┘
+┌─────────────────┬────────────────────────────────────────────────────┐
+│  Date sidebar   │  main (one card)                                   │
+│  230px fixed    │  Day timeline (flex-1)   |   Day info (260px)      │
+│  (own card)     │  no divider between them                           │
+└─────────────────┴────────────────────────────────────────────────────┘
 ```
 
-**Date sidebar** — a list of every day in the tour range. Coloured chip per day type (purple = show, teal = travel, amber = press, blue = rehearsal, stone = off). Selecting a day updates the `?date=` search param. Renders as its own standalone card, a sibling of the main content card, not embedded inside it: see "Panel and card visual language" below for the secondary panel system that makes this work. Server Component (`components/schedule/date-sidebar.tsx`), rendered via the `app/(app)/@secondaryPanel` slot, not inline in the schedule route's own layout.
+**Date sidebar**: a list of every day in the tour range. Coloured chip per day type (purple = show, teal = travel, amber = press, blue = rehearsal, stone = off). Selecting a day updates the `?date=` search param. Renders as its own standalone card, a sibling of the main content card, not embedded inside it: see "Panel and card visual language" below for the secondary panel system that makes this work. Server Component (`components/schedule/date-sidebar.tsx`), rendered via the `app/(app)/@secondaryPanel` slot, not inline in the schedule route's own layout.
 
-**Day timeline** — a chronological list of all items on the selected day merged from four sources: `hotel_stays` (check-in/check-out), `transport_segments`, `shows` (day sheet fields as individual cards), and `day_events` (freeform). Items sorted by time ascending. Server Component.
+**Day timeline**: a chronological list of all items on the selected day merged from four sources: `hotel_stays` (check-in/check-out), `transport_segments`, `shows` (day sheet fields as individual cards), and `day_events` (freeform). Items sorted by time ascending. Server Component. Clicking any item opens its detail in the global side panel (venue and day sheet for a show, the segment for transport, the stay for a hotel, the event), read via `PanelShell`-based panels in `components/schedule/panels/`. Flights render a read-only `FlightCard` inside `transport-panel.tsx` (live status, tracked via AirLabs) with booking reference as the one editable field; every other mode is a plain edit form.
 
-**Right panel** — two states:
-1. Default: day info (venue, contacts, roster, notes). Server Component.
-2. Edit mode: an edit form for the clicked timeline card, or the add picker. Replaces the day info panel without navigating away.
+**Day info**: a static block (venue, roster, notes), Server Component (`components/schedule/day-info-panel.tsx`). Never swaps for an edit view. The day options (`...`) and add (`+`) buttons sit above it, top right.
 
-**Panel interaction pattern:** only the state container (`components/schedule/day-view-client.tsx`) is a client component. It holds `activeCard` state. Timeline cards and panel content are Server Components rendered inside it. Never put the whole day view in a client component just to handle panel state.
+**Panel interaction pattern:** only the state container (`components/schedule/day-view-client.tsx`) is a client component. It holds popover, bottom-sheet, and dialog UI state, not which item is selected: clicking a timeline item or picking an add category opens the global side panel (`stores/side-panel-store.ts`) directly. Timeline cards and day info are Server Components rendered inside it. Never put the whole day view in a client component just to handle panel state.
 
-**Edit panel shell:** `components/schedule/edit-panel.tsx` is a custom component, not a shadcn Sheet or Drawer. It is a fixed right-column panel (header with title, subtitle, X button; scrollable body). Do not use shadcn Sheet, Drawer, or Dialog for in-page panel interactions. All card-type panels (`show-panel`, `transport-panel`, `hotel-panel`, `event-panel`) render inside it. Its root is a plain `flex flex-col h-full`, identical to `PanelShell`, and that is correct: panel components never carry the card token. See "Panel and card visual language" below for who owns it.
+**Add flow:** the "+" button opens a Radix popover (desktop) or bottom-sheet (mobile, from the FAB) showing a category picker (Flight, Drive, Rail, Hotel, Show, Event). Selecting a category closes the picker and opens the relevant add form in the global side panel, on `PanelShell` like every other schedule panel (`components/schedule/add/add-flow.tsx`). Each add form's own first-step "Back" button returns to the picker; there is no separate back affordance in the panel chrome. Never route away from the day view for any add or edit action.
 
-**Add flow:** the "+ Add" button opens the edit panel in add mode showing a category picker (Flight, Drive, Rail, Hotel, Show, Event). Selecting a category shows the relevant add form with a back arrow to return to the picker. Never route away from the day view for any add or edit action.
-
-**Notes** are always-visible editable textareas in the right panel. They save on blur via a server action. No save button, no panel swap. Notes are not timeline items and do not appear in the timeline.
+**Notes** are always-visible editable textareas in day info. They save on blur via a server action. No save button, no panel swap. Notes are not timeline items and do not appear in the timeline.
 
 **Transport and Hotels** are not top-level nav items. They are accessible via the gear icon settings panel in the sidebar header. The primary nav is: Schedule, People, Settings (gear).
 
@@ -137,32 +133,30 @@ rounded-3xl border border-border bg-background
 
 **`components/layout/app-content.tsx` owns it, and nothing else applies it.** It sits on four wrappers there: the secondary panel, `<main>`, the desktop side panel, and the mobile main. Those four are siblings of each other, separated by a gap.
 
-Panel components (`PanelShell`, `EditPanel`) are chrome only: a header and a scrollable body on a plain `flex h-full flex-col`. They never carry the token. `PanelShell` looks like a card because `app-content.tsx` wraps it in one; `EditPanel` does not, because the schedule right column renders inside `<main>`, which is already a card.
+`PanelShell` is chrome only: a header and a scrollable body on a plain `flex h-full flex-col`. It never carries the token. It looks like a card because `app-content.tsx` wraps it in one.
 
 Adding the token to a panel component draws a card inside a card. If a panel should read as standalone, make it a sibling of `<main>` in `app-content.tsx`. Do not give it a border where it stands.
 
-**The three panel systems and their shared visual contract:**
+**The two panel systems and their shared visual contract:**
 
-1. **Global side panel** (`components/layout/app-content.tsx` + `stores/side-panel-store.ts`): slides in from the right, main content shrinks left. 480px fixed width on desktop. Chrome is `components/layout/panel-shell.tsx`: header (title, optional subtitle, X button), scrollable body. Use `PanelShell` for all global panels. Transient: opened and closed by explicit user action from anywhere in the app (e.g. clicking a contact row).
+1. **Global side panel** (`components/layout/app-content.tsx` + `stores/side-panel-store.ts`): slides in from the right, main content shrinks left. 480px fixed width on desktop, full-width takeover on mobile. Chrome is `components/layout/panel-shell.tsx`: header (title, optional description, X button), scrollable body. Use `PanelShell` for every panel in the app, including the schedule day view's detail and add-to-day panels (Brief 33 retired the schedule's own right-column panel system in favour of this one). Transient: opened and closed by explicit user action from anywhere in the app (e.g. clicking a contact row, or a timeline item).
 
-2. **Schedule right column** (`components/schedule/edit-panel.tsx` + `stores/schedule-panel-store.ts`): fixed 260px column within the three-column day view layout. Does not slide. Chrome is `components/schedule/edit-panel.tsx`: identical header pattern (title, subtitle, X button), scrollable body. Visually identical to `PanelShell` even though the mechanism differs.
-
-3. **Secondary panel** (`app/(app)/@secondaryPanel` Next.js parallel route slot + `components/layout/app-content.tsx`): a standalone, always-visible card to the left of main content, on routes that supply one. Not transient and not driven by a store: a route (e.g. `app/(app)/@secondaryPanel/tours/[id]/schedule/layout.tsx`) renders its content into the slot as a `layout.tsx` (not a `page.tsx`) so it persists across nested navigations exactly like any Next.js layout, the same way the schedule Dates list stays mounted across `?date=` clicks. `app/(app)/@secondaryPanel/default.tsx` renders nothing, so routes that don't use this are unaffected on a hard navigation. `AppContent` wraps whatever the slot renders in the card token at a fixed 230px width, `hidden lg:flex` (same breakpoint the schedule route already uses to swap to the mobile date strip). First and current use: the schedule Dates list (`components/schedule/date-sidebar.tsx`).
+2. **Secondary panel** (`app/(app)/@secondaryPanel` Next.js parallel route slot + `components/layout/app-content.tsx`): a standalone, always-visible card to the left of main content, on routes that supply one. Not transient and not driven by a store: a route (e.g. `app/(app)/@secondaryPanel/tours/[id]/schedule/layout.tsx`) renders its content into the slot as a `layout.tsx` (not a `page.tsx`) so it persists across nested navigations exactly like any Next.js layout, the same way the schedule Dates list stays mounted across `?date=` clicks. `app/(app)/@secondaryPanel/default.tsx` renders nothing, so routes that don't use this are unaffected on a hard navigation. `AppContent` wraps whatever the slot renders in the card token at a fixed 230px width, `hidden lg:flex` (same breakpoint the schedule route already uses to swap to the mobile date strip). First and current use: the schedule Dates list (`components/schedule/date-sidebar.tsx`).
 
    `default.tsx` only resolves on a hard navigation (full page load or refresh). On client-side navigation, Next.js keeps rendering a slot's last content instead of re-resolving it, so without a second guard the panel would follow the user onto routes that never asked for one. `AppContent` gates visibility with `usePathname()` against `lib/layout/secondary-panel-routes.ts`. Adding a new secondary panel route requires both: the `@secondaryPanel/.../layout.tsx` override, and a matching path pattern added to `secondary-panel-routes.ts`. Skipping the second one is the failure mode: it will not error, it will just leak the panel onto other pages.
 
-All three use `rounded-3xl border border-border bg-background`. The first two share an identical header pattern (title, subtitle, X button); the secondary panel has no forced chrome since it's route-owned content, not a generic panel shell.
+Both use `rounded-3xl border border-border bg-background`. The global side panel has a forced header (title, optional description, X button); the secondary panel has no forced chrome since it's route-owned content, not a generic panel shell.
 
-**One accepted exception:** `components/nav/tour-settings-panel.tsx` is a bespoke nav-rail slide-over (the gear icon: People, Transport, Hotels, Documents, WhatsApp, Settings), not a content panel, and is exempt from the three-panel-system rule. It lives inside the sidebar rail rather than over the main content area, so the card token does not apply to it. This is the only exception. Do not use it as precedent for a new panel type.
+**One accepted exception:** `components/nav/tour-settings-panel.tsx` is a bespoke nav-rail slide-over (the gear icon: People, Transport, Hotels, Documents, WhatsApp, Settings), not a content panel, and is exempt from the panel-system rule. It lives inside the sidebar rail rather than over the main content area, so the card token does not apply to it. This is the only exception. Do not use it as precedent for a new panel type.
 
-When building any new panel anywhere in the app, use one of these three systems. Do not invent a fourth. Do not render panel content as a flat div without the card treatment. If the right column of the schedule looks different from the global side panel, it is wrong.
+When building any new panel anywhere in the app, use one of these two systems. Do not invent a third. Do not render panel content as a flat div without the card treatment.
 
 ## Architecture and directory layout
 
 ```
-app/                      Next.js routes (App Router). Desktop is primary. Mobile is the same codebase made responsive, not a separate route tree. On small screens, secondary columns (nav, date list, edit panel) collapse into drawers and bottom-sheets via progressive disclosure; they are never a shrunken three-column desktop. The mobile-first default layout is restored to the desktop arrangement with md: and lg: classes.
+app/                      Next.js routes (App Router). Desktop is primary. Mobile is the same codebase made responsive, not a separate route tree. On small screens, secondary columns (nav, date list, side panel) collapse into drawers and bottom-sheets via progressive disclosure; they are never a shrunken desktop layout. The mobile-first default layout is restored to the desktop arrangement with md: and lg: classes.
 components/ui/            shadcn components (Radix). Do not edit generated primitives unless extending.
-components/               application components, organised by feature (people/, shows/, logistics/, comms/, ...). See COMPONENTS.md at the repo root before adding or editing any component: it documents the three panel systems, the card/list tokens, and known drift between this file and the live code.
+components/               application components, organised by feature (people/, shows/, logistics/, comms/, ...). See COMPONENTS.md at the repo root before adding or editing any component: it documents the two panel systems, the card/list tokens, and known drift between this file and the live code.
 lib/                      shared utilities, clients, types
 lib/supabase/            client wrappers (server, admin, middleware). Server-side admin only uses service role.
 lib/types/database.ts    generated Supabase types. Never hand-edit.
