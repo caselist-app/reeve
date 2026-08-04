@@ -35,7 +35,7 @@ export async function renderTravel(
   // filter and the ordering both work, and transport_assignments!inner scopes it
   // to segments this person is actually assigned to. Same shape as the itinerary
   // render, which queries shows directly and has always been correct.
-  const { data: segments } = await admin
+  const { data: segments, error: segmentsError } = await admin
     .from('transport_segments')
     .select(`
       mode,
@@ -59,6 +59,15 @@ export async function renderTravel(
     .gt('depart_at', now)
     .order('depart_at', { ascending: true })
     .limit(1)
+
+  // See the note in itinerary.ts: a failed query must not render as an empty
+  // tour. This template already answered "No upcoming travel" once while travel
+  // existed, for a different reason (the embedded-filter bug fixed 2026-08-04),
+  // so it is the last one that should be allowed to say it wrongly again.
+  if (segmentsError) {
+    console.error('[travel] segment lookup failed:', segmentsError.message, { tour_id, person_id })
+    return 'Could not load your travel just now. Try again in a moment.'
+  }
 
   const seg = segments?.[0]
 

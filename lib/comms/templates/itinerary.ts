@@ -77,7 +77,7 @@ export async function renderItinerary(
   const graceStart = new Date(now.getTime() - SHOW_STAYS_ACTIVE_UNTIL_HOUR * 60 * 60 * 1000)
   const earliestActiveDate = localDateInZone(graceStart.toISOString(), timezone)
 
-  const { data: shows } = await admin
+  const { data: shows, error: showsError } = await admin
     .from('shows')
     // day_sheets is a plain embed being read, not filtered, so !inner would be
     // wrong here: it would drop a show whose day sheet row is somehow missing
@@ -88,6 +88,28 @@ export async function renderItinerary(
     .gte('date', earliestActiveDate)
     .order('date', { ascending: true })
     .limit(1)
+
+  // A failed query and an empty tour are not the same answer, and until 2026-08-04
+  // this code could not tell a crew member apart from a crew member. Every one of
+  // these templates discarded the error, so any failure rendered as "No upcoming
+  // shows on this tour", which is a confident, wrong, and completely plausible
+  // reply.
+  //
+  // That is exactly how this presented in production the day Brief 36 step 3
+  // shipped: the migration dropped shows.load_in_at and shows.curfew_at, Vercel
+  // redeployed, and Trigger.dev did not. /itinerary only ever runs on
+  // Trigger.dev (lib/comms/router.ts is reached from trigger/jobs/*-router.ts and
+  // from nowhere on Vercel), so it kept selecting two dropped columns, PostgREST
+  // rejected the query with 42703, and the crew member was told the tour had no
+  // shows. Nothing in any log said otherwise.
+  //
+  // Logged rather than thrown: the job has already accepted the message, so
+  // throwing loses the reply entirely. The log line is what makes the Trigger.dev
+  // run readable, and it is the only place this failure is visible.
+  if (showsError) {
+    console.error('[itinerary] show lookup failed:', showsError.message, { tour_id })
+    return 'Could not load the itinerary just now. Try again in a moment.'
+  }
 
   const show = shows?.[0]
 
