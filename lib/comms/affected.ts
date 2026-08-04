@@ -7,7 +7,10 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 export type ChangeDescriptor =
   | { type: 'transport_segment'; segmentId: string }
   | { type: 'hotel_stay'; stayId: string }
-  | { type: 'show'; showId: string; field: 'load_in_at' | 'address' | 'curfew_at' }
+  // Brief 36 step 3: the two time fields are named for the day-sheet columns that
+  // now hold them, not for the show columns that were dropped. Both still
+  // identify a show, because who to notify is still decided by the show's date.
+  | { type: 'show'; showId: string; field: 'load_in' | 'address' | 'curfew' }
   | { type: 'day_sheet'; showId: string }
 
 export type AffectedPerson = {

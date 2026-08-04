@@ -25,7 +25,12 @@ export default async function PlannerPage({
     supabase
       .from('shows')
       .select(
-        'id, tour_id, venue_name, date, load_in_at, hub_resolved_at, transport_hub_iata, transport_hub_rail, hub_ground_minutes'
+        // Brief 36 step 3: load-in comes from the day sheet, which is the only
+        // place that holds it. Read through the same embed the planner's server
+        // action reads it through, so the number the TM sees in the workspace and
+        // the number the feasibility ranking uses cannot come apart. That drift is
+        // exactly what the two columns caused.
+        'id, tour_id, venue_name, date, hub_resolved_at, transport_hub_iata, transport_hub_rail, hub_ground_minutes, day_sheets(load_in)'
       )
       .eq('id', showId)
       .eq('tour_id', id)

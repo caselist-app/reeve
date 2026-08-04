@@ -13,6 +13,7 @@ import { searchRenfe } from '@/lib/logistics/adapters/renfe'
 import { searchDarwin } from '@/lib/logistics/adapters/darwin'
 import { searchGoogleTransit } from '@/lib/logistics/adapters/google-transit'
 import { AIRPORTS } from '@/lib/logistics/airports'
+import { requiredSiteArrivalFor } from '@/lib/shows/load-in'
 import type { TravelOption, PlanTravelInput } from '@/lib/logistics/types'
 
 // Cache TTL for provider results. Availability is volatile so keep short.
@@ -42,7 +43,7 @@ export async function planTravel(
   // venue has not been resolved yet; surface a clear error to the TM.
   const { data: show } = await supabase
     .from('shows')
-    .select('tour_id, date, load_in_at, hub_resolved_at, transport_hub_iata, transport_hub_rail, hub_ground_minutes, address, venue_lat, venue_lng')
+    .select('tour_id, date, hub_resolved_at, transport_hub_iata, transport_hub_rail, hub_ground_minutes, address, venue_lat, venue_lng')
     .eq('id', input.show_id)
     .single()
 
@@ -91,7 +92,12 @@ export async function planTravel(
   // required_site_arrival: load-in is when crew must be on site.
   // door_to_site_at (arrive_at + transit + ground) is compared directly against
   // this, so do not subtract transit time here or it gets counted twice.
-  const requiredSiteArrival = show.load_in_at ?? null
+  //
+  // Brief 36 step 3: read through the one function that answers this, not from a
+  // second column on shows. This used to be show.load_in_at, which the day view
+  // never wrote, so a TM who set load-in on the timeline (the normal way) got a
+  // feasibility ranking computed against nothing at all.
+  const requiredSiteArrival = await requiredSiteArrivalFor(supabase, input.show_id)
 
   const railParams = {
     from_station: fromHub,

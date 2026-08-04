@@ -193,7 +193,11 @@ describe('cross-tour id checks', () => {
     it('refuses to send using another tour\'s show', async () => {
       const result = await sendBroadcast({
         tourId: fixture.tourId,
-        change: { type: 'show', showId: other.showId, field: 'load_in_at' },
+        // 'load_in' rather than 'load_in_at' since Brief 36 step 3 collapsed the
+        // show column into the day sheet. Still a real, accepted field on the
+        // descriptor, which is what matters here: the rejection must come from the
+        // show belonging to another tour, not from an unrecognised field name.
+        change: { type: 'show', showId: other.showId, field: 'load_in' },
       })
       expect(result.error).toBeTruthy()
       expect(result.sent).toBeUndefined()
@@ -205,7 +209,7 @@ describe('cross-tour id checks', () => {
       const preview = await previewBroadcast(fixture.tourId, {
         type: 'show',
         showId: other.showId,
-        field: 'load_in_at',
+        field: 'load_in',
       })
       expect(preview.people).toHaveLength(0)
       expect(preview.message).toBe('')

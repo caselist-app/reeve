@@ -36,8 +36,10 @@ export type TourContext = {
     venue_name: string
     address: string | null
     venue_type: string | null
-    load_in_at: string | null
-    curfew_at: string | null
+    // Brief 36 step 3: load-in and curfew live on day_sheet below and nowhere
+    // else. This type used to carry load_in_at and curfew_at alongside the day
+    // sheet's load_in and curfew, so the model was handed two answers to the same
+    // question with no rule for which one won.
     advance: {
       status_audio: string
       status_lighting: string
@@ -130,7 +132,7 @@ export async function assembleTourContext(tour_id: string): Promise<TourContext>
       admin
         .from('shows')
         .select(`
-          id, date, venue_name, address, venue_type, load_in_at, curfew_at,
+          id, date, venue_name, address, venue_type,
           show_advance ( status_audio, status_lighting, status_staging, status_hospitality, status_travel ),
           day_sheets ( venue_access, load_in, soundcheck, doors, headliner_on, curfew, hotel_departure )
         `)
@@ -184,8 +186,6 @@ export async function assembleTourContext(tour_id: string): Promise<TourContext>
       venue_name: s.venue_name,
       address: s.address,
       venue_type: s.venue_type,
-      load_in_at: s.load_in_at,
-      curfew_at: s.curfew_at,
       advance: Array.isArray(s.show_advance) ? (s.show_advance[0] ?? null) : (s.show_advance ?? null),
       day_sheet: Array.isArray(s.day_sheets) ? (s.day_sheets[0] ?? null) : (s.day_sheets ?? null),
     })),
