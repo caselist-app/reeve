@@ -19,6 +19,7 @@ import { parseFlightDate, type ParsedFlightDate } from '@/lib/utils/parse-flight
 import { formatFlightNumber } from '@/lib/utils/format-flight-number'
 import { rankSearch } from '@/lib/utils/rank-search'
 import type { NormalizedFlightLookup, NormalizedRouteTimetableEntry } from '@/lib/logistics/adapters/airlabs'
+import { fromDatetimeLocal } from '@/lib/schedule/datetime'
 
 interface AddFlightFormProps {
   tourId: string
@@ -32,18 +33,6 @@ interface AddFlightFormProps {
 type Airline = { iataCode: string | null; icaoCode: string | null; name: string }
 type Airport = { iataCode: string; icaoCode: string | null; name: string; city: string | null }
 type Step = 'search' | 'date' | 'card' | 'reference' | 'route' | 'manual'
-
-// Same UTC-conversion approach already used in transport-panel.tsx. Duplicated
-// rather than extracted: a known, tracked duplication (Brief 27), not
-// introduced by this change.
-function fromDatetimeLocal(local: string | null, tz: string): string | null {
-  if (!local) return null
-  const ref = new Date(`${local}:00.000Z`)
-  const localStr = ref.toLocaleString('sv-SE', { timeZone: tz }).slice(0, 19)
-  const localAsUtc = new Date(`${localStr.replace(' ', 'T')}.000Z`)
-  const offsetMs = ref.getTime() - localAsUtc.getTime()
-  return new Date(ref.getTime() + offsetMs).toISOString()
-}
 
 // dep_time_local / arr_time_local are "YYYY-MM-DD HH:MM"; take HH:MM.
 function timeOfDay(local: string | null): string {

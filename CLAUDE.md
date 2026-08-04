@@ -119,7 +119,7 @@ The schedule day view is the main place a TM works. It is a three-column layout:
 
 **Panel interaction pattern:** only the state container (`components/schedule/day-view-client.tsx`) is a client component. It holds `activeCard` state. Timeline cards and panel content are Server Components rendered inside it. Never put the whole day view in a client component just to handle panel state.
 
-**Edit panel shell:** `components/schedule/edit-panel.tsx` is a custom component — not a shadcn Sheet or Drawer. It is a fixed right-column panel (header with title, subtitle, X button; scrollable body). Do not use shadcn Sheet, Drawer, or Dialog for in-page panel interactions. All card-type panels (`show-panel`, `transport-panel`, `hotel-panel`, `event-panel`) render inside it. The edit panel must use the same card styling as the global side panel: `rounded-3xl border border-border bg-background`. This is non-negotiable. A plain `<div>` with no border or rounding is wrong.
+**Edit panel shell:** `components/schedule/edit-panel.tsx` is a custom component, not a shadcn Sheet or Drawer. It is a fixed right-column panel (header with title, subtitle, X button; scrollable body). Do not use shadcn Sheet, Drawer, or Dialog for in-page panel interactions. All card-type panels (`show-panel`, `transport-panel`, `hotel-panel`, `event-panel`) render inside it. Its root is a plain `flex flex-col h-full`, identical to `PanelShell`, and that is correct: panel components never carry the card token. See "Panel and card visual language" below for who owns it.
 
 **Add flow:** the "+ Add" button opens the edit panel in add mode showing a category picker (Flight, Drive, Rail, Hotel, Show, Event). Selecting a category shows the relevant add form with a back arrow to return to the picker. Never route away from the day view for any add or edit action.
 
@@ -129,13 +129,17 @@ The schedule day view is the main place a TM works. It is a three-column layout:
 
 ## Panel and card visual language (applies everywhere, no exceptions)
 
-Every panel in Reeve — the global sliding side panel, the schedule right column, the secondary panel, any future panel — is a card. The card token is:
+The card token is:
 
 ```
 rounded-3xl border border-border bg-background
 ```
 
-This is the same token used for the main content area. A panel is visually a sibling of the main content card, not an overlay or a plain div. Never build a panel without this treatment.
+**`components/layout/app-content.tsx` owns it, and nothing else applies it.** It sits on four wrappers there: the secondary panel, `<main>`, the desktop side panel, and the mobile main. Those four are siblings of each other, separated by a gap.
+
+Panel components (`PanelShell`, `EditPanel`) are chrome only: a header and a scrollable body on a plain `flex h-full flex-col`. They never carry the token. `PanelShell` looks like a card because `app-content.tsx` wraps it in one; `EditPanel` does not, because the schedule right column renders inside `<main>`, which is already a card.
+
+Adding the token to a panel component draws a card inside a card. If a panel should read as standalone, make it a sibling of `<main>` in `app-content.tsx`. Do not give it a border where it stands.
 
 **The three panel systems and their shared visual contract:**
 
@@ -148,6 +152,8 @@ This is the same token used for the main content area. A panel is visually a sib
    `default.tsx` only resolves on a hard navigation (full page load or refresh). On client-side navigation, Next.js keeps rendering a slot's last content instead of re-resolving it, so without a second guard the panel would follow the user onto routes that never asked for one. `AppContent` gates visibility with `usePathname()` against `lib/layout/secondary-panel-routes.ts`. Adding a new secondary panel route requires both: the `@secondaryPanel/.../layout.tsx` override, and a matching path pattern added to `secondary-panel-routes.ts`. Skipping the second one is the failure mode: it will not error, it will just leak the panel onto other pages.
 
 All three use `rounded-3xl border border-border bg-background`. The first two share an identical header pattern (title, subtitle, X button); the secondary panel has no forced chrome since it's route-owned content, not a generic panel shell.
+
+**One accepted exception:** `components/nav/tour-settings-panel.tsx` is a bespoke nav-rail slide-over (the gear icon: People, Transport, Hotels, Documents, WhatsApp, Settings), not a content panel, and is exempt from the three-panel-system rule. It lives inside the sidebar rail rather than over the main content area, so the card token does not apply to it. This is the only exception. Do not use it as precedent for a new panel type.
 
 When building any new panel anywhere in the app, use one of these three systems. Do not invent a fourth. Do not render panel content as a flat div without the card treatment. If the right column of the schedule looks different from the global side panel, it is wrong.
 

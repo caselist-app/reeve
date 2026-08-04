@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { updateDayEvent } from '@/lib/actions/day-events'
 import type { Tables } from '@/lib/types/database'
+import { fromDatetimeLocal, toDatetimeLocal } from '@/lib/schedule/datetime'
 
 type DayEvent = Pick<
   Tables<'day_events'>,
@@ -17,20 +18,6 @@ type DayEvent = Pick<
 interface EventPanelProps {
   event: DayEvent
   timezone: string
-}
-
-function toDatetimeLocal(iso: string | null | undefined, tz: string): string {
-  if (!iso) return ''
-  return new Date(iso).toLocaleString('sv-SE', { timeZone: tz }).slice(0, 16)
-}
-
-function fromDatetimeLocal(local: string | null, tz: string): string | null {
-  if (!local) return null
-  const ref = new Date(`${local}:00.000Z`)
-  const localStr = ref.toLocaleString('sv-SE', { timeZone: tz }).slice(0, 19)
-  const localAsUtc = new Date(`${localStr.replace(' ', 'T')}.000Z`)
-  const offsetMs = ref.getTime() - localAsUtc.getTime()
-  return new Date(ref.getTime() + offsetMs).toISOString()
 }
 
 export function EventPanel({ event, timezone }: EventPanelProps) {
