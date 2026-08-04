@@ -32,8 +32,8 @@ interface TimelineCardProps {
 // Minimal 'use client' wrapper so timeline cards can trigger panel state
 // while the parent day-timeline.tsx stays a Server Component.
 export function TimelineCard({ time, label, title, subtitle, accent, card, logoIataCode, flightTimes }: TimelineCardProps) {
-  const { panel, open, close } = useSidePanel()
-  const isActive = panel !== null && 'key' in panel && panel.key === card.key
+  const { panel, isOpen, open, close } = useSidePanel()
+  const isActive = isOpen && panel !== null && 'key' in panel && panel.key === card.key
 
   return (
     <button
