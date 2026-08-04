@@ -25,10 +25,14 @@ import { readForm } from '@/lib/forms/read-form'
 import { DateMoveNotice } from '@/components/schedule/date-move-notice'
 
 // Fields that warrant a crew notification when changed.
-// load_in_at: affects everyone traveling to the show that day.
-// address: affects everyone - venue has physically moved.
-// curfew_at: affects plans for the night, especially transport home.
-type NotifyField = 'load_in_at' | 'address' | 'curfew_at'
+// address: affects everyone, the venue has physically moved.
+//
+// Brief 36 step 3: load-in and curfew left this form with their columns. They are
+// day-sheet fields now, and the day sheet is edited from the day view's show
+// panel, so that is where their change alert belongs. Until it is wired there, a
+// load-in change does not offer to notify crew. Recorded rather than left to be
+// discovered.
+type NotifyField = 'address'
 
 type NotifyState = {
   change: Extract<ChangeDescriptor, { type: 'show' }>
@@ -94,8 +98,6 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
         date: 'requiredString',
         venue_name: 'requiredString',
         capacity: 'number',
-        load_in_at: 'string',
-        curfew_at: 'string',
         stage_dimensions: 'string',
         parking: 'string',
         shore_power: 'string',
@@ -110,8 +112,6 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
         address: address || null,
         venue_type: (venueType as ShowData['venue_type']) || null,
         capacity: fields.capacity,
-        load_in_at: fields.load_in_at,
-        curfew_at: fields.curfew_at,
         stage_dimensions: fields.stage_dimensions,
         parking: fields.parking,
         shore_power: fields.shore_power,
@@ -228,26 +228,11 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor={`${formId}-load_in_at`}>Load-in</Label>
-          <Input
-            id={`${formId}-load_in_at`}
-            name="load_in_at"
-            type="datetime-local"
-            defaultValue={toDatetimeLocal(initialData?.load_in_at)}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor={`${formId}-curfew_at`}>Curfew</Label>
-          <Input
-            id={`${formId}-curfew_at`}
-            name="curfew_at"
-            type="datetime-local"
-            defaultValue={toDatetimeLocal(initialData?.curfew_at)}
-          />
-        </div>
-      </div>
+      {/* Load-in and curfew used to sit here, writing shows.load_in_at and
+          shows.curfew_at while the Schedule tab wrote day_sheets.load_in and
+          day_sheets.curfew, with nothing syncing the two. Brief 36 step 3
+          collapsed them into the day sheet, so the times are edited on the day
+          view timeline and in the Schedule tab, and this tab covers the venue. */}
 
       <p className="pt-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         Technical
@@ -393,26 +378,17 @@ function detectNotifyField(
   prev: Partial<ShowData> | undefined
 ): NotifyField | null {
   if (!prev) return null
-  if ((next.load_in_at ?? null) !== (prev.load_in_at ?? null)) return 'load_in_at'
   if ((next.address ?? null) !== (prev.address ?? null)) return 'address'
-  if ((next.curfew_at ?? null) !== (prev.curfew_at ?? null)) return 'curfew_at'
   return null
 }
 
 // Formats the old value of a field as a human-readable string for the
-// "was X" part of the change message. Timestamps become HH:MM.
+// "was X" part of the change message.
 function formatPreviousValue(
   field: NotifyField,
   prev: Partial<ShowData> | undefined
 ): string | null {
   if (!prev) return null
-  if (field === 'load_in_at' || field === 'curfew_at') {
-    const iso = prev[field]
-    if (!iso) return null
-    // The form stores these as datetime-local strings (YYYY-MM-DDTHH:MM).
-    // Slice to HH:MM for a readable "was 09:00".
-    return iso.length >= 16 ? iso.slice(11, 16) : iso
-  }
   if (field === 'address') {
     return prev.address ?? null
   }

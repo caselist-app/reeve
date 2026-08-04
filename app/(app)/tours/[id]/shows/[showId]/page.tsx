@@ -87,8 +87,9 @@ export default async function ShowDetailPage({
     address: show.address,
     venue_type: show.venue_type as z.infer<typeof showSchema>['venue_type'],
     capacity: show.capacity,
-    load_in_at: show.load_in_at,
-    curfew_at: show.curfew_at,
+    // Brief 36 step 3: load-in and curfew are day-sheet fields now. The Schedule
+    // tab on this page already edits them through DaySheetForm, which is the one
+    // writer, so the Venue tab no longer carries a second copy.
     stage_dimensions: show.stage_dimensions,
     parking: show.parking,
     shore_power: show.shore_power,

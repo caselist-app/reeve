@@ -11,8 +11,10 @@ export const showSchema = z.object({
     .nullable()
     .optional(),
   capacity: z.number().int().positive().nullable().optional(),
-  load_in_at: z.string().nullable().optional(),
-  curfew_at: z.string().nullable().optional(),
+  // Brief 36 step 3: load-in and curfew are day-sheet fields now, so they are
+  // not part of what a show form submits. They go through daySheetFormSchema and
+  // updateDaySheet, which is the only writer. Adding them back here would
+  // recreate the two-columns-one-fact problem this brief removed.
   stage_dimensions: z.string().nullable().optional(),
   parking: z.string().nullable().optional(),
   shore_power: z.string().nullable().optional(),
