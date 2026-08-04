@@ -52,6 +52,22 @@ vi.mock('@/lib/supabase/admin', () => ({
   createAdminClient: () => testDb,
 }))
 
+// lib/redis.ts constructs an Upstash client at module load, so simply importing
+// any action logs two warnings and then one more per cache-bust. None of it
+// fails a test, because the cache-bust is fire-and-forget, but noise is how a
+// real failure gets missed later.
+//
+// A Proxy rather than a list of methods, so adding a Redis call somewhere does
+// not break these tests for an unrelated reason. When the idempotency tests
+// arrive (claim, fail the send, assert the claim is released) this stub is not
+// enough: those need a real Redis or a fake that actually stores things.
+vi.mock('@/lib/redis', () => ({
+  redis: new Proxy(
+    {},
+    { get: () => async () => null }
+  ),
+}))
+
 vi.mock('@/lib/auth/helpers', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/auth/helpers')>()
   return {
