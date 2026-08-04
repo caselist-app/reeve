@@ -24,7 +24,15 @@ type Client = SupabaseClient<Database>
 
 export type DayType = 'show' | 'rehearsal' | 'travel' | 'press' | 'day_off'
 
-type Resolved = { id: string; error: null } | { id: null; error: string }
+// `created` says the date was not a day of the tour until this call added it.
+// Callers pass it back to the TM ("added to the tour"), because a save that
+// silently extends the tour's day list is the kind of correct-but-invisible
+// change Brief 36's follow-up exists to announce. It is only ever true on the
+// success branch, so the failure branch pins it to false rather than leaving it
+// optional and letting a caller read it off an errored result.
+type Resolved =
+  | { id: string; created: boolean; error: null }
+  | { id: null; created: false; error: string }
 
 export async function resolveTourDateId(
   supabase: Client,
@@ -50,9 +58,9 @@ export async function resolveTourDateId(
         .update({ day_type: 'show' })
         .eq('id', existing.id)
 
-      if (error) return { id: null, error: error.message }
+      if (error) return { id: null, created: false, error: error.message }
     }
-    return { id: existing.id, error: null }
+    return { id: existing.id, created: false, error: null }
   }
 
   const { data: created, error } = await supabase
@@ -68,7 +76,7 @@ export async function resolveTourDateId(
     .select('id')
     .single()
 
-  if (created) return { id: created.id, error: null }
+  if (created) return { id: created.id, created: true, error: null }
 
   // tour_dates has unique(tour_id, date). Two saves landing on the same new day
   // at once means one of them loses the insert, and the row it wanted now
@@ -81,8 +89,17 @@ export async function resolveTourDateId(
       .eq('date', date)
       .maybeSingle()
 
-    if (raced) return { id: raced.id, error: null }
+    // created: true, even though the losing save is not the one that inserted
+    // the row. The claim being reported to the TM is that the day was not on the
+    // tour when they hit save and is now, which is true either way, and which of
+    // two concurrent saves won the insert is not something they should be told
+    // about.
+    if (raced) return { id: raced.id, created: true, error: null }
   }
 
-  return { id: null, error: error?.message ?? 'Could not resolve the day for that date.' }
+  return {
+    id: null,
+    created: false,
+    error: error?.message ?? 'Could not resolve the day for that date.',
+  }
 }
