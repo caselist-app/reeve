@@ -39,7 +39,7 @@ jobs:
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
 
       - name: Install dependencies
@@ -98,10 +98,18 @@ jobs:
         with:
           version: 9
 
+      # Both jobs pin the Node version Vercel builds production on. Keep them
+      # in step: CI verifying a different runtime than the one that deploys is
+      # the drift this workflow exists to prevent.
+      #
+      # There is also a hard floor here. supabase-js constructs a RealtimeClient
+      # on creation, which needs a global WebSocket, and that only exists
+      # natively from Node 22. Below that the integration tests fail on client
+      # construction before a single assertion runs.
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
 
       - name: Install dependencies

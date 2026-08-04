@@ -11,7 +11,7 @@
     "check:conventions": "node scripts/check-conventions.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:integration": "vitest run --config vitest.integration.config.mts",
     "types:gen": "supabase gen types typescript --linked > lib/types/database.ts"
   },
   "dependencies": {
