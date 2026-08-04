@@ -17,7 +17,7 @@ export async function renderHotel(
   // hotel_stays.check_in_date returned an arbitrary assignment and rendered
   // "No upcoming hotel" whenever that one happened to be in the past. Same bug
   // the travel render had. See lib/comms/templates/travel.ts.
-  const { data: stays } = await admin
+  const { data: stays, error: staysError } = await admin
     .from('hotel_stays')
     .select(`
       name,
@@ -39,6 +39,15 @@ export async function renderHotel(
     .gte('check_in_date', today)
     .order('check_in_date', { ascending: true })
     .limit(1)
+
+  // See the note in itinerary.ts: a failed query must not render as an empty
+  // tour. Like the travel render, this one has already told a crew member
+  // "nothing upcoming" while data existed, so it does not get to say it wrongly
+  // twice.
+  if (staysError) {
+    console.error('[hotel] stay lookup failed:', staysError.message, { tour_id, person_id })
+    return 'Could not load your hotel just now. Try again in a moment.'
+  }
 
   const hotel = stays?.[0]
 

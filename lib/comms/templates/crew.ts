@@ -6,10 +6,20 @@ import { createAdminClient } from '@/lib/supabase/admin'
 export async function renderCrew(tour_id: string): Promise<string> {
   const admin = createAdminClient()
 
-  const { data: rows } = await admin
+  const { data: rows, error: rowsError } = await admin
     .from('people')
     .select('role, person_type, contacts(name, whatsapp_number, contact_phone)')
     .eq('tour_id', tour_id)
+
+  // See the note in itinerary.ts: a failed query must not render as an empty
+  // tour. Included even though /crew has never been run in production, because
+  // the whole point of this pass is that the four templates behave the same way
+  // and none of them is allowed to answer "nothing" when it means "I could not
+  // ask".
+  if (rowsError) {
+    console.error('[crew] people lookup failed:', rowsError.message, { tour_id })
+    return 'Could not load the crew list just now. Try again in a moment.'
+  }
 
   if (!rows || rows.length === 0) return 'No crew on this tour yet.'
 
