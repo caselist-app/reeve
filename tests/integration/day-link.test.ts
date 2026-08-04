@@ -228,6 +228,20 @@ describe('the day link survives an edit', () => {
     })
 
     it('renders a check-out card on the check-out day of a linked multi-night stay', async () => {
+      // The check-out day has to be a day of the tour before this assertion
+      // means anything. The day view only renders dates that exist in
+      // tour_dates, so without this the check-out day returns nothing for the
+      // ordinary reason that there is no such day, and the test would pass or
+      // fail for something other than what it is checking.
+      //
+      // Only check_out_date is submitted below, so the link stays on the
+      // check-in day. That is the point: the stay must render on a day its
+      // tour_date_id does not name.
+      const { error: dayError } = await testDb
+        .from('tour_dates')
+        .insert({ tour_id: fixture.tourId, date: NEXT_DAY, day_type: 'day_off' })
+      if (dayError) throw new Error(`could not create the check-out day: ${dayError.message}`)
+
       const result = await updateHotelStay(stayId, { check_out_date: NEXT_DAY })
       expect(result.error).toBeNull()
 
