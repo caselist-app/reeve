@@ -13,6 +13,8 @@ export interface Fixture {
   tourId: string
   tourDateId: string
   showId: string
+  contactId: string
+  personId: string
   date: string
 }
 
@@ -81,9 +83,34 @@ export async function createFixture(opts: { date?: string; timezone?: string } =
     .insert({ show_id: show.id, tour_id: tour.id })
   if (daySheetError) throw new Error(`fixture: could not create day_sheet: ${daySheetError.message}`)
 
+  // A crew member on this tour. Needed so a cross-tour test can pass a *valid*
+  // id for every argument except the one under test: without that, a test can
+  // pass because the wrong check fired, which is worse than no test.
+  const { data: contact, error: contactError } = await testDb
+    .from('contacts')
+    .insert({ account_id: userId, name: 'Test Crew' })
+    .select('id')
+    .single()
+  if (contactError || !contact) throw new Error(`fixture: could not create contact: ${contactError?.message}`)
+
+  const { data: person, error: personError } = await testDb
+    .from('people')
+    .insert({ tour_id: tour.id, contact_id: contact.id, person_type: 'crew' })
+    .select('id')
+    .single()
+  if (personError || !person) throw new Error(`fixture: could not create person: ${personError?.message}`)
+
   setTestUserId(userId)
 
-  return { userId, tourId: tour.id, tourDateId: tourDate.id, showId: show.id, date }
+  return {
+    userId,
+    tourId: tour.id,
+    tourDateId: tourDate.id,
+    showId: show.id,
+    contactId: contact.id,
+    personId: person.id,
+    date,
+  }
 }
 
 // Deleting the auth user cascades to accounts, and accounts cascades to tours,
@@ -91,4 +118,67 @@ export async function createFixture(opts: { date?: string; timezone?: string } =
 // teardown.
 export async function destroyFixture(fixture: Fixture) {
   await testDb.auth.admin.deleteUser(fixture.userId)
+}
+
+// A second tour on the SAME account. This is the shape the cross-tour bugs
+// actually take: RLS passes on both tours because one TM owns both, and the
+// only thing standing between tour B's data and tour A's crew is an explicit
+// check in the action. A second account would be caught by RLS and would
+// therefore test nothing.
+export async function createSecondTour(fixture: Fixture, date = '2026-07-01') {
+  const { data: artist } = await testDb
+    .from('artists')
+    .insert({ account_id: fixture.userId, name: 'Other Artist' })
+    .select('id')
+    .single()
+  if (!artist) throw new Error('fixture: could not create second artist')
+
+  const { data: tour } = await testDb
+    .from('tours')
+    .insert({
+      account_id: fixture.userId,
+      artist_id: artist.id,
+      name: 'Other Tour',
+      timezone: 'Europe/London',
+    })
+    .select('id')
+    .single()
+  if (!tour) throw new Error('fixture: could not create second tour')
+
+  const { data: tourDate } = await testDb
+    .from('tour_dates')
+    .insert({ tour_id: tour.id, date, day_type: 'show' })
+    .select('id')
+    .single()
+  if (!tourDate) throw new Error('fixture: could not create second tour_date')
+
+  const { data: show } = await testDb
+    .from('shows')
+    .insert({
+      tour_id: tour.id,
+      tour_date_id: tourDate.id,
+      date,
+      venue_name: 'Other Venue',
+    })
+    .select('id')
+    .single()
+  if (!show) throw new Error('fixture: could not create second show')
+
+  // people.contact_id is required: identity lives on the account-level contact,
+  // and people is the per-tour membership row.
+  const { data: contact } = await testDb
+    .from('contacts')
+    .insert({ account_id: fixture.userId, name: 'Other Crew' })
+    .select('id')
+    .single()
+  if (!contact) throw new Error('fixture: could not create second contact')
+
+  const { data: person } = await testDb
+    .from('people')
+    .insert({ tour_id: tour.id, contact_id: contact.id, person_type: 'crew' })
+    .select('id')
+    .single()
+  if (!person) throw new Error('fixture: could not create second person')
+
+  return { tourId: tour.id, tourDateId: tourDate.id, showId: show.id, personId: person.id, date }
 }
