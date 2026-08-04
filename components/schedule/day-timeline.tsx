@@ -115,6 +115,7 @@ export async function DayTimeline({ records, tourId, tourDateId, date, timezone,
             accent="border-purple-500"
             card={{
               type: 'show',
+              tourId,
               key: `show-${show.id}`,
               showId: show.id,
               venueName: show.venue_name,
@@ -145,6 +146,7 @@ export async function DayTimeline({ records, tourId, tourDateId, date, timezone,
             accent="border-purple-500"
             card={{
               type: 'show',
+              tourId,
               key: `show-${show.id}`,
               showId: show.id,
               venueName: show.venue_name,

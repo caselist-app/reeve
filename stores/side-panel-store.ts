@@ -121,6 +121,10 @@ export type PanelDescriptor =
       type: 'show'
       key: string
       showId: string
+      // Needed by the day sheet's change alert: previewBroadcast and sendBroadcast
+      // are both tour-scoped, since who to notify is resolved from the tour's
+      // people and the show's date.
+      tourId: string
       venueName: string
       timezone: string
       daySheet: ShowDaySheet | null
