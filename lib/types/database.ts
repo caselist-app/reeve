@@ -1183,7 +1183,6 @@ export type Database = {
           address: string | null
           capacity: number | null
           created_at: string
-          curfew_at: string | null
           date: string
           dressing_rooms: string | null
           house_lighting_plot: string | null
@@ -1191,7 +1190,6 @@ export type Database = {
           hub_ground_minutes: number | null
           hub_resolved_at: string | null
           id: string
-          load_in_at: string | null
           notes: string | null
           parking: string | null
           production_office: boolean | null
@@ -1215,7 +1213,6 @@ export type Database = {
           address?: string | null
           capacity?: number | null
           created_at?: string
-          curfew_at?: string | null
           date: string
           dressing_rooms?: string | null
           house_lighting_plot?: string | null
@@ -1223,7 +1220,6 @@ export type Database = {
           hub_ground_minutes?: number | null
           hub_resolved_at?: string | null
           id?: string
-          load_in_at?: string | null
           notes?: string | null
           parking?: string | null
           production_office?: boolean | null
@@ -1247,7 +1243,6 @@ export type Database = {
           address?: string | null
           capacity?: number | null
           created_at?: string
-          curfew_at?: string | null
           date?: string
           dressing_rooms?: string | null
           house_lighting_plot?: string | null
@@ -1255,7 +1250,6 @@ export type Database = {
           hub_ground_minutes?: number | null
           hub_resolved_at?: string | null
           id?: string
-          load_in_at?: string | null
           notes?: string | null
           parking?: string | null
           production_office?: boolean | null
