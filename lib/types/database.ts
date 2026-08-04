@@ -879,11 +879,11 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "hotel_stays_tour_date_id_fkey"
-            columns: ["tour_date_id"]
+            foreignKeyName: "hotel_stays_tour_date_id_check_in_date_fkey"
+            columns: ["tour_date_id", "check_in_date"]
             isOneToOne: false
             referencedRelation: "tour_dates"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "date"]
           },
           {
             foreignKeyName: "hotel_stays_tour_id_fkey"
@@ -1284,11 +1284,11 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "shows_tour_date_id_fkey"
-            columns: ["tour_date_id"]
+            foreignKeyName: "shows_tour_date_id_date_fkey"
+            columns: ["tour_date_id", "date"]
             isOneToOne: false
             referencedRelation: "tour_dates"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "date"]
           },
           {
             foreignKeyName: "shows_tour_id_fkey"

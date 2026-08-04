@@ -2,7 +2,7 @@ import { TimelineCard } from '@/components/schedule/timeline-card'
 import { DayHeader } from '@/components/schedule/day-header'
 import { formatFlightNumber } from '@/lib/utils/format-flight-number'
 import { placeName } from '@/lib/utils/place-name'
-import type { DayRecords, DayHotel } from '@/lib/schedule/day-records'
+import type { DayRecords } from '@/lib/schedule/day-records'
 
 interface DayTimelineProps {
   records: DayRecords
@@ -69,32 +69,11 @@ export async function DayTimeline({ records, tourId, tourDateId, date, timezone,
     />
   )
 
-  const { shows, segments, hotelsLinked, hotelsCheckin, hotelsCheckout, events } = records
-
-  // Deduplicate hotels: tour_date_id-linked take precedence over date-matched.
-  // Keeps the full DayHotel shape (not just the display fields) so the row
-  // can go straight into a side panel descriptor without a re-fetch.
-  const hotelMap = new Map<string, DayHotel & { isCheckout: boolean }>()
-  for (const h of hotelsLinked) {
-    // A linked stay shows both check-in and check-out if applicable.
-    if (h.check_in_date === date) {
-      hotelMap.set(`checkin:${h.id}`, { ...h, isCheckout: false })
-    }
-    if (h.check_out_date === date) {
-      hotelMap.set(`checkout:${h.id}`, { ...h, isCheckout: true })
-    }
-  }
-  for (const h of hotelsCheckin) {
-    if (!hotelMap.has(`checkin:${h.id}`)) {
-      hotelMap.set(`checkin:${h.id}`, { ...h, isCheckout: false })
-    }
-  }
-  for (const h of hotelsCheckout) {
-    if (!hotelMap.has(`checkout:${h.id}`)) {
-      hotelMap.set(`checkout:${h.id}`, { ...h, isCheckout: true })
-    }
-  }
-  const hotels = Array.from(hotelMap.values())
+  // Which hotels belong to this day, and whether each card is a check-in or a
+  // check-out, is decided in fetchDayRecords now. It used to be reassembled
+  // here from three overlapping buckets, which is where an edited stay could
+  // fall through every one of them and render on no day at all.
+  const { shows, segments, hotels, events } = records
 
   // Build a flat list of timeline items with a sort key.
   type TimelineItem = {

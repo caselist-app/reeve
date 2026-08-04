@@ -13,9 +13,12 @@ import type { Database } from '@/lib/types/database'
 // while the show or rehearsal existed is almost always naming the thing that
 // just disappeared.
 //
-// Guarded by re-reading the current day_type first: only reverts if it still
-// matches removedType, so it never clobbers a type the TM has since set
-// deliberately through some other path.
+// Guarded twice. First by re-reading the current day_type: only reverts if it
+// still matches removedType, so it never clobbers a type the TM has since set
+// deliberately through some other path. Second by checking that nothing of
+// removedType is still attached to the day, because "orphaned" means no show
+// or rehearsal remains, not that one was removed. A day carrying two shows, or
+// one a show has just been moved onto from elsewhere, is still a show day.
 export async function revertDayTypeIfOrphaned(
   supabase: SupabaseClient<Database>,
   tourDateId: string,
@@ -28,6 +31,15 @@ export async function revertDayTypeIfOrphaned(
     .single()
 
   if (!tourDate || tourDate.day_type !== removedType) return
+
+  const { data: remaining } = await supabase
+    .from(removedType === 'show' ? 'shows' : 'rehearsals')
+    .select('id')
+    .eq('tour_date_id', tourDateId)
+    .limit(1)
+    .maybeSingle()
+
+  if (remaining) return
 
   const { data: segment } = await supabase
     .from('transport_segments')

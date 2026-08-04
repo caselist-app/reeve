@@ -6,7 +6,10 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { boardingPassJob } from '@/trigger/jobs/boarding-pass'
 import type { TravelOption } from '@/lib/logistics/types'
+import type { TablesUpdate } from '@/lib/types/database'
 import { bustTourContextCache } from '@/lib/ai/context'
+import { resolveTourDateId } from '@/lib/schedule/day-link'
+import { localDateInZone } from '@/lib/schedule/datetime'
 
 export type TransportActionState = { error: string | null; segmentId?: string }
 
@@ -163,9 +166,37 @@ export async function createTransportSegment(
     if (!tourDate) return { error: 'Day not found on this tour.' }
   }
 
+  // The caller passes the day the TM was looking at, but every add form lets
+  // them pick a departure on a different date (the drive, rail and manual
+  // flight forms default their datetime-local to the current day and then let
+  // it be edited, and the flight search flow has a date step of its own). So
+  // the create paths could produce the same mismatch the edit paths did, and
+  // the day view is date-guarded now, which would leave the segment on no day
+  // at all rather than on the wrong one.
+  //
+  // Deriving the link from the departure here is what makes create and edit
+  // obey one rule. The create/edit split is the whole root cause of Brief 36,
+  // so closing it on both sides is the fix, not just repairing the edit half.
+  let tourDateId = data.tour_date_id ?? null
+
+  if (data.depart_at) {
+    const { data: tourRow } = await supabase
+      .from('tours')
+      .select('timezone')
+      .eq('id', tourId)
+      .single()
+
+    const localDate = localDateInZone(data.depart_at, tourRow?.timezone ?? 'UTC')
+    const resolved = await resolveTourDateId(supabase, tourId, localDate)
+    if (resolved.id === null) return { error: resolved.error }
+    tourDateId = resolved.id
+  }
+
   const { data: row, error } = await supabase
     .from('transport_segments')
-    .insert({ tour_id: tourId, status: 'planned', ...data })
+    // tour_date_id after the spread: the derived link wins over the one the
+    // form passed.
+    .insert({ tour_id: tourId, status: 'planned', ...data, tour_date_id: tourDateId })
     .select('id')
     .single()
 
@@ -199,15 +230,47 @@ export async function updateTransportSegment(
   // RLS on transport_segments enforces owns_tour(tour_id).
   const { data: existing } = await supabase
     .from('transport_segments')
-    .select('tour_id')
+    .select('tour_id, tour_date_id, depart_at')
     .eq('id', segmentId)
     .single()
 
   if (!existing) return { error: 'Segment not found.' }
 
+  const update: TablesUpdate<'transport_segments'> = { ...data }
+
+  // Bug 1c, and the hardest of the three to notice. The day view returns linked
+  // segments by tour_date_id with no date guard at all, so a segment moved to
+  // another day did not vanish the way an edited hotel does: it stayed on the
+  // old day, showing the new day's time, sorted by a key belonging to a
+  // different date. Wrong and plausible is worse than missing.
+  //
+  // depart_at is a timestamptz, so the day it belongs to is its local date in
+  // the tour's timezone, not its UTC date. 22:00Z on the 14th is the 15th in
+  // Auckland.
+  //
+  // undefined means the form never sent it (the booking-reference control sends
+  // that field alone) and the link must survive. null means the TM cleared the
+  // departure, and a segment with no departure is on no day.
+  if (data.depart_at !== undefined) {
+    if (!data.depart_at) {
+      update.tour_date_id = null
+    } else {
+      const { data: tourRow } = await supabase
+        .from('tours')
+        .select('timezone')
+        .eq('id', existing.tour_id)
+        .single()
+
+      const localDate = localDateInZone(data.depart_at, tourRow?.timezone ?? 'UTC')
+      const resolved = await resolveTourDateId(supabase, existing.tour_id, localDate)
+      if (resolved.id === null) return { error: resolved.error }
+      update.tour_date_id = resolved.id
+    }
+  }
+
   const { error } = await supabase
     .from('transport_segments')
-    .update(data)
+    .update(update)
     .eq('id', segmentId)
 
   if (error) return { error: error.message }
