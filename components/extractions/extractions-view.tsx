@@ -166,8 +166,8 @@ function ExtractionCard({ extraction, onDone }: { extraction: Extraction; onDone
                   <Field label="Date" value={show.date ?? ''} onChange={(v) => setShow(i, 'date', v)} />
                   <Field label="Venue" value={show.venue_name ?? ''} onChange={(v) => setShow(i, 'venue_name', v)} />
                   <Field label="Address" value={show.address ?? ''} onChange={(v) => setShow(i, 'address', v)} />
-                  <Field label="Load-in" value={show.load_in_at ?? ''} onChange={(v) => setShow(i, 'load_in_at', v)} />
-                  <Field label="Curfew" value={show.curfew_at ?? ''} onChange={(v) => setShow(i, 'curfew_at', v)} />
+                  <Field label="Load-in" value={show.load_in ?? ''} onChange={(v) => setShow(i, 'load_in', v)} />
+                  <Field label="Curfew" value={show.curfew ?? ''} onChange={(v) => setShow(i, 'curfew', v)} />
                 </div>
               ))}
             </section>
