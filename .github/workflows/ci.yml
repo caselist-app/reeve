@@ -1,11 +1,14 @@
 name: CI
 
-# Runs on every push and every pull request. This is the enforcement layer
-# for the "pnpm build / pnpm lint / pnpm typecheck must pass before merge"
-# rule in CLAUDE.md. Before this workflow existed, that rule depended on
-# someone remembering to run it locally. Now it's a status check GitHub can
-# block merges on (set that up once in Settings > Branches > main > require
-# status checks to pass, and tick this workflow).
+# Runs on every push and every pull request. This is the enforcement layer for
+# the "must pass before merge" rules in CLAUDE.md. Before this workflow
+# existed, they depended on someone remembering to run them locally.
+#
+# Branch protection on main is ENABLED, so a red run here blocks the merge.
+# The required status check is matched by JOB NAME, currently "Typecheck,
+# lint, build". Adding a step to that job is covered automatically. Renaming
+# the job silently detaches the branch rule and merges stop being blocked with
+# nothing looking wrong, so rename and update the rule together or not at all.
 
 on:
   push:
@@ -47,6 +50,14 @@ jobs:
 
       - name: Lint
         run: pnpm lint
+
+      # The rules in CLAUDE.md that typecheck, lint and build cannot see.
+      # Added 2026-08-04, after an audit found that every bug in the repo,
+      # including two that destroyed user data, passed the three steps above.
+      # Known violations are listed in scripts/conventions-baseline.json, so
+      # this blocks new ones without needing the backlog cleared first.
+      - name: Check conventions
+        run: pnpm check:conventions
 
       - name: Build
         run: pnpm build

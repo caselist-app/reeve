@@ -62,6 +62,7 @@ pnpm dev              # local dev server
 pnpm build            # production build (must pass before merge)
 pnpm lint             # eslint, must be clean
 pnpm typecheck        # tsc --noEmit, must be clean
+pnpm check:conventions # the rules below that CI can enforce, must be clean
 pnpm types:gen        # regenerate lib/types/database.ts from Supabase (see Database workflow)
 
 # Supabase (the only ways schema reaches the database)
@@ -72,6 +73,18 @@ supabase db reset               # rebuild local DB from all migrations (destruct
 ```
 
 `pnpm types:gen` wraps `supabase gen types typescript` and writes to `lib/types/database.ts`. Keep this script in `package.json` so the command is identical for every agent.
+
+## Some of this file is enforced, and you should know which parts
+
+`pnpm check:conventions` runs `scripts/check-conventions.mjs` and is a CI step alongside typecheck, lint and build. It exists because an audit on 2026-08-04 found that every bug in the repo, including two that silently destroyed user data, passed all three of those. This file was complete and correct at the time and its rules were still broken repeatedly by agents that had read it. **A rule that cannot fail the build is a suggestion.**
+
+It currently enforces: `requireUser()` first in every server action, `revalidatePath` on the schedule route for any action writing a schedule-rendered table, no `getSession()`, `cache_control` on every Anthropic call, no unguarded `.in()`, no em-dashes, every `process.env` read declared in `.env.example`, and `[BOTH]` marked on every variable reachable from `trigger/jobs/`.
+
+Known violations that predate the check live in `scripts/conventions-baseline.json`, each with a reason saying whether it is **accepted** (the check is wrong about it) or **debt** (the check is right and the fix is scheduled). That file should only ever shrink. Removing an entry is part of the fix, because a stale entry fails the check too.
+
+If a check fires on you, the default assumption is that the check is right. If it genuinely is not, add a baseline entry explaining why, rather than weakening the rule. Do not delete a check to make the build pass.
+
+These are greps with judgement, not a type system, and they only cover rules mechanical enough to express. Most of this file is still unenforced prose, so the absence of a failure is not evidence that a change is correct.
 
 ## Database workflow (the rule Matt cares about most)
 
