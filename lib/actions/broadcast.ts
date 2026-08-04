@@ -5,7 +5,7 @@ import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { getAffectedPeople } from '@/lib/comms/affected'
 import {
-  buildShowLoadInChangeMessage,
+  buildShowTimeChangeMessage,
   buildShowAddressChangeMessage,
   buildDaySheetChangeMessage,
   buildTransportChangeMessage,
@@ -184,12 +184,23 @@ async function buildPreviewMessage(
     }
 
     case 'show': {
-      const { data: show } = await supabase
-        .from('shows')
-        .select('venue_name, date, load_in_at, address')
-        .eq('id', change.showId)
-        .eq('tour_id', tourId)
-        .single()
+      // Brief 36 step 3: the time comes from the day sheet, which is the only
+      // place that holds it now. A plain embed being read, not filtered, so no
+      // !inner: a show whose day sheet row is missing should still produce a
+      // message with the time TBC rather than no message at all.
+      //
+      // The tour timezone is read too, because a UTC render told crew a load-in
+      // an hour off the one the TM typed on any tour not on UTC. Same bug as
+      // /itinerary had, same fix.
+      const [{ data: show }, { data: tour }] = await Promise.all([
+        supabase
+          .from('shows')
+          .select('venue_name, date, address, day_sheets(load_in, curfew)')
+          .eq('id', change.showId)
+          .eq('tour_id', tourId)
+          .single(),
+        supabase.from('tours').select('timezone').eq('id', tourId).single(),
+      ])
 
       const venueName = show?.venue_name ?? 'venue'
       const date = show?.date ?? 'TBC'
@@ -202,21 +213,28 @@ async function buildPreviewMessage(
         })
       }
 
-      // load_in_at or curfew_at change: show the new time with "was" context.
-      const fieldValue = change.field === 'load_in_at' ? show?.load_in_at : null
+      const daySheet = Array.isArray(show?.day_sheets)
+        ? (show.day_sheets[0] ?? null)
+        : (show?.day_sheets ?? null)
+
+      // load_in or curfew change: show the new time with "was" context.
+      const fieldValue = change.field === 'load_in' ? daySheet?.load_in : daySheet?.curfew
       const newTime = fieldValue
         ? new Date(fieldValue).toLocaleTimeString('en-GB', {
             hour: '2-digit',
             minute: '2-digit',
-            timeZone: 'UTC',
+            timeZone: tour?.timezone ?? 'UTC',
           })
         : 'TBC'
 
-      return buildShowLoadInChangeMessage({
+      return buildShowTimeChangeMessage({
         venueName,
         date,
-        newLoadIn: newTime,
-        previousLoadIn: previousValue ?? null,
+        // The words a TM uses, so the message names the time that actually moved
+        // rather than calling everything load-in.
+        timeLabel: change.field === 'load_in' ? 'load-in' : 'curfew',
+        newTime,
+        previousTime: previousValue ?? null,
         customMessage,
       })
     }

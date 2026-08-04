@@ -28,7 +28,9 @@ interface Show {
   tour_id: string
   venue_name: string
   date: string
-  load_in_at: string | null
+  // Brief 36 step 3: load-in lives on the day sheet. Typed as the embed the page
+  // selects, including the array shape PostgREST can return for a to-one embed.
+  day_sheets: { load_in: string | null } | { load_in: string | null }[] | null
   hub_resolved_at: string | null
   transport_hub_iata: string | null
   transport_hub_rail: string | null
@@ -73,7 +75,13 @@ export function PlannerWorkspace({
 
   // Site arrival deadline is load-in. Ground and transit time is used for
   // feasibility ranking, not for shifting this display time.
-  const requiredSiteArrival = show.load_in_at ?? null
+  //
+  // This is the display half of the value planTravel ranks against. Both now read
+  // day_sheets.load_in: this one used to read shows.load_in_at, which the day view
+  // never wrote, so the workspace showed a deadline the TM had never set while the
+  // timeline showed the one they had.
+  const requiredSiteArrival =
+    (Array.isArray(show.day_sheets) ? show.day_sheets[0] : show.day_sheets)?.load_in ?? null
 
   const selectedPerson = people.find((p) => p.id === selectedPersonId)
 

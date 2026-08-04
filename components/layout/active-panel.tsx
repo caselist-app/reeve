@@ -95,6 +95,7 @@ export function ActivePanel() {
       return (
         <ShowPanel
           showId={panel.showId}
+          tourId={panel.tourId}
           venueName={panel.venueName}
           timezone={panel.timezone}
           daySheet={panel.daySheet}

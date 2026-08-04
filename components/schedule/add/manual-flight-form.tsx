@@ -7,6 +7,7 @@
 // form (unlike the rest of the wizard, which is one multi-step component
 // with shared state across steps) and migrates cleanly to useEntityForm.
 
+import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -14,6 +15,7 @@ import { createTransportSegment } from '@/lib/actions/transport'
 import { fromDatetimeLocal } from '@/lib/schedule/datetime'
 import { useEntityForm } from '@/hooks/use-entity-form'
 import { readForm } from '@/lib/forms/read-form'
+import { DateMoveNotice } from '@/components/schedule/date-move-notice'
 
 interface ManualFlightFormProps {
   tourId: string
@@ -25,6 +27,8 @@ interface ManualFlightFormProps {
 }
 
 export function ManualFlightForm({ tourId, tourDateId, date, timezone, onBack, onSuccess }: ManualFlightFormProps) {
+  const [departLocal, setDepartLocal] = useState(`${date}T07:00`)
+
   const { submit, pending, error } = useEntityForm({
     refreshOnSuccess: true,
     onSuccess,
@@ -77,7 +81,14 @@ export function ManualFlightForm({ tourId, tourDateId, date, timezone, onBack, o
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">Departs</Label>
-          <Input name="depart_at" type="datetime-local" defaultValue={`${date}T07:00`} className="h-7 text-xs" />
+          <Input
+            name="depart_at"
+            type="datetime-local"
+            defaultValue={`${date}T07:00`}
+            onChange={(e) => setDepartLocal(e.target.value)}
+            className="h-7 text-xs"
+          />
+          <DateMoveNotice currentDate={date} value={departLocal} />
         </div>
         <div className="space-y-1">
           <Label className="text-xs">Arrives</Label>

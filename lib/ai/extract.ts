@@ -14,8 +14,13 @@ export type ExtractionProposal = {
     date: string | null
     venue_name: string | null
     address: string | null
-    load_in_at: string | null
-    curfew_at: string | null
+    // Brief 36 step 3: these are day-sheet times now, so they are extracted as
+    // wall-clock HH:MM the way the day sheet stores them rather than as ISO
+    // instants for two show columns that no longer exist. updateDaySheet turns
+    // them into timestamptz against the show's date and the tour's timezone,
+    // which keeps one writer for the conversion instead of two.
+    load_in: string | null
+    curfew: string | null
   }>
   transport_segments: Array<{
     mode: string | null
@@ -70,8 +75,8 @@ export async function extractEmailForward(
                   date: { type: ['string', 'null'], description: 'YYYY-MM-DD' },
                   venue_name: { type: ['string', 'null'] },
                   address: { type: ['string', 'null'] },
-                  load_in_at: { type: ['string', 'null'], description: 'ISO 8601' },
-                  curfew_at: { type: ['string', 'null'], description: 'ISO 8601' },
+                  load_in: { type: ['string', 'null'], description: 'HH:MM, venue local' },
+                  curfew: { type: ['string', 'null'], description: 'HH:MM, venue local' },
                 },
               },
             },

@@ -2,10 +2,18 @@
 
 import { useTransition, useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
+import { describeDateMove, dateMoveHref, type MaybeMoved } from '@/lib/schedule/date-move'
 
 // The shape every server action in lib/actions returns. Widened so any
 // action's return type is accepted as long as it carries `error`.
-export interface EntityActionResult {
+//
+// `moved` (from MaybeMoved) is optional and only the actions that can move a
+// record between days ever set it. It lives on the shared result type rather
+// than being handled per caller so the announcement below is impossible for a
+// new panel or add form to forget: every form in the app already goes through
+// this hook, so wiring one up is all it takes to inherit it.
+export interface EntityActionResult extends MaybeMoved {
   error: string | null
 }
 
@@ -71,6 +79,34 @@ export function useEntityForm<TResult extends EntityActionResult>({
       }
       setError(null)
       setSaved(true)
+
+      // Brief 36 Part 1 follow-up. The record has correctly moved to a day the TM
+      // is not looking at, so it has correctly vanished from the one they are.
+      // Announced here, before onSuccess, because onSuccess is what closes an add
+      // panel: the toast is mounted in the app layout rather than in the panel, so
+      // it survives that. The panel closing with no trace at all is the case that
+      // reads as the app having dropped the record.
+      //
+      // `moved` is set by the action only when the date actually changed, which is
+      // what keeps this from firing on the many edits that move nothing. A toast on
+      // all of them would train the TM to dismiss without reading and make the one
+      // that matters invisible too.
+      //
+      // No undo, deliberately. See lib/schedule/date-move.ts for why a partial one
+      // would be worse than none.
+      if (result.moved) {
+        const moved = result.moved
+        toast(describeDateMove(moved), {
+          // Long enough to read a sentence and decide to follow it, rather than the
+          // 4 seconds a routine confirmation gets.
+          duration: 8000,
+          action: {
+            label: 'View',
+            onClick: () => router.push(dateMoveHref(moved)),
+          },
+        })
+      }
+
       if (refreshOnSuccess) router.refresh()
       onSuccess?.(result)
     })

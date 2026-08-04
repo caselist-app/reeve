@@ -7,8 +7,11 @@ import type { HotelOption } from '@/lib/logistics/types'
 import type { TablesUpdate } from '@/lib/types/database'
 import { bustTourContextCache } from '@/lib/ai/context'
 import { resolveTourDateId } from '@/lib/schedule/day-link'
+import type { DateMove } from '@/lib/schedule/date-move'
 
-export type HotelActionState = { error: string | null; stayId?: string }
+// `moved` is set only when the stay actually landed on a day other than the one
+// the TM was looking at. See lib/schedule/date-move.ts.
+export type HotelActionState = { error: string | null; stayId?: string; moved?: DateMove | null }
 
 // Records a hotel option as a hotel_stay with status='planned' and creates
 // room_assignments for each named person.
@@ -181,12 +184,27 @@ export async function createHotelStay(
   // it lands the stay renders on no day. Deriving the link closes the
   // create/edit split that caused all of Brief 36 rather than patching one side.
   let tourDateId = stayData.tour_date_id ?? null
+  let dayCreated = false
 
   if (stayData.check_in_date) {
     const resolved = await resolveTourDateId(supabase, tourId, stayData.check_in_date)
     if (resolved.id === null) return { error: resolved.error }
     tourDateId = resolved.id
+    dayCreated = resolved.created
   }
+
+  // The add flow is the worse half of the problem this announces. The panel
+  // closes on success and the timeline in front of the TM is unchanged, so a
+  // stay created for another date leaves no trace at all and reads as the app
+  // having dropped it.
+  //
+  // Compared by day id rather than by date because the date the form was opened
+  // from is not passed to this action, only that day's id. Both ids are on this
+  // tour (checked above), so this is a sound comparison, and a caller that passed
+  // no tour_date_id (the planner) has no "day the TM was looking at" to have
+  // moved away from, which is why a null one announces nothing.
+  const movedFromOpenedDay =
+    !!stayData.tour_date_id && !!tourDateId && tourDateId !== stayData.tour_date_id
 
   const { data: stay, error } = await supabase
     .from('hotel_stays')
@@ -211,7 +229,23 @@ export async function createHotelStay(
 
   void bustTourContextCache(tourId)
   revalidatePath(`/tours/${tourId}/schedule`)
-  return { error: null, stayId: stay.id }
+
+  return {
+    error: null,
+    stayId: stay.id,
+    moved:
+      movedFromOpenedDay && stayData.check_in_date
+        ? {
+            tourId,
+            date: stayData.check_in_date,
+            dayCreated,
+            // Hotels have no day sheet. Stated rather than omitted so a reader of
+            // DateMove does not have to work out whether an absent field means
+            // false or means unknown.
+            carriedTimes: false,
+          }
+        : null,
+  }
 }
 
 // Updates an existing hotel stay. Used by the timeline edit panel.
@@ -258,6 +292,8 @@ export async function updateHotelStay(
   // undefined means the form never sent the field and the link must survive.
   // null means the TM cleared the date, and a stay with no check-in date is on
   // no day, so the link goes with it.
+  let dayCreated = false
+
   if (data.check_in_date !== undefined) {
     if (!data.check_in_date) {
       update.tour_date_id = null
@@ -265,8 +301,17 @@ export async function updateHotelStay(
       const resolved = await resolveTourDateId(supabase, existing.tour_id, data.check_in_date)
       if (resolved.id === null) return { error: resolved.error }
       update.tour_date_id = resolved.id
+      dayCreated = resolved.created
     }
   }
+
+  // Compared on the date, not on the link. The link is recomputed whenever the
+  // field is submitted at all, even unchanged, so that editing a planner-created
+  // stay (which has a check-in date and no link) repairs it. Comparing links
+  // would report that repair as a move and tell the TM their hotel went to the
+  // day it was already on.
+  const dateChanged =
+    data.check_in_date !== undefined && data.check_in_date !== existing.check_in_date
 
   const { error } = await supabase
     .from('hotel_stays')
@@ -277,7 +322,19 @@ export async function updateHotelStay(
 
   void bustTourContextCache(existing.tour_id)
   revalidatePath(`/tours/${existing.tour_id}/schedule`)
-  return { error: null, stayId }
+
+  return {
+    error: null,
+    stayId,
+    // Bug 1b's fix is what makes this necessary: the stay now correctly leaves
+    // the day the TM is on. Clearing the date moves it off the schedule entirely
+    // rather than to another day, so there is no day to link to and nothing to
+    // announce.
+    moved:
+      dateChanged && data.check_in_date
+        ? { tourId: existing.tour_id, date: data.check_in_date, dayCreated, carriedTimes: false }
+        : null,
+  }
 }
 
 // Updates the confirmation number and promotes status to 'booked'.

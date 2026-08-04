@@ -22,8 +22,6 @@ export function AddShowForm({ tourId, date, onBack, onSuccess }: AddShowFormProp
       const data = readForm(fd, {
         venue_name: 'requiredString',
         address: 'string',
-        load_in_at: 'string',
-        curfew_at: 'string',
       })
       return createShow(tourId, { date, ...data })
     },
@@ -39,16 +37,12 @@ export function AddShowForm({ tourId, date, onBack, onSuccess }: AddShowFormProp
         <Label className="text-xs">Address</Label>
         <Input name="address" placeholder="Chalk Farm Rd, London NW1 8EH" className="h-7 text-xs" />
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label className="text-xs">Load-in</Label>
-          <Input name="load_in_at" type="datetime-local" defaultValue={`${date}T10:00`} className="h-7 text-xs" />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Curfew</Label>
-          <Input name="curfew_at" type="datetime-local" defaultValue={`${date}T23:00`} className="h-7 text-xs" />
-        </div>
-      </div>
+      {/* Brief 36 step 3: no load-in or curfew here. They are day-sheet fields
+          now, and this form used to default them to 10:00 and 23:00 and write
+          them to columns nothing on the day view could edit, so the times a TM
+          saw on the timeline and the times the crew were sent came apart from the
+          moment the show was created. The show lands with no times and the TM
+          sets them on the timeline, which is where they already edit them. */}
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex gap-2">
         <Button type="button" variant="ghost" size="sm" onClick={onBack} className="flex-1">Back</Button>

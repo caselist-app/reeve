@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -7,6 +8,7 @@ import { createTransportSegment } from '@/lib/actions/transport'
 import { fromDatetimeLocal } from '@/lib/schedule/datetime'
 import { useEntityForm } from '@/hooks/use-entity-form'
 import { readForm } from '@/lib/forms/read-form'
+import { DateMoveNotice } from '@/components/schedule/date-move-notice'
 
 interface AddRailFormProps {
   tourId: string
@@ -18,6 +20,11 @@ interface AddRailFormProps {
 }
 
 export function AddRailForm({ tourId, tourDateId, date, timezone, onBack, onSuccess }: AddRailFormProps) {
+  // The departure decides the day, and this field defaults to the current day and
+  // then lets the TM edit it, so the segment can leave the day it was added from
+  // before it ever exists.
+  const [departLocal, setDepartLocal] = useState(`${date}T09:00`)
+
   const { submit, pending, error } = useEntityForm({
     refreshOnSuccess: true,
     onSuccess,
@@ -58,7 +65,14 @@ export function AddRailForm({ tourId, tourDateId, date, timezone, onBack, onSucc
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">Departs</Label>
-          <Input name="depart_at" type="datetime-local" defaultValue={`${date}T09:00`} className="h-7 text-xs" />
+          <Input
+            name="depart_at"
+            type="datetime-local"
+            defaultValue={`${date}T09:00`}
+            onChange={(e) => setDepartLocal(e.target.value)}
+            className="h-7 text-xs"
+          />
+          <DateMoveNotice currentDate={date} value={departLocal} />
         </div>
         <div className="space-y-1">
           <Label className="text-xs">Arrives</Label>

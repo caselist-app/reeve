@@ -21,6 +21,8 @@ import { updateDaySheet, deleteShow } from '@/lib/actions/shows'
 import type { Tables } from '@/lib/types/database'
 import { useEntityForm } from '@/hooks/use-entity-form'
 import { readForm } from '@/lib/forms/read-form'
+import { NotifyPanel } from '@/components/broadcast/notify-panel'
+import type { ChangeDescriptor } from '@/lib/comms/affected'
 
 type DaySheet = Pick<
   Tables<'day_sheets'>,
@@ -31,9 +33,34 @@ type DaySheet = Pick<
 
 interface ShowPanelProps {
   showId: string
+  tourId: string
   venueName: string
   timezone: string
   daySheet: DaySheet | null
+}
+
+// Day-sheet times that warrant offering to notify crew when they change.
+//
+// load_in: affects everyone travelling to the show that day.
+// curfew: affects plans for the night, especially transport home.
+//
+// Brief 36 step 3 moved these two off the show row and into the day sheet, and
+// the change alert had to move with them. It used to be constructed in
+// show-form.tsx on the show page's Venue tab, keyed on shows.load_in_at and
+// shows.curfew_at, and when those columns were dropped the alert stopped firing
+// for anything but an address change. This is the surface a TM actually edits
+// load-in on, so it is where the offer belongs.
+//
+// Ordered: the first one that changed wins, so a save that moves both offers one
+// message rather than two. load_in first because it affects more people.
+const NOTIFY_FIELDS = [
+  { key: 'load_in' as const, field: 'load_in' as const },
+  { key: 'curfew' as const, field: 'curfew' as const },
+]
+
+type NotifyState = {
+  change: Extract<ChangeDescriptor, { type: 'show' }>
+  previousValue: string | null
 }
 
 // Converts a UTC ISO string to a HH:MM time string in the given timezone.
@@ -83,12 +110,30 @@ const SECTIONS = [
   },
 ]
 
-export function ShowPanel({ showId, venueName, timezone, daySheet }: ShowPanelProps) {
+export function ShowPanel({ showId, tourId, venueName, timezone, daySheet }: ShowPanelProps) {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const router = useRouter()
   const { close } = useSidePanel()
+
+  // Set after a successful save if a notification-worthy time changed.
+  const [notify, setNotify] = useState<NotifyState | null>(null)
+
+  // The times as last saved, in the same HH:MM frame the inputs use, so the
+  // change check compares like with like.
+  //
+  // Held in state rather than read from the daySheet prop on each save. The prop
+  // comes from the side-panel store card, captured when the timeline item was
+  // clicked, and updateDaySheet revalidates the route rather than reopening the
+  // panel, so it does not update. Comparing against it would work on the first
+  // save and then compare every later save against the original values, offering
+  // to notify crew about a change the TM already sent.
+  const [savedTimes, setSavedTimes] = useState<Record<string, string>>(() =>
+    Object.fromEntries(
+      NOTIFY_FIELDS.map(({ key }) => [key, toTimeLocal(daySheet?.[key] ?? null, timezone)]),
+    ),
+  )
 
   async function handleDelete() {
     setDeleting(true)
@@ -100,8 +145,15 @@ export function ShowPanel({ showId, venueName, timezone, daySheet }: ShowPanelPr
     router.refresh()
   }
 
+  // The notify check in onSuccess needs the values just submitted, not just the
+  // result. action() sets this before calling the server action, and onSuccess
+  // always runs after action() resolves, so it is populated by the time it reads.
+  // Same shape as show-form.tsx's submittedData.
+  let submittedTimes: Record<string, string | null> | null = null
+
   const { submit, pending, error, saved } = useEntityForm({
     action: (fd) => {
+      setNotify(null)
       // Day sheet fields are a dynamic list (SECTIONS), not a fixed shape, so
       // the field-name-to-kind map is built from it rather than written out
       // by hand. Every field reads as plain 'string' (null when blank).
@@ -109,7 +161,32 @@ export function ShowPanel({ showId, venueName, timezone, daySheet }: ShowPanelPr
         SECTIONS.flatMap((section) => section.fields.map(({ key }) => [key, 'string' as const]))
       )
       const data = readForm(fd, shape)
+      submittedTimes = data
       return updateDaySheet(showId, data as Parameters<typeof updateDaySheet>[1])
+    },
+    onSuccess: () => {
+      const times = submittedTimes
+      if (!times) return
+
+      const changed = NOTIFY_FIELDS.find(
+        ({ key }) => (times[key] ?? '') !== (savedTimes[key] ?? ''),
+      )
+
+      if (changed) {
+        setNotify({
+          change: { type: 'show', showId, field: changed.field },
+          // The time it was, for the "was 09:00" half of the message. Null when
+          // there was nothing there before: an initial entry is not a change to
+          // anything, and "was TBC" reads worse than saying nothing.
+          previousValue: savedTimes[changed.key] || null,
+        })
+      }
+
+      // Recorded whether or not a notify-worthy field moved, so the next save
+      // compares against what is actually stored.
+      setSavedTimes(
+        Object.fromEntries(NOTIFY_FIELDS.map(({ key }) => [key, times[key] ?? ''])),
+      )
     },
   })
 
@@ -142,6 +219,18 @@ export function ShowPanel({ showId, venueName, timezone, daySheet }: ShowPanelPr
           {pending ? 'Saving...' : 'Save'}
         </Button>
         {saved && <p className="text-xs text-muted-foreground text-center">Saved.</p>}
+
+        {/* Rendered inside the panel rather than as a toast: this one asks the TM
+            to do something (read the message, pick recipients, send) rather than
+            telling them something happened, and it renders nothing at all when
+            no one is affected. NotifyPanel returns null on a zero count. */}
+        {saved && notify && (
+          <NotifyPanel
+            tourId={tourId}
+            change={notify.change}
+            previousValue={notify.previousValue}
+          />
+        )}
       </form>
 
       <div className="mt-5 border-t border-border pt-4">

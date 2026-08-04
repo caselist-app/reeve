@@ -4,6 +4,7 @@ import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import type { ExtractionProposal } from '@/lib/ai/extract'
 import { bustTourContextCache } from '@/lib/ai/context'
+import { updateDaySheet } from '@/lib/actions/shows'
 
 export type ExtractionActionState = { error: string | null }
 
@@ -46,17 +47,35 @@ export async function confirmExtraction(
   // Shows: one RPC call per show (they need the tour_dates upsert inside the RPC).
   for (const show of confirmed.shows) {
     if (!show.date || !show.venue_name) continue
-    const { error } = await supabase.rpc('create_show_with_dependents', {
+    const { data: showId, error } = await supabase.rpc('create_show_with_dependents', {
       p_tour_id: tourId,
       p_show_data: {
         date: show.date,
         venue_name: show.venue_name,
         address: show.address ?? null,
-        load_in_at: show.load_in_at ?? null,
-        curfew_at: show.curfew_at ?? null,
       },
     })
-    if (error) errors.push(`Show (${show.venue_name}): ${error.message}`)
+    if (error) {
+      errors.push(`Show (${show.venue_name}): ${error.message}`)
+      continue
+    }
+
+    // Brief 36 step 3: the times the email carried go to the day sheet, through
+    // the one writer, rather than to two show columns the day view could not edit.
+    // Written after the show exists because the day sheet hangs off it, and only
+    // when there is something to write, so an email with no times does not touch
+    // the row the RPC just created.
+    if (showId && (show.load_in || show.curfew)) {
+      const daySheetResult = await updateDaySheet(showId, {
+        ...(show.load_in ? { load_in: show.load_in } : {}),
+        ...(show.curfew ? { curfew: show.curfew } : {}),
+      })
+      // Reported rather than thrown: the show landed, and losing the whole
+      // extraction because one time did not parse would be the worse trade.
+      if (daySheetResult.error) {
+        errors.push(`Show times (${show.venue_name}): ${daySheetResult.error}`)
+      }
+    }
   }
 
   // Transport segments: batch insert in a single round trip.
