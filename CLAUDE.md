@@ -224,7 +224,8 @@ The day view is the surface a TM hits hundreds of times a day, so latency there 
 
 `.env.example` is the contract. Every variable the code reads must be listed there, even the optional ones. Two rules that are easy to get wrong:
 
-- **One secret, one name.** `META_APP_SECRET` and `WHATSAPP_APP_SECRET` are currently two names for the same Meta app secret, read by `app/api/data-deletion/route.ts` and `app/api/whatsapp/inbound/route.ts` respectively. Because webhook signature checks fail closed, whichever name is unset makes that endpoint reject everything. Consolidate on `META_APP_SECRET`. Do not add a third name for it.
+- **One secret, one name.** There is one Meta app and therefore one app secret, and it is called `META_APP_SECRET`. Both `app/api/whatsapp/inbound/route.ts` and `app/api/data-deletion/route.ts` read that name. It used to be duplicated as `WHATSAPP_APP_SECRET` in the WhatsApp route, which meant whichever of the two names was left unset made that endpoint reject every request, silently, because signature checks fail closed. Consolidated 2026-08-04. Do not reintroduce a second name for it. The same reasoning applies to any future Meta or provider credential: one credential, one variable, read from one place.
+- **Renaming a secret is a two-step deploy, in this order.** Add the new variable in Vercel and confirm it is live, then ship the code that reads it, then remove the old variable. Shipping the rename first takes the endpoint down the moment it deploys, and for the WhatsApp webhook that means every inbound crew message is rejected.
 - **`NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` is browser-exposed by design** (Places autocomplete in `components/shows/places-address-input.tsx`). It must be a separate key from the server-side `GOOGLE_MAPS_API_KEY` and must be HTTP-referrer restricted in Google Cloud. Never reuse the server key with a `NEXT_PUBLIC_` prefix.
 
 ## Brand and copy
