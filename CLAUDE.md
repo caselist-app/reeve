@@ -80,7 +80,7 @@ supabase db reset               # rebuild local DB from all migrations (destruct
 
 `pnpm check:conventions` runs `scripts/check-conventions.mjs` and is a CI step alongside typecheck, lint and build. It exists because an audit on 2026-08-04 found that every bug in the repo, including two that silently destroyed user data, passed all three of those. This file was complete and correct at the time and its rules were still broken repeatedly by agents that had read it. **A rule that cannot fail the build is a suggestion.**
 
-It currently enforces: `requireUser()` first in every server action, `revalidatePath` on the schedule route for any action writing a schedule-rendered table, no `getSession()`, `cache_control` on every Anthropic call, no unguarded `.in()`, no em-dashes, every `process.env` read declared in `.env.example`, and `[BOTH]` marked on every variable reachable from `trigger/jobs/`.
+It currently enforces: `requireUser()` first in every server action, `revalidatePath` on the schedule route for any action writing a schedule-rendered table, no `getSession()`, `cache_control` on every Anthropic call, no unguarded `.in()`, no em-dashes, every `process.env` read declared in `.env.example`, `[BOTH]` marked on every variable reachable from `trigger/jobs/`, and a `-- deploy-order:` line on any migration that drops a column or table.
 
 Known violations that predate the check live in `scripts/conventions-baseline.json`, each with a reason saying whether it is **accepted** (the check is wrong about it) or **debt** (the check is right and the fix is scheduled). That file should only ever shrink. Removing an entry is part of the fix, because a stale entry fails the check too.
 
@@ -97,6 +97,10 @@ A change to the database is a single atomic action with three parts. Never do on
 3. **Regenerate types.** Run `pnpm types:gen` to rewrite `lib/types/database.ts`. Never hand-edit that file. Never invent table or column names anywhere in the codebase: import them from the generated types so the compiler catches drift.
 
 Commit all three together (migration file, any code using the new schema, regenerated types) in one commit. A schema change that lands without its migration or without regenerated types is incomplete and must not be merged. If you change schema and forget the types, the build is wrong even if it compiles.
+
+**If the migration drops or renames anything, there is a fourth part, and it is the one that has actually broken production.** A `drop column` is safe only once **both runtimes** are running the code that stopped reading it. `pnpm build` passing does not establish that: it covers the Next.js app on Vercel and says nothing about the jobs in `trigger/jobs/`, which deploy separately. Nor does grepping the repo for readers: that proves what the code says, never what is running.
+
+So: ship the code to both runtimes, confirm both are live, then apply the migration. CI now deploys Trigger.dev on merge to `main`, which is what makes "both" happen automatically, and `pnpm check:conventions` fails a destructive migration that carries no `-- deploy-order:` line stating this was considered. The full reasoning, and the production failure that produced the rule, is under Environment variables below. It is repeated here because that is where it was written the first time and it was 170 lines from the decision it governs, which is exactly why it was missed.
 
 ## Database conventions
 
