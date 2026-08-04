@@ -87,7 +87,21 @@ export async function DayTimeline({ records, tourId, tourDateId, date, timezone,
   // Show spine items.
   for (const show of (shows ?? [])) {
     const ds = Array.isArray(show.day_sheets) ? show.day_sheets[0] : show.day_sheets
-    if (!ds) {
+
+    // Brief 36 step 4. This guard used to be `if (!ds)`, which never fired:
+    // create_show_with_dependents always inserts a day_sheets row, so ds was
+    // always truthy and the placeholder below was dead code. A show with no times
+    // populated therefore rendered nothing at all on the timeline, and since
+    // nothing else on the day view linked to it, a TM who added a show and forgot
+    // load-in had no way to reach it.
+    //
+    // The right question is whether the row holds anything, not whether it exists.
+    // Now that step 3 has taken load-in and curfew off the add-show form, every
+    // new show starts in exactly this state, so this is the common path rather
+    // than an edge case.
+    const hasAnyTime = !!ds && DAY_SHEET_FIELDS.some(({ key }) => !!ds[key as keyof typeof ds])
+
+    if (!hasAnyTime) {
       // Show with no day sheet times yet: single placeholder card.
       items.push({
         key: `show-${show.id}`,
@@ -105,7 +119,10 @@ export async function DayTimeline({ records, tourId, tourDateId, date, timezone,
               showId: show.id,
               venueName: show.venue_name,
               timezone,
-              daySheet: null,
+              // The row, not null. It exists and is empty, and passing it means
+              // the panel opens on the real day sheet the TM is about to fill in
+              // rather than on nothing.
+              daySheet: ds,
             }}
           />
         ),
