@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
+import { definedOnly } from '@/lib/forms/write-row'
 import { revertDayTypeIfOrphaned } from '@/lib/schedule/day-type-revert'
 import { z } from 'zod'
 
@@ -106,16 +107,23 @@ export async function updateRehearsal(
 
   if (!existing) return { error: 'Rehearsal not found.' }
 
+  // The parameter is a Partial, and every field was being written as
+  // `data.field ?? null`, so any caller submitting a subset would have cleared
+  // the rest. Its one caller happens to send everything, which is the only
+  // reason this had not destroyed anything yet. definedOnly makes that a
+  // property of the action rather than a property of today's caller.
   const { error } = await supabase
     .from('rehearsals')
-    .update({
-      location_name: data.location_name,
-      address: data.address ?? null,
-      google_maps_url: data.google_maps_url ?? null,
-      start_at: data.start_at ?? null,
-      end_at: data.end_at ?? null,
-      notes: data.notes ?? null,
-    })
+    .update(
+      definedOnly({
+        location_name: data.location_name,
+        address: data.address,
+        google_maps_url: data.google_maps_url,
+        start_at: data.start_at,
+        end_at: data.end_at,
+        notes: data.notes,
+      }),
+    )
     .eq('id', rehearsalId)
 
   if (error) return { error: error.message }

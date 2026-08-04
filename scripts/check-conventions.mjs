@@ -173,6 +173,45 @@ for (const file of sourceFiles) {
   }
 }
 
+// ---- Rule 2b: no .default() on an action-facing validator ----
+// The quietest half of the null-versus-undefined rule, and the one that has
+// actually destroyed data. Zod's .default() invents a value for a key the form
+// never submitted, so a partial form posted to an action that writes the whole
+// row does not merely fail to update a column, it writes a value the TM never
+// chose. daySheetFormSchema carried .default('none') on catering_type; the
+// schedule day view's show panel submits 14 time fields and no catering, so
+// every load-in edit set catering to 'none' and nulled six catering columns
+// alongside it. Crew silently stopped being told about food.
+//
+// Scoped to lib/validators/ because that is where every action-facing schema
+// lives by convention, and because the same call on a non-schema object is
+// unrelated. There is no legitimate exception here that a required field plus
+// an explicit fallback at the call site does not express better: a fallback in
+// the action is visible in the diff, and a default in the schema is visible to
+// nobody. If one ever does turn up, it belongs in the baseline with a reason
+// rather than in a weakened rule.
+for (const file of sourceFiles.filter((f) => rel(f).startsWith('lib/validators/'))) {
+  const src = readFileSync(file, 'utf8')
+  const re = /\.default\(/g
+  let m
+  while ((m = re.exec(src)) !== null) {
+    // Skip the prose. Several of these files explain at length why they carry
+    // no default, and a check that fires on its own documentation teaches
+    // people to delete the documentation.
+    const line = src.slice(src.lastIndexOf('\n', m.index) + 1, src.indexOf('\n', m.index))
+    if (line.trim().startsWith('//') || line.trim().startsWith('*')) continue
+
+    report(
+      'no-schema-default',
+      rel(file),
+      lineOf(src, m.index),
+      '.default() on a validator invents a value for a field the form never sent. ' +
+        'Make it required, or optional, and put the fallback at the call site.',
+      `no-schema-default|${rel(file)}|${lineOf(src, m.index)}`
+    )
+  }
+}
+
 // ---- Rule 3: never getSession(), always getUser() ----
 for (const file of sourceFiles) {
   const src = readFileSync(file, 'utf8')

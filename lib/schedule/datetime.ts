@@ -36,9 +36,20 @@ export function toDatetimeLocal(iso: string | null | undefined, tz: string): str
 /**
  * Converts a `datetime-local` input value back to a UTC ISO string, reading the
  * input as wall-clock time in the given timezone.
- * Returns null for an empty input so the column can be nulled out.
+ *
+ * Passes the null-versus-undefined distinction straight through rather than
+ * flattening it, because this sits between readForm and a server action and is
+ * exactly the kind of helper that would quietly undo the whole convention.
+ * Empty input is null, so the column is cleared. A field the form never
+ * rendered is undefined, so the action leaves the column alone. Returning null
+ * for both would make a datetime impossible to leave untouched by any partial
+ * form, which is the bug in Brief 37 with an extra step.
  */
-export function fromDatetimeLocal(local: string | null, tz: string): string | null {
+export function fromDatetimeLocal(
+  local: string | null | undefined,
+  tz: string,
+): string | null | undefined {
+  if (local === undefined) return undefined
   if (!local) return null
   return wallClockToUtc(local, tz)
 }

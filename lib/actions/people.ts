@@ -3,36 +3,45 @@
 import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
+import { definedOnly } from '@/lib/forms/write-row'
 import { personSchema, crewDetailSchema } from '@/lib/validators/person'
 import { bustTourContextCache } from '@/lib/ai/context'
 import type { z } from 'zod'
 
 export type PeopleActionState = { error: string | null; personId?: string }
 
-// Maps the form DTO's identity fields to a contacts row. Empty strings become
-// null so DB constraints (and the date column) are satisfied.
+// Maps the form DTO's identity fields to a contacts row, on the same rule as
+// toRow in lib/actions/contacts.ts: undefined is dropped, null is written.
+//
+// `notes` belongs here and was missing, which is the third of Brief 37's
+// destructive instances and the one with no wipe involved. contact-sheet.tsx
+// posts a notes textarea on the add path, personSchema did not declare the key,
+// Zod stripped it, and this mapper had nowhere to read it from. The TM typed a
+// note, saved, and it was gone, while the same textarea saved fine the next
+// time they opened the person. Any field added to one of these two mappers has
+// to be added to the other and to both schemas, or it silently does nothing.
 function contactIdentityFields(p: z.infer<typeof personSchema>) {
-  return {
-    name: p.name,
-    contact_email: p.contact_email || null,
-    contact_phone: p.contact_phone || null,
-    operational_channel: p.operational_channel ?? null,
-    email_enabled: p.email_enabled ?? false,
-    whatsapp_number: p.whatsapp_number || null,
-    sms_number: p.sms_number || null,
-    emergency_contact_name: p.emergency_contact_name || null,
-    emergency_contact_phone: p.emergency_contact_phone || null,
-    dietary: p.dietary || null,
-    allergies: p.allergies || null,
-    home_city: p.home_city || null,
-    passport_first_names: p.passport_first_names || null,
-    passport_surname: p.passport_surname || null,
-    passport_number: p.passport_number || null,
-    passport_expiry: p.passport_expiry || null,
-    passport_country: p.passport_country || null,
-    date_of_birth: p.date_of_birth || null,
-    tshirt_size: p.tshirt_size || null,
-  }
+  return definedOnly({
+    contact_email: p.contact_email,
+    contact_phone: p.contact_phone,
+    operational_channel: p.operational_channel,
+    email_enabled: p.email_enabled,
+    whatsapp_number: p.whatsapp_number,
+    sms_number: p.sms_number,
+    emergency_contact_name: p.emergency_contact_name,
+    emergency_contact_phone: p.emergency_contact_phone,
+    dietary: p.dietary,
+    allergies: p.allergies,
+    home_city: p.home_city,
+    passport_first_names: p.passport_first_names,
+    passport_surname: p.passport_surname,
+    passport_number: p.passport_number,
+    passport_expiry: p.passport_expiry,
+    passport_country: p.passport_country,
+    date_of_birth: p.date_of_birth,
+    tshirt_size: p.tshirt_size,
+    notes: p.notes,
+  })
 }
 
 export async function addPerson(
@@ -76,11 +85,17 @@ export async function addPerson(
   // per-tour terms for any future tour this contact is added to.
   const { data: contact, error: contactError } = await supabase
     .from('contacts')
+    // This is an insert of a brand new contact, so `?? null` is safe here in a
+    // way it never is on an update: there is no stored value to destroy, and
+    // the seeded defaults are genuinely absent when the TM did not give them.
+    // `name` is stated outside contactIdentityFields because that mapper
+    // returns a Partial and the column is not null.
     .insert({
       account_id: user.id,
       ...contactIdentityFields(p),
+      name: p.name,
       default_person_type: p.person_type,
-      default_role: p.role || null,
+      default_role: p.role ?? null,
       default_per_diem_rate: detail?.per_diem_rate ?? null,
       default_per_diem_currency: detail?.per_diem_currency ?? null,
       default_daily_wage_rate: detail?.daily_wage_rate ?? null,
@@ -101,7 +116,7 @@ export async function addPerson(
       tour_id: tourId,
       contact_id: contact.id,
       person_type: p.person_type,
-      role: p.role || null,
+      role: p.role ?? null,
     })
     .select('id')
     .single()
@@ -144,7 +159,8 @@ export async function addPerson(
 // in parallel instead, because identity is account-level and terms are
 // tour-level and the two writes have different scopes. Deleted rather than
 // given the revalidate it was missing, since a second untested way to write
-// contacts, people and crew_detail is a place for the two to drift apart.
+// contacts, people and crew_detail is a place for the two to drift apart, and
+// the null-versus-undefined rules above would have had to be maintained in both.
 
 // Adds an existing roster contact to a tour via the add_contact_to_tour RPC.
 // personType overrides the contact's default_person_type (e.g. when the TM
@@ -207,7 +223,7 @@ export async function updatePersonTerms(
 
   const { error: personError } = await supabase
     .from('people')
-    .update({ person_type: personType, role: role || null })
+    .update({ person_type: personType, role })
     .eq('id', personId)
 
   if (personError) {
@@ -219,6 +235,14 @@ export async function updatePersonTerms(
     if (!parsed.success) {
       return { error: parsed.error.issues[0].message }
     }
+    // The upsert payload is the convention in miniature. supabase-js JSON
+    // serialises this object, so a rate key holding undefined is not sent and
+    // the stored rate survives, while a key holding null is sent and clears the
+    // column. Before crewDetailSchema was made nullable, a blank rate input
+    // could only ever produce undefined, so a per diem could be set and never
+    // taken off again. definedOnly is not needed here: JSON.stringify already
+    // does the dropping, and spelling it out would imply the two behave
+    // differently.
     const { error: detailError } = await supabase.from('crew_detail').upsert({
       person_id: personId,
       tour_id: existing.tour_id,
@@ -305,7 +329,7 @@ export async function removePerson(personId: string): Promise<PeopleActionState>
 async function whatsappConflictError(
   supabase: Awaited<ReturnType<typeof createClient>>,
   tourId: string,
-  number: string | undefined,
+  number: string | null | undefined,
   excludePersonId?: string
 ): Promise<PeopleActionState> {
   if (!number) {

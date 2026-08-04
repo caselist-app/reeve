@@ -90,33 +90,41 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
       onSuccess(result.id)
     },
     action: async (fd): Promise<ContactSheetResult> => {
+      // Every field is read the same way now, and the shape no longer has to
+      // guess. This form renders three different field sets (tour add, tour
+      // edit, roster), so a field's meaning here depends on which branch drew
+      // it: `default_role` and the two `default_*` rates exist only in roster
+      // context, `tour_role` and the two tour rates only in tour context.
+      // readForm reports the ones this render did not draw as undefined and the
+      // ones the TM emptied as null, which is the distinction the actions need
+      // and the one the old *OrUndefined kinds could not express.
       const strFields = readForm(fd, {
-        contact_email: 'stringOrUndefined',
-        contact_phone: 'stringOrUndefined',
-        whatsapp_number: 'stringOrUndefined',
-        sms_number: 'stringOrUndefined',
-        emergency_contact_name: 'stringOrUndefined',
-        emergency_contact_phone: 'stringOrUndefined',
-        dietary: 'stringOrUndefined',
-        allergies: 'stringOrUndefined',
-        home_city: 'stringOrUndefined',
-        passport_first_names: 'stringOrUndefined',
-        passport_surname: 'stringOrUndefined',
-        passport_number: 'stringOrUndefined',
-        passport_expiry: 'stringOrUndefined',
-        passport_country: 'stringOrUndefined',
-        date_of_birth: 'stringOrUndefined',
-        tshirt_size: 'stringOrUndefined',
-        notes: 'stringOrUndefined',
-        tour_role: 'stringOrUndefined',
-        default_role: 'stringOrUndefined',
+        contact_email: 'string',
+        contact_phone: 'string',
+        whatsapp_number: 'string',
+        sms_number: 'string',
+        emergency_contact_name: 'string',
+        emergency_contact_phone: 'string',
+        dietary: 'string',
+        allergies: 'string',
+        home_city: 'string',
+        passport_first_names: 'string',
+        passport_surname: 'string',
+        passport_number: 'string',
+        passport_expiry: 'string',
+        passport_country: 'string',
+        date_of_birth: 'string',
+        tshirt_size: 'string',
+        notes: 'string',
+        tour_role: 'string',
+        default_role: 'string',
         name: 'requiredString',
       })
       const numFields = readForm(fd, {
-        per_diem_rate: 'numberOrUndefined',
-        daily_wage_rate: 'numberOrUndefined',
-        default_per_diem_rate: 'numberOrUndefined',
-        default_daily_wage_rate: 'numberOrUndefined',
+        per_diem_rate: 'number',
+        daily_wage_rate: 'number',
+        default_per_diem_rate: 'number',
+        default_daily_wage_rate: 'number',
       })
 
       // Identity fields common to both paths.
@@ -143,40 +151,50 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
         notes: strFields.notes,
       }
 
-      // Tour terms only used when tourContext is present.
+      // Tour terms only used when tourContext is present, where the input is
+      // always rendered, so `?? null` here can only ever be reading a field
+      // this render did not draw at all.
       const tourRole = strFields.tour_role ?? null
+      // The rates pass straight through. Blank now reads as null and clears the
+      // stored rate, which is what a TM emptying the field means and what they
+      // could not do before.
       const crewDetailRaw = isCrewInTourContext
         ? {
             per_diem_rate: numFields.per_diem_rate,
-            per_diem_currency: perDiemCurrency || undefined,
+            per_diem_currency: perDiemCurrency || null,
             daily_wage_rate: numFields.daily_wage_rate,
-            wage_currency: wageCurrency || undefined,
+            wage_currency: wageCurrency || null,
           }
         : undefined
 
       if (hasTourContext) {
         // Add mode: create a new contact and tour membership in one shot.
+        // addPerson seeds default_person_type and default_role from person_type
+        // and role itself, so they are not passed here. They used to be, and
+        // personSchema does not declare them, so Zod stripped them and the cast
+        // that used to sit on this call hid that it did. The cast is gone: an
+        // argument that does not typecheck against personSchema is a field that
+        // will be silently dropped, which is how `notes` went missing.
         if (tourContext.mode === 'add') {
-          const personRaw = {
-            ...identityRaw,
-            person_type: personType,
-            role: tourRole ?? undefined,
-            // Seed the contact's defaults from the tour terms so future
-            // tours pre-fill correctly.
-            default_person_type: personType,
-            default_role: tourRole ?? undefined,
-          }
-
-          const result = await addPerson(tourContext.tourId, personRaw as Parameters<typeof addPerson>[1], crewDetailRaw)
+          const result = await addPerson(
+            tourContext.tourId,
+            { ...identityRaw, person_type: personType, role: tourRole },
+            crewDetailRaw
+          )
           return { error: result.error, id: result.personId }
         }
 
-        // Edit mode: update identity on the contact, tour terms on people/crew_detail.
-        const parsedIdentity = contactSchema.safeParse({
-          ...identityRaw,
-          default_person_type: personType,
-          default_role: tourRole ?? undefined,
-        })
+        // Edit mode: update identity on the contact, tour terms on
+        // people/crew_detail.
+        //
+        // Neither default_person_type nor default_role is sent. This panel
+        // renders no input for either (the "Default type" select and the
+        // "Default role" input are both roster-only), and the tour's own type
+        // and role are a different fact: someone carried as support on one tour
+        // is not thereby support on the roster. Sending them wrote the tour's
+        // values over the contact's defaults on every save, which is the same
+        // shape as the pay-rate wipe with a field nobody thought to check.
+        const parsedIdentity = contactSchema.safeParse(identityRaw)
         if (!parsedIdentity.success) {
           return { error: parsedIdentity.error.issues[0].message }
         }
@@ -189,15 +207,16 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
         return { error: err ?? null, id: contact!.id }
       }
 
-      // Roster-only path: create or update the contact with default pay fields.
+      // Roster-only path: this is the render that owns the default fields, so
+      // it is the only one that sends them.
       const raw = {
         ...identityRaw,
         default_person_type: personType,
         default_role: strFields.default_role,
         default_per_diem_rate: numFields.default_per_diem_rate,
-        default_per_diem_currency: perDiemCurrency || undefined,
+        default_per_diem_currency: perDiemCurrency || null,
         default_daily_wage_rate: numFields.default_daily_wage_rate,
-        default_wage_currency: wageCurrency || undefined,
+        default_wage_currency: wageCurrency || null,
       }
 
       const parsed = contactSchema.safeParse(raw)

@@ -2,6 +2,9 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { testDb } from './setup'
 import { createFixture, destroyFixture, type Fixture } from './fixture'
 import { updateDaySheet } from '@/lib/actions/shows'
+import { updateContact } from '@/lib/actions/contacts'
+import { addPerson, updatePersonTerms } from '@/lib/actions/people'
+import type { ContactForm } from '@/lib/validators/contact'
 
 // The bug this file exists for, in full:
 //
@@ -124,5 +127,214 @@ describe('updateDaySheet partial writes', () => {
     const after = await readDaySheet()
     expect(after?.catering_type).toBe('buyout')
     expect(after?.catering_lunch_start).not.toBeNull()
+  })
+})
+
+// The same class on the other partial form in the product. components/roster/
+// contact-sheet.tsx renders three different field sets from one component:
+// tour-context add, tour-context edit, and roster. The pay inputs exist only in
+// the first two, the default role and default rates only in the third. Every
+// field one mode omits is a field the other mode's save can destroy.
+//
+// Both directions are asserted for each field, because a fix that only skips
+// undefined makes a field impossible to clear, which is the second bug Brief 37
+// names and the exact inverse of the first.
+
+describe('contact and person partial writes', () => {
+  let fixture: Fixture
+
+  beforeEach(async () => {
+    fixture = await createFixture()
+  })
+
+  afterEach(async () => {
+    await destroyFixture(fixture)
+  })
+
+  async function readContact() {
+    const { data } = await testDb
+      .from('contacts')
+      .select('*')
+      .eq('id', fixture.contactId)
+      .single()
+    return data
+  }
+
+  async function readCrewDetail(personId: string) {
+    const { data } = await testDb
+      .from('crew_detail')
+      .select('*')
+      .eq('person_id', personId)
+      .single()
+    return data
+  }
+
+  // What contact-sheet.tsx posts in tour-context edit mode: identity only. The
+  // default role, default type and the four default_* pay fields have no input
+  // rendered on the panel at all, so none of them is in the payload.
+  const IDENTITY_ONLY: ContactForm = {
+    name: 'Test Crew',
+    contact_email: 'crew@example.test',
+    contact_phone: null,
+    operational_channel: null,
+    email_enabled: false,
+    sms_number: null,
+    emergency_contact_name: null,
+    emergency_contact_phone: null,
+    dietary: 'Vegan',
+    allergies: null,
+    home_city: null,
+    passport_first_names: null,
+    passport_surname: null,
+    passport_number: null,
+    passport_expiry: null,
+    passport_country: null,
+    date_of_birth: null,
+    tshirt_size: null,
+    notes: null,
+  }
+
+  it('leaves the default role alone when the form never rendered it', async () => {
+    await testDb
+      .from('contacts')
+      .update({ default_role: 'FOH Engineer' })
+      .eq('id', fixture.contactId)
+
+    const result = await updateContact(fixture.contactId, IDENTITY_ONLY)
+    expect(result.error).toBeNull()
+
+    expect((await readContact())?.default_role).toBe('FOH Engineer')
+  })
+
+  it('clears the default role when the roster form posts it blank', async () => {
+    await testDb
+      .from('contacts')
+      .update({ default_role: 'FOH Engineer' })
+      .eq('id', fixture.contactId)
+
+    await updateContact(fixture.contactId, { ...IDENTITY_ONLY, default_role: null })
+
+    expect((await readContact())?.default_role).toBeNull()
+  })
+
+  it('leaves the default person type alone when the form never rendered it', async () => {
+    // Same shape as default_role and found alongside it. The "Default type"
+    // select is roster-only, but the tour-context edit path was posting the
+    // tour's person_type into it, so moving someone onto a tour as support
+    // rewrote their roster default.
+    await testDb
+      .from('contacts')
+      .update({ default_person_type: 'artist' })
+      .eq('id', fixture.contactId)
+
+    await updateContact(fixture.contactId, IDENTITY_ONLY)
+
+    expect((await readContact())?.default_person_type).toBe('artist')
+  })
+
+  it('leaves the default pay rates alone when the form never rendered them', async () => {
+    await testDb
+      .from('contacts')
+      .update({ default_per_diem_rate: 45, default_daily_wage_rate: 250 })
+      .eq('id', fixture.contactId)
+
+    await updateContact(fixture.contactId, IDENTITY_ONLY)
+
+    const after = await readContact()
+    expect(after?.default_per_diem_rate).toBe(45)
+    expect(after?.default_daily_wage_rate).toBe(250)
+  })
+
+  it('clears a default pay rate when the roster form posts it blank', async () => {
+    await testDb
+      .from('contacts')
+      .update({ default_per_diem_rate: 45 })
+      .eq('id', fixture.contactId)
+
+    await updateContact(fixture.contactId, { ...IDENTITY_ONLY, default_per_diem_rate: null })
+
+    expect((await readContact())?.default_per_diem_rate).toBeNull()
+  })
+
+  it('writes the identity fields it did submit', async () => {
+    // The inverse of every test above: proving a field survives is worthless if
+    // the action has stopped writing anything.
+    await updateContact(fixture.contactId, { ...IDENTITY_ONLY, dietary: 'Coeliac' })
+
+    expect((await readContact())?.dietary).toBe('Coeliac')
+  })
+
+  it('clears a per diem the TM blanked on the tour terms form', async () => {
+    await testDb
+      .from('crew_detail')
+      .insert({ person_id: fixture.personId, tour_id: fixture.tourId, per_diem_rate: 40 })
+
+    const result = await updatePersonTerms(fixture.personId, 'crew', 'FOH', {
+      per_diem_rate: null,
+      per_diem_currency: 'GBP',
+      daily_wage_rate: null,
+      wage_currency: 'GBP',
+    })
+    expect(result.error).toBeNull()
+
+    expect((await readCrewDetail(fixture.personId))?.per_diem_rate).toBeNull()
+  })
+
+  it('leaves a per diem alone when the rate field was not submitted', async () => {
+    await testDb
+      .from('crew_detail')
+      .insert({ person_id: fixture.personId, tour_id: fixture.tourId, per_diem_rate: 40 })
+
+    await updatePersonTerms(fixture.personId, 'crew', 'FOH', {
+      per_diem_currency: 'GBP',
+      wage_currency: 'GBP',
+    })
+
+    expect((await readCrewDetail(fixture.personId))?.per_diem_rate).toBe(40)
+  })
+
+  it('writes a per diem the TM entered', async () => {
+    await updatePersonTerms(fixture.personId, 'crew', 'FOH', {
+      per_diem_rate: 55,
+      per_diem_currency: 'EUR',
+      daily_wage_rate: null,
+      wage_currency: 'GBP',
+    })
+
+    const after = await readCrewDetail(fixture.personId)
+    expect(after?.per_diem_rate).toBe(55)
+    expect(after?.per_diem_currency).toBe('EUR')
+  })
+
+  it('saves notes when adding a person, the same as it does on edit', async () => {
+    // personSchema had no notes key, so Zod stripped the field contact-sheet was
+    // posting and addPerson never saw it. The same textarea saved correctly when
+    // the TM edited the person afterwards, which is what made it look like the
+    // save had worked.
+    const result = await addPerson(fixture.tourId, {
+      person_type: 'crew',
+      name: 'Rigger',
+      notes: 'Allergic to early lobby calls.',
+    })
+    expect(result.error).toBeNull()
+
+    const { data: person } = await testDb
+      .from('people')
+      .select('contact_id')
+      .eq('id', result.personId ?? '')
+      .single()
+
+    // Throwing rather than asserting: an assertion on a missing id passes for
+    // the wrong reason, because a query filtered by undefined returns nothing
+    // and "no notes" would read as a pass.
+    if (!person) throw new Error('addPerson did not return a usable person id')
+
+    const { data: contact } = await testDb
+      .from('contacts')
+      .select('notes')
+      .eq('id', person.contact_id)
+      .single()
+
+    expect(contact?.notes).toBe('Allergic to early lobby calls.')
   })
 })
