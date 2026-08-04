@@ -142,6 +142,14 @@ export type PanelDescriptor =
       timezone: string
     }
 
+// The subset of PanelDescriptor that timeline-card.tsx can open: the four
+// variants that carry a stable key, used for active-state comparison instead
+// of JSON.stringify.
+export type SchedulePanelDescriptor = Extract<
+  PanelDescriptor,
+  { type: 'show' | 'transport' | 'hotel' | 'event' }
+>
+
 interface SidePanelState {
   panel: PanelDescriptor | null
   isOpen: boolean

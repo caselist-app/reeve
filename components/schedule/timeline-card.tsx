@@ -2,7 +2,7 @@
 
 import { ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useSchedulePanel, type CardDescriptor } from '@/stores/schedule-panel-store'
+import { useSidePanel, type SchedulePanelDescriptor } from '@/stores/side-panel-store'
 import { AirlineLogo } from '@/components/schedule/airline-logo'
 
 interface FlightTimes {
@@ -19,7 +19,7 @@ interface TimelineCardProps {
   title: string         // primary line
   subtitle?: string     // secondary line
   accent: string        // Tailwind border-left colour class
-  card: CardDescriptor  // what to set as activeCard on click
+  card: SchedulePanelDescriptor  // what to open in the side panel on click
   // Flight segments only: AirLabs serves logos from a static, IATA-code-keyed
   // URL, so day-timeline.tsx (a Server Component) computes this from the
   // segment's flight number and passes it straight through as a plain string.
@@ -32,14 +32,12 @@ interface TimelineCardProps {
 // Minimal 'use client' wrapper so timeline cards can trigger panel state
 // while the parent day-timeline.tsx stays a Server Component.
 export function TimelineCard({ time, label, title, subtitle, accent, card, logoIataCode, flightTimes }: TimelineCardProps) {
-  const { activeCard, setActiveCard } = useSchedulePanel()
-  const isActive = activeCard
-    ? JSON.stringify(activeCard) === JSON.stringify(card)
-    : false
+  const { panel, open, close } = useSidePanel()
+  const isActive = panel !== null && 'key' in panel && panel.key === card.key
 
   return (
     <button
-      onClick={() => setActiveCard(isActive ? null : card)}
+      onClick={() => (isActive ? close() : open(card))}
       className={cn(
         'w-full text-left flex gap-3 px-8 py-3 transition-colors',
         isActive ? 'bg-muted/60' : 'hover:bg-muted/30',

@@ -2,8 +2,8 @@
 
 import { useTransition, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useSchedulePanel } from '@/stores/schedule-panel-store'
-import { EditPanel } from '@/components/schedule/edit-panel'
+import { useSidePanel } from '@/stores/side-panel-store'
+import { PanelShell } from '@/components/layout/panel-shell'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -88,7 +88,7 @@ export function ShowPanel({ showId, venueName, timezone, daySheet }: ShowPanelPr
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const router = useRouter()
-  const { setActiveCard } = useSchedulePanel()
+  const { close } = useSidePanel()
 
   async function handleDelete() {
     setDeleting(true)
@@ -96,7 +96,7 @@ export function ShowPanel({ showId, venueName, timezone, daySheet }: ShowPanelPr
     setDeleting(false)
     if (result.error) { setError(result.error); return }
     setDeleteOpen(false)
-    setActiveCard(null)
+    close()
     router.refresh()
   }
 
@@ -121,7 +121,7 @@ export function ShowPanel({ showId, venueName, timezone, daySheet }: ShowPanelPr
   }
 
   return (
-    <EditPanel title={venueName} subtitle="Day sheet">
+    <PanelShell title={venueName} description="Day sheet">
       <form onSubmit={handleSubmit} className="space-y-5">
         {SECTIONS.map((section) => (
           <div key={section.title}>
@@ -184,6 +184,6 @@ export function ShowPanel({ showId, venueName, timezone, daySheet }: ShowPanelPr
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </EditPanel>
+    </PanelShell>
   )
 }

@@ -2,7 +2,7 @@ import { TimelineCard } from '@/components/schedule/timeline-card'
 import { DayHeader } from '@/components/schedule/day-header'
 import { formatFlightNumber } from '@/lib/utils/format-flight-number'
 import { placeName } from '@/lib/utils/place-name'
-import type { DayRecords } from '@/lib/schedule/day-records'
+import type { DayRecords, DayHotel } from '@/lib/schedule/day-records'
 
 interface DayTimelineProps {
   records: DayRecords
@@ -72,7 +72,9 @@ export async function DayTimeline({ records, tourId, tourDateId, date, timezone,
   const { shows, segments, hotelsLinked, hotelsCheckin, hotelsCheckout, events } = records
 
   // Deduplicate hotels: tour_date_id-linked take precedence over date-matched.
-  const hotelMap = new Map<string, { id: string; name: string | null; check_in_date: string | null; check_in_time: string | null; check_out_date: string | null; check_out_time: string | null; isCheckout: boolean }>()
+  // Keeps the full DayHotel shape (not just the display fields) so the row
+  // can go straight into a side panel descriptor without a re-fetch.
+  const hotelMap = new Map<string, DayHotel & { isCheckout: boolean }>()
   for (const h of hotelsLinked) {
     // A linked stay shows both check-in and check-out if applicable.
     if (h.check_in_date === date) {
@@ -118,7 +120,14 @@ export async function DayTimeline({ records, tourId, tourDateId, date, timezone,
             label="Show"
             title={show.venue_name}
             accent="border-purple-500"
-            card={{ type: 'show', showId: show.id }}
+            card={{
+              type: 'show',
+              key: `show-${show.id}`,
+              showId: show.id,
+              venueName: show.venue_name,
+              timezone,
+              daySheet: null,
+            }}
           />
         ),
       })
@@ -138,7 +147,14 @@ export async function DayTimeline({ records, tourId, tourDateId, date, timezone,
             label={label}
             title={show.venue_name}
             accent="border-purple-500"
-            card={{ type: 'show', showId: show.id }}
+            card={{
+              type: 'show',
+              key: `show-${show.id}`,
+              showId: show.id,
+              venueName: show.venue_name,
+              timezone,
+              daySheet: ds,
+            }}
           />
         ),
       })
@@ -206,7 +222,7 @@ export async function DayTimeline({ records, tourId, tourDateId, date, timezone,
           title={title}
           subtitle={subtitle || undefined}
           accent="border-teal-500"
-          card={{ type: 'transport', segmentId: seg.id }}
+          card={{ type: 'transport', key: `transport-${seg.id}`, segment: seg, timezone }}
           logoIataCode={logoIataCodeFor(seg)}
           flightTimes={flightTimes}
         />
@@ -233,7 +249,11 @@ export async function DayTimeline({ records, tourId, tourDateId, date, timezone,
           label={isCheckout ? 'Hotel check-out' : 'Hotel check-in'}
           title={hotel.name ?? 'Hotel'}
           accent="border-blue-500"
-          card={{ type: isCheckout ? 'hotel-checkout' : 'hotel-checkin', stayId: hotel.id }}
+          card={{
+            type: 'hotel',
+            key: `hotel-${isCheckout ? 'checkout' : 'checkin'}-${hotel.id}`,
+            stay: hotel,
+          }}
         />
       ),
     })
@@ -252,7 +272,7 @@ export async function DayTimeline({ records, tourId, tourDateId, date, timezone,
           title={ev.title}
           subtitle={ev.location ?? undefined}
           accent="border-amber-500"
-          card={{ type: 'event', eventId: ev.id }}
+          card={{ type: 'event', key: `event-${ev.id}`, event: ev, timezone }}
         />
       ),
     })

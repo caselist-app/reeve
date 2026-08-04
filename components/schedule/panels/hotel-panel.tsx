@@ -1,7 +1,7 @@
 'use client'
 
 import { useTransition, useState } from 'react'
-import { EditPanel } from '@/components/schedule/edit-panel'
+import { PanelShell } from '@/components/layout/panel-shell'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -48,7 +48,7 @@ export function HotelPanel({ stay }: HotelPanelProps) {
   }
 
   return (
-    <EditPanel title={stay.name ?? 'Hotel'} subtitle={stay.address ?? undefined}>
+    <PanelShell title={stay.name ?? 'Hotel'} description={stay.address ?? undefined}>
       <form onSubmit={handleSubmit} className="space-y-3">
         <div className="space-y-1">
           <Label className="text-xs">Hotel name</Label>
@@ -109,6 +109,6 @@ export function HotelPanel({ stay }: HotelPanelProps) {
         </Button>
         {saved && <p className="text-xs text-muted-foreground text-center">Saved.</p>}
       </form>
-    </EditPanel>
+    </PanelShell>
   )
 }
