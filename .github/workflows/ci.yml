@@ -136,3 +136,67 @@ jobs:
 
       - name: Integration tests
         run: pnpm test:integration
+
+  # Deploys the jobs in trigger/jobs to Trigger.dev, on merge to main only.
+  #
+  # This job exists because the two runtimes deploying separately caused a silent
+  # production failure on 2026-08-04. Vercel redeploys on merge; Trigger.dev did
+  # not, because it had no CI step and no package.json script. So when Brief 36
+  # step 3 dropped shows.load_in_at and shows.curfew_at, Vercel shipped the code
+  # that stopped reading them and Trigger.dev kept running the code that did.
+  # /itinerary runs ONLY on Trigger.dev (lib/comms/router.ts is reached from
+  # trigger/jobs/*-router.ts and from nothing on Vercel), so every inbound
+  # /itinerary hit a 42703 on two dropped columns and told the crew member the
+  # tour had no shows. Vercel's logs were clean throughout.
+  #
+  # CLAUDE.md documents the ordering rule that would have prevented it. This job
+  # is the reason nobody has to remember it: both runtimes now ship from the same
+  # merge, so the code cannot skew between them in the first place.
+  #
+  # needs: [build, integration] deliberately. A deploy that races the tests would
+  # put unverified job code in front of real crew.
+  deploy-trigger:
+    name: Deploy Trigger.dev jobs
+    runs-on: ubuntu-latest
+    needs: [build, integration]
+    # Merges only. A pull request must never deploy: it would put a branch's job
+    # code into the same Trigger.dev environment that production runs from.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      # Same Node version as the other two jobs and as Vercel. trigger.config.ts
+      # pins the jobs' own runtime to node-22 separately; this is just the CLI.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Fails the job if the secret is absent rather than letting the deploy
+      # command fail with something less obvious. A missing token here means the
+      # runtimes are silently back to deploying separately, which is the exact
+      # state this job exists to prevent, so it has to be loud.
+      - name: Check the Trigger.dev token is present
+        run: |
+          if [ -z "${{ secrets.TRIGGER_ACCESS_TOKEN }}" ]; then
+            echo "TRIGGER_ACCESS_TOKEN is not set in repository secrets."
+            echo "Without it the Trigger.dev jobs do not deploy on merge, and any"
+            echo "migration that drops a column will break them silently."
+            exit 1
+          fi
+
+      - name: Deploy
+        run: npx trigger.dev@latest deploy
+        env:
+          TRIGGER_ACCESS_TOKEN: ${{ secrets.TRIGGER_ACCESS_TOKEN }}
