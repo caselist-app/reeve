@@ -1,6 +1,7 @@
 'use server'
 
 import { redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
 import { schedules } from '@trigger.dev/sdk/v3'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
@@ -130,6 +131,17 @@ export async function updateTourAction(
       // Schedule may not exist yet (e.g. never enabled). Silently ignore.
     }
   }
+
+  // Required, not a nicety. React 19 resets an uncontrolled form to its
+  // defaultValue after a form action succeeds, on the assumption that
+  // defaultValue is the canonical value the server just sent back. Without a
+  // revalidate the server component still holds the old tour, so the reset puts
+  // the previous name back in the input and the save looks like it failed until
+  // the page is reloaded. Revalidating makes that assumption true.
+  //
+  // Scoped to the layout, not the page: the tour name also renders in
+  // components/nav/tour-selector.tsx, which sits above this route.
+  revalidatePath(`/tours/${tourId}`, 'layout')
 
   return { error: null }
 }
