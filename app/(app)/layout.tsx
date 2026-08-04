@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { ResizableSidebar } from '@/components/layout/resizable-sidebar'
 import { MobileNavDrawer } from '@/components/layout/mobile-nav-drawer'
 import { AppContent } from '@/components/layout/app-content'
-import { CommandPalette } from '@/components/nav/command-palette'
+import { LazyCommandPalette } from '@/components/nav/lazy-command-palette'
 
 const DEFAULT_SIDEBAR_WIDTH = 220
 const MIN_SIDEBAR_WIDTH = 180
@@ -75,8 +75,8 @@ export default async function AppLayout({
       {/* AppContent owns the main card, the secondary panel, and the side panel. */}
       <AppContent secondaryPanel={secondaryPanel}>{children}</AppContent>
 
-      {/* Command palette, mounts once, listens for Cmd+K globally */}
-      <CommandPalette />
+      {/* Command palette is lazy-loaded so the first app shell stays light. */}
+      <LazyCommandPalette />
     </div>
   )
 }
