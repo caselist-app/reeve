@@ -57,12 +57,22 @@ describe('the day link survives an edit', () => {
   // What the schedule day view actually renders for a date. Off-calendar dates
   // (no tour_dates row) render no timeline at all, which is what the null
   // tourDateId branch of fetchDayRecords returns.
+  //
+  // The timezone read is not incidental. This mirrors what
+  // app/(app)/tours/[id]/schedule/page.tsx passes down, and transport is placed
+  // by a tour-local day window, so a harness that omitted it would assert
+  // against UTC boundaries the product never uses and fail a correct fix.
   async function dayRecords(date: string) {
-    const day = await tourDateFor(date)
+    const [day, { data: tour }] = await Promise.all([
+      tourDateFor(date),
+      testDb.from('tours').select('timezone').eq('id', fixture.tourId).single(),
+    ])
+
     return fetchDayRecords(testDb, {
       tourId: fixture.tourId,
       tourDateId: day?.id ?? null,
       date,
+      timezone: tour?.timezone ?? 'UTC',
     })
   }
 

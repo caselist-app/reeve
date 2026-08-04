@@ -101,7 +101,12 @@ export async function fetchDayRecords(
     tourDateId,
     date,
     timezone,
-  }: { tourId: string; tourDateId: string | null; date: string; timezone?: string | null },
+    // Required, not optional. Transport is placed by a tour-local day window,
+    // so a caller that omits this silently gets UTC boundaries and a segment
+    // near either end of the day lands on the wrong one. Making it optional
+    // meant forgetting it compiled fine, which is how this bug class returns.
+    // Pass `tour.timezone ?? 'UTC'`, the way the schedule route already does.
+  }: { tourId: string; tourDateId: string | null; date: string; timezone: string | null },
 ): Promise<DayRecords> {
   // Off-calendar dates have no tour_date row, so the timeline is not rendered.
   // The info panel still needs the day-notes sentinel, so fetch only that.
