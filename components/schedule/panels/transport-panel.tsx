@@ -31,6 +31,7 @@ import {
 import { updateTransportSegment, deleteTransportSegment } from '@/lib/actions/transport'
 import { useSchedulePanel } from '@/stores/schedule-panel-store'
 import type { Tables } from '@/lib/types/database'
+import { fromDatetimeLocal, toDatetimeLocal } from '@/lib/schedule/datetime'
 
 type Segment = Pick<
   Tables<'transport_segments'>,
@@ -52,24 +53,6 @@ const MODE_LABELS: Record<string, string> = {
   truck:  'Truck',
   ground: 'Ground',
   hire:   'Hire car',
-}
-
-// Converts a UTC ISO string to a datetime-local input value (YYYY-MM-DDTHH:MM)
-// in the given timezone.
-function toDatetimeLocal(iso: string | null | undefined, tz: string): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return d.toLocaleString('sv-SE', { timeZone: tz }).slice(0, 16)
-}
-
-// Converts a datetime-local string back to UTC ISO.
-function fromDatetimeLocal(local: string | null, tz: string): string | null {
-  if (!local) return null
-  const ref = new Date(`${local}:00.000Z`)
-  const localStr = ref.toLocaleString('sv-SE', { timeZone: tz }).slice(0, 19)
-  const localAsUtc = new Date(`${localStr.replace(' ', 'T')}.000Z`)
-  const offsetMs = ref.getTime() - localAsUtc.getTime()
-  return new Date(ref.getTime() + offsetMs).toISOString()
 }
 
 // Just the time, for the compact departure/arrival row.

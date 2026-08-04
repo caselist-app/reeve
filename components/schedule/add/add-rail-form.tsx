@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { createTransportSegment } from '@/lib/actions/transport'
+import { fromDatetimeLocal } from '@/lib/schedule/datetime'
 
 interface AddRailFormProps {
   tourId: string
@@ -14,15 +15,6 @@ interface AddRailFormProps {
   timezone: string
   onBack: () => void
   onSuccess: () => void
-}
-
-function fromDatetimeLocal(local: string | null, tz: string): string | null {
-  if (!local) return null
-  const ref = new Date(`${local}:00.000Z`)
-  const localStr = ref.toLocaleString('sv-SE', { timeZone: tz }).slice(0, 19)
-  const localAsUtc = new Date(`${localStr.replace(' ', 'T')}.000Z`)
-  const offsetMs = ref.getTime() - localAsUtc.getTime()
-  return new Date(ref.getTime() + offsetMs).toISOString()
 }
 
 export function AddRailForm({ tourId, tourDateId, date, timezone, onBack, onSuccess }: AddRailFormProps) {

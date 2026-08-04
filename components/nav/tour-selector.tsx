@@ -33,7 +33,7 @@ export function TourSelector({ tours, activeTourId, collapsed = false }: TourSel
   function switchTour(tourId: string) {
     const sectionMatch = pathname.match(/\/tours\/[^/]+\/([^/]+)/)
     const section = sectionMatch?.[1]
-    if (section && ['shows', 'people', 'settings'].includes(section)) {
+    if (section && ['schedule', 'people', 'settings'].includes(section)) {
       router.push(`/tours/${tourId}/${section}`)
     } else {
       router.push(`/tours/${tourId}/shows`)
