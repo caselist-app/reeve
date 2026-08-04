@@ -116,6 +116,9 @@ export async function recordHotelOption(
 
   void bustTourContextCache(tourId)
   revalidatePath(`/tours/${tourId}/hotels`)
+  // Same as recordTransportOption: the stay renders as a check-in item on the
+  // day timeline, matched on check_in_date since the planner writes no link.
+  revalidatePath(`/tours/${tourId}/schedule`)
 
   return { error: null, stayId: stay.id }
 }

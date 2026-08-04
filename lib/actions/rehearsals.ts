@@ -76,6 +76,14 @@ export async function createRehearsal(
 
   if (rError) return { error: rError.message }
 
+  // This upserts a tour_dates row, which is the Dates sidebar. That sidebar is
+  // a Next.js layout inside the @secondaryPanel slot, and a layout is not
+  // re-resolved by router.push or router.refresh, which is all the caller does.
+  // So a rehearsal created on a date the tour did not have yet added a day that
+  // did not appear in the sidebar until a hard reload. Only a server-side
+  // revalidate reaches it.
+  revalidatePath(`/tours/${tourId}/schedule`)
+
   return { error: null, rehearsalId: rehearsal.id }
 }
 
@@ -86,6 +94,17 @@ export async function updateRehearsal(
   await requireUser()
 
   const supabase = await createClient()
+
+  // RLS on rehearsals enforces owns_tour(tour_id), so this is null when the
+  // caller does not own it. Read for the revalidate path, and as the ownership
+  // gate that gives a clean message instead of a silent no-op update.
+  const { data: existing } = await supabase
+    .from('rehearsals')
+    .select('tour_id')
+    .eq('id', rehearsalId)
+    .single()
+
+  if (!existing) return { error: 'Rehearsal not found.' }
 
   const { error } = await supabase
     .from('rehearsals')
@@ -100,6 +119,11 @@ export async function updateRehearsal(
     .eq('id', rehearsalId)
 
   if (error) return { error: error.message }
+
+  // The worst of the missing revalidates, because its caller is an edit panel
+  // that sets `saved` and never refreshes. Without this the panel said "Saved."
+  // over a timeline still rendering the old location and times.
+  revalidatePath(`/tours/${existing.tour_id}/schedule`)
 
   return { error: null, rehearsalId }
 }

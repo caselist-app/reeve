@@ -1,5 +1,6 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import type { ExtractionProposal } from '@/lib/ai/extract'
@@ -119,6 +120,19 @@ export async function confirmExtraction(
     )
     if (error) errors.push(`Hotels: ${error.message}`)
   }
+
+  // Before the error branch, not after it, because this action is not atomic:
+  // shows, segments and stays are written in three separate round trips and a
+  // failure on the third leaves the first two in the database. The TM is told
+  // to retry, so the rows that did land have to be on screen. Revalidating only
+  // on the success path would show them a schedule missing records that exist.
+  //
+  // The highest data volume of any action in this sweep, and it revalidated
+  // nothing at all: a confirmed extraction could add a week of shows, flights
+  // and hotels and leave the day view showing none of them.
+  revalidatePath(`/tours/${tourId}/schedule`)
+  revalidatePath(`/tours/${tourId}/transport`)
+  revalidatePath(`/tours/${tourId}/hotels`)
 
   if (errors.length > 0) {
     // Roll back the optimistic lock so the TM can retry.

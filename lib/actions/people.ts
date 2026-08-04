@@ -132,93 +132,19 @@ export async function addPerson(
 
   void bustTourContextCache(tourId)
   revalidatePath(`/tours/${tourId}/people`)
+  // The day view's roster panel renders the same membership rows as the people
+  // page, so a person added from either surface has to invalidate both.
+  revalidatePath(`/tours/${tourId}/schedule`)
 
   return { error: null, personId: person.id }
 }
 
-export async function updatePerson(
-  personId: string,
-  data: z.infer<typeof personSchema>,
-  crewDetail?: z.infer<typeof crewDetailSchema>
-): Promise<PeopleActionState> {
-  await requireUser()
-
-  const parsedPerson = personSchema.safeParse(data)
-  if (!parsedPerson.success) {
-    return { error: parsedPerson.error.issues[0].message }
-  }
-  const p = parsedPerson.data
-
-  let detail: z.infer<typeof crewDetailSchema> | undefined
-  if (p.person_type === 'crew' && crewDetail) {
-    const parsedDetail = crewDetailSchema.safeParse(crewDetail)
-    if (!parsedDetail.success) {
-      return { error: parsedDetail.error.issues[0].message }
-    }
-    detail = parsedDetail.data
-  }
-
-  const supabase = await createClient()
-
-  // RLS on people enforces owns_tour(tour_id), so this returns null if the caller
-  // does not own the person's tour. This is the ownership check.
-  const { data: existing } = await supabase
-    .from('people')
-    .select('tour_id, contact_id')
-    .eq('id', personId)
-    .single()
-
-  if (!existing) {
-    return { error: 'Person not found.' }
-  }
-
-  // 1. Identity -> the contact. This updates the person everywhere they appear:
-  // the contact is the single source of truth.
-  const { error: contactError } = await supabase
-    .from('contacts')
-    .update(contactIdentityFields(p))
-    .eq('id', existing.contact_id)
-
-  if (contactError) {
-    if (contactError.code === '23505') {
-      return await whatsappConflictError(
-        supabase,
-        existing.tour_id,
-        p.whatsapp_number,
-        personId
-      )
-    }
-    return { error: contactError.message }
-  }
-
-  // 2. Membership terms -> people.
-  const { error: personError } = await supabase
-    .from('people')
-    .update({ person_type: p.person_type, role: p.role || null })
-    .eq('id', personId)
-
-  if (personError) {
-    return { error: personError.message }
-  }
-
-  // 3. Per-tour rates.
-  if (detail) {
-    const { error: detailError } = await supabase.from('crew_detail').upsert({
-      person_id: personId,
-      tour_id: existing.tour_id,
-      ...detail,
-    })
-
-    if (detailError) {
-      return { error: 'Could not save pay details. Please try again.' }
-    }
-  }
-
-  void bustTourContextCache(existing.tour_id)
-  revalidatePath(`/tours/${existing.tour_id}/people`)
-
-  return { error: null }
-}
+// updatePerson was here. It had no callers anywhere in the repo: contact-sheet.tsx,
+// the only edit surface for a person, calls updateContact and updatePersonTerms
+// in parallel instead, because identity is account-level and terms are
+// tour-level and the two writes have different scopes. Deleted rather than
+// given the revalidate it was missing, since a second untested way to write
+// contacts, people and crew_detail is a place for the two to drift apart.
 
 // Adds an existing roster contact to a tour via the add_contact_to_tour RPC.
 // personType overrides the contact's default_person_type (e.g. when the TM
@@ -249,6 +175,7 @@ export async function addContactToTour(
 
   void bustTourContextCache(tourId)
   revalidatePath(`/tours/${tourId}/people`)
+  revalidatePath(`/tours/${tourId}/schedule`)
 
   return { error: null, personId: personId ?? undefined }
 }
@@ -304,6 +231,8 @@ export async function updatePersonTerms(
 
   void bustTourContextCache(existing.tour_id)
   revalidatePath(`/tours/${existing.tour_id}/people`)
+  // person_type and role both render in the day view's roster panel.
+  revalidatePath(`/tours/${existing.tour_id}/schedule`)
 
   return { error: null }
 }
@@ -362,6 +291,9 @@ export async function removePerson(personId: string): Promise<PeopleActionState>
 
   void bustTourContextCache(person.tour_id)
   revalidatePath(`/tours/${person.tour_id}/people`)
+  // The most visible of the four in the day roster: someone the TM removed
+  // stays listed on the day until a hard reload without this.
+  revalidatePath(`/tours/${person.tour_id}/schedule`)
 
   return { error: null }
 }

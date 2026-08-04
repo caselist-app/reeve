@@ -1,5 +1,6 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { contactSchema } from '@/lib/validators/contact'
@@ -182,6 +183,21 @@ export async function updateContact(
       return { error: 'That WhatsApp number is already in use by someone on a shared tour.' }
     }
     return { error: error.message }
+  }
+
+  // A contact is account-level and renders on the day roster of every tour they
+  // are on, so every one of those schedules is stale after a name change. The
+  // form that calls this is the side panel on the people page, which refreshes
+  // itself; the schedule route is the surface with no client-side path back to
+  // it. Nothing here is a schedule redirect stub: /tours/{id}/schedule is the
+  // route the day view actually renders from.
+  const { data: memberships } = await supabase
+    .from('people')
+    .select('tour_id')
+    .eq('contact_id', contactId)
+
+  for (const tourId of new Set((memberships ?? []).map((m) => m.tour_id))) {
+    revalidatePath(`/tours/${tourId}/schedule`)
   }
 
   return { error: null, contactId }

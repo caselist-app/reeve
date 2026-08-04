@@ -6,7 +6,12 @@
     "  'accepted' means the check is wrong about this one and always will be. It stays.",
     "  'debt' means the check is right and the fix is scheduled. It leaves when the fix lands.",
     "The file should only ever shrink. A stale entry (one that no longer matches anything) fails",
-    "the check too, so a fix cannot land without the entry being removed."
+    "the check too, so a fix cannot land without the entry being removed.",
+    "",
+    "2026-08-04, Brief 37 Part 2: was 20 entries, 5 accepted and 15 debt. All 14 revalidate-schedule",
+    "debt entries are gone. Twelve were fixed, one (updatePerson) was deleted as dead code, and one",
+    "(deleteContact) turned out to be a false positive and is now accepted, with the reasoning below.",
+    "There is no revalidate-schedule debt left in this file, which was the whole measure of that part."
   ],
   "accepted": {
     "revalidate-schedule|lib/logistics/plan.ts|planTravel": "accepted: writes only the venue hub cache columns on shows (transport_hub_iata, hub_ground_minutes and siblings). None of them render on the schedule.",
@@ -14,22 +19,8 @@
     "revalidate-schedule|lib/actions/hotels.ts|confirmHotelBooking": "accepted: writes confirmation_number and status, neither of which is in HOTEL_SELECT, so the schedule cannot render them. It revalidates /hotels, which is the surface that does.",
     "revalidate-schedule|lib/actions/boarding-pass-upload.ts|uploadBoardingPassAction": "accepted: writes boarding_pass_document_id on transport_assignments, which the schedule does not render. The uploader tracks its own state.",
     "revalidate-schedule|lib/actions/contacts.ts|createContact": "accepted: a newly created contact is not yet on any tour, so nothing on the schedule can be showing it.",
+    "revalidate-schedule|lib/actions/contacts.ts|deleteContact": "accepted: people.contact_id is ON DELETE RESTRICT, so this delete can only succeed for a contact who is on no tour. The day roster reads people joined to contacts, so a contact with no membership row is on no day of any schedule. A contact who is on a tour gets a 23503 and an error message instead, having written nothing. Was listed as debt until 2026-08-04; the constraint is what makes the check wrong about it.",
 
-    "requireUser-first|lib/actions/boarding-pass-upload.ts|uploadBoardingPassAction": "debt: requireUser() is the third statement, after a Zod parse. Brief 39 Part 3. Two line reorder.",
-
-    "revalidate-schedule|lib/actions/rehearsals.ts|updateRehearsal": "debt: worst of the set. Its caller is a schedule edit panel with no client refresh, so it says 'Saved.' over stale data today. Brief 37 Part 2.",
-    "revalidate-schedule|lib/actions/extractions.ts|confirmExtraction": "debt: writes three schedule-rendered tables and revalidates nothing. Highest data volume of any action here. Brief 37 Part 2.",
-    "revalidate-schedule|lib/actions/rehearsals.ts|createRehearsal": "debt: relies on router.push(), which cannot re-resolve the @secondaryPanel Dates layout, so the new day does not appear until a hard reload. Brief 37 Part 2.",
-    "revalidate-schedule|lib/actions/tour-dates.ts|deleteTourDate": "debt: same layout-persistence problem as createRehearsal. Brief 37 Part 2.",
-    "revalidate-schedule|lib/actions/tour-dates.ts|createTourDate": "debt: latent. Correct today only because one caller happens to call router.refresh(). Brief 37 Part 2.",
-    "revalidate-schedule|lib/actions/tour-dates.ts|updateTourDate": "debt: latent, same as createTourDate. Changes day_type, which drives the sidebar chip colour. Brief 37 Part 2.",
-    "revalidate-schedule|lib/actions/transport.ts|recordTransportOption": "debt: revalidates /transport only, but the segment lands on the day timeline via the unlinked date-match query. Brief 37 Part 2.",
-    "revalidate-schedule|lib/actions/hotels.ts|recordHotelOption": "debt: revalidates /hotels only, but the stay renders as a check-in item on the day timeline. Brief 37 Part 2.",
-    "revalidate-schedule|lib/actions/contacts.ts|updateContact": "debt: contacts.name renders in the schedule day roster. Brief 37 Part 2.",
-    "revalidate-schedule|lib/actions/contacts.ts|deleteContact": "debt: removes someone who may be on a tour and therefore in the day roster. Brief 37 Part 2.",
-    "revalidate-schedule|lib/actions/people.ts|addPerson": "debt: revalidates /tours/{id}/people only. The day roster panel renders the same membership. Brief 37 Part 2.",
-    "revalidate-schedule|lib/actions/people.ts|updatePerson": "debt: same as addPerson. Note this function currently has no callers and may be deleted instead. Brief 37 Part 2.",
-    "revalidate-schedule|lib/actions/people.ts|updatePersonTerms": "debt: same as addPerson. Brief 37 Part 2.",
-    "revalidate-schedule|lib/actions/people.ts|removePerson": "debt: same as addPerson, and removal is the case most visible in the day roster. Brief 37 Part 2."
+    "requireUser-first|lib/actions/boarding-pass-upload.ts|uploadBoardingPassAction": "debt: requireUser() is the third statement, after a Zod parse. Brief 39 Part 3. Two line reorder."
   }
 }
