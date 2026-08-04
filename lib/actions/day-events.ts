@@ -8,6 +8,23 @@ import type { z } from 'zod'
 
 export type DayEventActionState = { error: string | null; eventId?: string }
 
+// RLS scopes rows by tour but does not check that two ids in one payload belong
+// to the same tour. Every action here taking both a tour and a show verifies it.
+async function showIsOnTour(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  showId: string,
+  tourId: string
+): Promise<boolean> {
+  const { data } = await supabase
+    .from('shows')
+    .select('id')
+    .eq('id', showId)
+    .eq('tour_id', tourId)
+    .maybeSingle()
+
+  return Boolean(data)
+}
+
 export async function createDayEvent(
   data: z.infer<typeof dayEventSchema>,
 ): Promise<DayEventActionState> {
@@ -19,6 +36,12 @@ export async function createDayEvent(
   const supabase = await createClient()
 
   // RLS enforces owns_tour(tour_id); if ownership fails, insert returns null.
+  // It does not check show_id, which arrives in the same payload: a show from
+  // another tour would bind cleanly and corrupt day-view grouping.
+  if (parsed.data.show_id && !(await showIsOnTour(supabase, parsed.data.show_id, parsed.data.tour_id))) {
+    return { error: 'Show not found on this tour.' }
+  }
+
   const { data: row, error } = await supabase
     .from('day_events')
     .insert(parsed.data)
@@ -50,6 +73,13 @@ export async function updateDayEvent(
     .single()
 
   if (!existing) return { error: 'Event not found.' }
+
+  // dayEventUpdateSchema drops tour_id but keeps show_id, so without this an
+  // update could repoint an event at another tour's show even though the event
+  // itself is one the caller owns.
+  if (parsed.data.show_id && !(await showIsOnTour(supabase, parsed.data.show_id, existing.tour_id))) {
+    return { error: 'Show not found on this tour.' }
+  }
 
   const { error } = await supabase
     .from('day_events')
