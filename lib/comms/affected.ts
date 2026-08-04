@@ -52,10 +52,14 @@ export async function getAffectedPeople(
       // Show changes (load-in, address, curfew) affect:
       // - People traveling on that show's date (segment departs or arrives that day)
       // - People in a hotel that checks in on that show's date
+      // Scoped by tour_id as well as id. The date read here selects this tour's
+      // segments and stays, so an unscoped read lets another tour's show date
+      // decide which of this tour's crew get the message.
       const { data: show } = await db
         .from('shows')
         .select('date')
         .eq('id', change.showId)
+        .eq('tour_id', tourId)
         .single()
 
       if (!show) return []
