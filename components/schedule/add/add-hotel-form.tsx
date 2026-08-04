@@ -1,11 +1,13 @@
 'use client'
 
+import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { createHotelStay } from '@/lib/actions/hotels'
 import { useEntityForm } from '@/hooks/use-entity-form'
 import { readForm } from '@/lib/forms/read-form'
+import { DateMoveNotice } from '@/components/schedule/date-move-notice'
 
 interface AddHotelFormProps {
   tourId: string
@@ -16,6 +18,11 @@ interface AddHotelFormProps {
 }
 
 export function AddHotelForm({ tourId, tourDateId, date, onBack, onSuccess }: AddHotelFormProps) {
+  // The add flow is the worse half of the problem the notice and the toast exist
+  // for: this panel closes on success, so a stay created for another date leaves
+  // no trace on the timeline in front of the TM at all.
+  const [checkInDate, setCheckInDate] = useState(date)
+
   const { submit, pending, error } = useEntityForm({
     refreshOnSuccess: true,
     onSuccess,
@@ -45,7 +52,14 @@ export function AddHotelForm({ tourId, tourDateId, date, onBack, onSuccess }: Ad
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">Check-in date</Label>
-          <Input name="check_in_date" type="date" defaultValue={date} className="h-7 text-xs" />
+          <Input
+            name="check_in_date"
+            type="date"
+            defaultValue={date}
+            onChange={(e) => setCheckInDate(e.target.value)}
+            className="h-7 text-xs"
+          />
+          <DateMoveNotice currentDate={date} value={checkInDate} />
         </div>
         <div className="space-y-1">
           <Label className="text-xs">Check-in time</Label>

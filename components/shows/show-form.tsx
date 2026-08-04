@@ -22,6 +22,7 @@ import { PlacesAddressInput } from '@/components/shows/places-address-input'
 import type { ChangeDescriptor } from '@/lib/comms/affected'
 import { useEntityForm } from '@/hooks/use-entity-form'
 import { readForm } from '@/lib/forms/read-form'
+import { DateMoveNotice } from '@/components/schedule/date-move-notice'
 
 // Fields that warrant a crew notification when changed.
 // load_in_at: affects everyone traveling to the show that day.
@@ -61,6 +62,11 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
   const router = useRouter()
   // Set after a successful update if a notification-worthy field changed.
   const [notify, setNotify] = useState<NotifyState | null>(null)
+
+  // Moving a show is the biggest of the three moves: the show, the day it sits on
+  // and up to twenty day-sheet timestamps all go with it. Saying so before the
+  // save is cheap, and this form is where a show's date is edited.
+  const [date, setDate] = useState(initialData?.date ?? '')
 
   const [address, setAddress] = useState(initialData?.address ?? '')
   const [venueName, setVenueName] = useState(initialData?.venue_name ?? '')
@@ -153,8 +159,12 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
             name="date"
             type="date"
             defaultValue={initialData?.date ?? ''}
+            onChange={(e) => setDate(e.target.value)}
             required
           />
+          {/* Only ever shows for an existing show: initialData has no date on a
+              new one, so there is no day it could be moving off. */}
+          <DateMoveNotice currentDate={initialData?.date} value={date} />
         </div>
         <div className="space-y-2">
           <Label htmlFor={`${formId}-venue_name`}>Venue</Label>

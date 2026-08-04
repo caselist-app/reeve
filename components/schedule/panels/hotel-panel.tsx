@@ -1,6 +1,8 @@
 'use client'
 
+import { useState } from 'react'
 import { PanelShell } from '@/components/layout/panel-shell'
+import { DateMoveNotice } from '@/components/schedule/date-move-notice'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -22,6 +24,12 @@ interface HotelPanelProps {
 }
 
 export function HotelPanel({ stay }: HotelPanelProps) {
+  // Mirrors the check-in input so the notice can react to it. The input stays
+  // uncontrolled: this only reads what the TM typed, it does not drive the field,
+  // so React 19's post-action reset to defaultValue still behaves as CLAUDE.md
+  // describes.
+  const [checkInDate, setCheckInDate] = useState(stay.check_in_date ?? '')
+
   const { submit, pending, error, saved } = useEntityForm({
     action: (fd) => {
       const data = readForm(fd, {
@@ -54,7 +62,16 @@ export function HotelPanel({ stay }: HotelPanelProps) {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1">
             <Label className="text-xs">Check-in date</Label>
-            <Input name="check_in_date" type="date" defaultValue={stay.check_in_date ?? ''} className="h-7 text-xs" />
+            <Input
+              name="check_in_date"
+              type="date"
+              defaultValue={stay.check_in_date ?? ''}
+              onChange={(e) => setCheckInDate(e.target.value)}
+              className="h-7 text-xs"
+            />
+            {/* check_in_date is the day a stay belongs to, so changing it is what
+                moves the stay off the day the TM is looking at. */}
+            <DateMoveNotice currentDate={stay.check_in_date} value={checkInDate} />
           </div>
           <div className="space-y-1">
             <Label className="text-xs">Check-in time</Label>

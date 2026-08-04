@@ -9,6 +9,7 @@ import { getDriveTime } from '@/lib/actions/drive-time'
 import { fromDatetimeLocal } from '@/lib/schedule/datetime'
 import { useEntityForm } from '@/hooks/use-entity-form'
 import { readForm } from '@/lib/forms/read-form'
+import { DateMoveNotice } from '@/components/schedule/date-move-notice'
 
 interface AddDriveFormProps {
   tourId: string
@@ -22,6 +23,7 @@ interface AddDriveFormProps {
 export function AddDriveForm({ tourId, tourDateId, date, timezone, onBack, onSuccess }: AddDriveFormProps) {
   const [computedArrival, setComputedArrival] = useState<string>('')
   const [computing, setComputing] = useState(false)
+  const [departLocal, setDepartLocal] = useState(`${date}T09:00`)
 
   async function computeArrival(origin: string, destination: string, departAt: string) {
     if (!origin || !destination || !departAt) return
@@ -104,6 +106,7 @@ export function AddDriveForm({ tourId, tourDateId, date, timezone, onBack, onSuc
           type="datetime-local"
           defaultValue={`${date}T09:00`}
           className="h-7 text-xs"
+          onChange={(e) => setDepartLocal(e.target.value)}
           onBlur={(e) => {
             const form = e.currentTarget.form!
             const orig = (form.elements.namedItem('origin') as HTMLInputElement).value
@@ -111,6 +114,7 @@ export function AddDriveForm({ tourId, tourDateId, date, timezone, onBack, onSuc
             computeArrival(orig, dest, e.currentTarget.value)
           }}
         />
+        <DateMoveNotice currentDate={date} value={departLocal} />
       </div>
       <div className="space-y-1">
         <Label className="text-xs">

@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { updateTransportSegment, deleteTransportSegment } from '@/lib/actions/transport'
 import { useSidePanel } from '@/stores/side-panel-store'
+import { DateMoveNotice } from '@/components/schedule/date-move-notice'
 import type { Tables } from '@/lib/types/database'
 import { fromDatetimeLocal, toDatetimeLocal } from '@/lib/schedule/datetime'
 import { useEntityForm } from '@/hooks/use-entity-form'
@@ -278,6 +279,13 @@ function FlightCard({ segment, timezone }: { segment: Segment; timezone: string 
 }
 
 function EditableSegmentForm({ segment, timezone }: { segment: Segment; timezone: string }) {
+  // The day the segment is on now, in the same frame the input renders: the
+  // tour-local calendar date of its departure. Comparing against the UTC date
+  // would warn about a move that is not one, and miss one that is, on any tour
+  // not on UTC.
+  const currentLocalDate = toDatetimeLocal(segment.depart_at, timezone).slice(0, 10)
+  const [departLocal, setDepartLocal] = useState(toDatetimeLocal(segment.depart_at, timezone))
+
   const { submit, pending, error, saved } = useEntityForm({
     action: (fd) => {
       const data = readForm(fd, {
@@ -321,8 +329,13 @@ function EditableSegmentForm({ segment, timezone }: { segment: Segment; timezone
             name="depart_at"
             type="datetime-local"
             defaultValue={toDatetimeLocal(segment.depart_at, timezone)}
+            onChange={(e) => setDepartLocal(e.target.value)}
             className="h-7 text-xs"
           />
+          {/* The departure decides which day a segment is on, so this is the
+              field that moves it. Bug 1c was the hardest of the three to spot
+              because the segment used to stay put and show the new time. */}
+          <DateMoveNotice currentDate={currentLocalDate} value={departLocal} />
         </div>
         <div className="space-y-1">
           <Label className="text-xs">Arrives</Label>
