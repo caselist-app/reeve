@@ -39,13 +39,14 @@ export async function DayContent({ tourId, tourName, timezone, selectedDate, tou
     tourId,
     tourDateId: tourDate?.id ?? null,
     date: selectedDate,
+    timezone,
   })
 
   // Roster fetched once here and shared by the info panel and the mobile dock.
   const roster = await fetchDayRoster(supabase, {
     tourId,
-    segmentIds: records.linkedSegmentIds,
-    hotelStayIds: records.linkedHotelIds,
+    segmentIds: records.segmentIds,
+    hotelStayIds: records.hotelStayIds,
   })
 
   return (
