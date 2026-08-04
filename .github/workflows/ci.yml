@@ -196,7 +196,19 @@ jobs:
             exit 1
           fi
 
+      # The CLI version is read from the installed SDK rather than pinned here or
+      # left as @latest.
+      #
+      # Trigger.dev expects the CLI and the SDK to be the same version. @latest
+      # would drift the moment they publish a major, and it would drift silently:
+      # a deploy that stops working puts the two runtimes back to shipping
+      # separately, which is the exact failure this job exists to prevent, and
+      # nothing else in CI would notice. Deriving it from package.json means
+      # bumping the SDK cannot leave the CLI behind.
       - name: Deploy
-        run: npx trigger.dev@latest deploy
+        run: |
+          CLI_VERSION="$(node -p "require('./package.json').dependencies['@trigger.dev/sdk'].replace(/^[^0-9]*/, '')")"
+          echo "Deploying with trigger.dev CLI $CLI_VERSION (matched to the installed SDK)"
+          npx "trigger.dev@$CLI_VERSION" deploy
         env:
           TRIGGER_ACCESS_TOKEN: ${{ secrets.TRIGGER_ACCESS_TOKEN }}
