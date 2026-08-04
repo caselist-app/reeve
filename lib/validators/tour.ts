@@ -51,3 +51,17 @@ export const tourSchema = z.object({
 })
 
 export type Tour = z.infer<typeof tourSchema>
+
+// Settings-page schema: what components/tours/settings-form.tsx sends to
+// updateTourAction. The settings page edits a subset of the tour and does not
+// manage the artist, so artist_id is deliberately not part of it.
+//
+// Validating a settings save against tourSchema was a real bug: that schema
+// requires artist_id, the settings form never renders it, so formData.get()
+// returned null and Zod reported the raw type error "Expected string, received
+// null" rather than the friendly uuid message. Every settings save failed,
+// including both comms toggles. Fixed 2026-08-04. Keep the two schemas apart:
+// a form that edits a subset validates against a schema for that subset.
+export const tourSettingsSchema = tourSchema.omit({ artist_id: true })
+
+export type TourSettings = z.infer<typeof tourSettingsSchema>

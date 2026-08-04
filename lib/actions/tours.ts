@@ -4,7 +4,7 @@ import { redirect } from 'next/navigation'
 import { schedules } from '@trigger.dev/sdk/v3'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
-import { tourSchema } from '@/lib/validators/tour'
+import { tourSchema, tourSettingsSchema } from '@/lib/validators/tour'
 
 export type TourActionState = { error: string | null }
 
@@ -23,6 +23,24 @@ function parseTourFormData(formData: FormData) {
     base_currency: formData.get('base_currency') || 'GBP',
     timezone: formData.get('timezone') || undefined,
     // Checkboxes are absent from FormData when unchecked; treat absence as false.
+    inbound_qa_enabled: formData.get('inbound_qa_enabled') === 'true',
+    morning_message_enabled: formData.get('morning_message_enabled') === 'true',
+  })
+}
+
+// The settings form edits a subset of the tour and does not manage the artist,
+// so it validates against tourSettingsSchema. Parsing it with the create schema
+// meant artist_id came back null and every save failed. Do not "simplify" this
+// back into parseTourFormData: the two forms send different field sets.
+function parseTourSettingsFormData(formData: FormData) {
+  return tourSettingsSchema.safeParse({
+    name: formData.get('name'),
+    start_date: formData.get('start_date') || undefined,
+    end_date: formData.get('end_date') || undefined,
+    territory: formData.get('territory') || undefined,
+    base_currency: formData.get('base_currency') || 'GBP',
+    timezone: formData.get('timezone') || undefined,
+    // Toggles post as hidden inputs carrying 'true' or 'false'.
     inbound_qa_enabled: formData.get('inbound_qa_enabled') === 'true',
     morning_message_enabled: formData.get('morning_message_enabled') === 'true',
   })
@@ -69,7 +87,7 @@ export async function updateTourAction(
 ): Promise<TourActionState> {
   const user = await requireUser()
 
-  const parsed = parseTourFormData(formData)
+  const parsed = parseTourSettingsFormData(formData)
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message }
   }
