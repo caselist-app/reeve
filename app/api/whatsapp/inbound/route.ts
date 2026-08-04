@@ -168,17 +168,40 @@ export async function POST(request: NextRequest) {
         if (!person) continue  // Should not happen given length check above.
 
         // Enqueue the router job. The handler does nothing else.
-        await tasks.trigger('whatsapp-router', {
-          tour_id: person.tour_id,
-          person_id: person.id,
-          from_number: fromNumber,
-          body,
-          wamid: wamid ?? null,
-        })
+        try {
+          await tasks.trigger('whatsapp-router', {
+            tour_id: person.tour_id,
+            person_id: person.id,
+            from_number: fromNumber,
+            body,
+            wamid: wamid ?? null,
+          })
+        } catch (err) {
+          // Claim, send, release on failure. The wamid was claimed above, before
+          // this enqueue. Leaving the claim set makes Meta's retry of the same
+          // message look like a duplicate, so the crew member's message is lost
+          // for the full 24 hour TTL and they never get a reply. Same rule the
+          // outbound send paths follow, see lib/comms/notify/index.ts.
+          if (wamid) {
+            try {
+              await redis.del(`wamid:${wamid}`)
+            } catch {
+              // Redis unavailable. The claim expires on its own within 24 hours.
+            }
+          }
+
+          // Deliberate non-200. Meta retries, and the claim is now free for the
+          // retry to get through, so a transient Trigger.dev outage recovers by
+          // itself. Dropping an inbound crew message is worse than a retry, the
+          // same trade-off the Redis guard above makes.
+          console.error('whatsapp inbound: enqueue failed', err)
+          return NextResponse.json({ error: 'Enqueue failed' }, { status: 500 })
+        }
       }
     }
   }
 
-  // Always return 200 fast. Meta retries on anything else.
+  // Return 200 fast on the success path. Meta retries on anything else, which
+  // is what the deliberate 500 above is for.
   return NextResponse.json({ status: 'ok' })
 }

@@ -99,6 +99,7 @@ Commit all three together (migration, code using it, regenerated types) in one c
 - Parallelise independent queries with Promise.all. Never chain awaits that do not depend on each other.
 - Heavy client components not visible on first paint load via next/dynamic with ssr: false. Reference: components/nav/lazy-command-palette.tsx.
 - Every env var the code reads is listed in .env.example, including optional ones.
+- Two runtimes, separate env vars. Vercel runs the Next.js app; Trigger.dev runs trigger/jobs/ on its own infrastructure and cannot see Vercel's variables. Anything job code reads (directly or via lib/) must be set in Trigger.dev too, and marked [BOTH] in .env.example. Jobs run after the webhook returns 200, so this failure shows up as a missing message with clean Vercel logs, never as an error.
 - One credential, one variable name, read from one place. The single Meta app secret is META_APP_SECRET, read by both app/api/whatsapp/inbound/route.ts and app/api/data-deletion/route.ts. Never give a secret a second name.
 - Renaming a secret is a two-step deploy: add the new variable in Vercel and confirm it is live, then ship the code that reads it, then remove the old one. Never the other way round.
 - Webhook signature checks fail closed: return 401 immediately when the secret env var is absent. Never verify against an empty string or a default fallback.
