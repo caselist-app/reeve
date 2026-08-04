@@ -10,6 +10,38 @@ type PersonType = 'artist' | 'crew' | 'management' | 'support'
 type SendableDocument = { id: string; title: string; doc_type: string }
 type ContactablePerson = { id: string; name: string; contact_email: string }
 
+// Mirrors DaySheet from components/schedule/panels/show-panel.tsx
+type ShowDaySheet = Pick<
+  Tables<'day_sheets'>,
+  | 'venue_access' | 'load_in' | 'line_check' | 'soundcheck' | 'vip'
+  | 'doors' | 'support_on' | 'support_off' | 'changeover'
+  | 'headliner_on' | 'headliner_off' | 'curfew' | 'load_out' | 'hotel_departure'
+>
+
+// Mirrors Segment from components/schedule/panels/transport-panel.tsx
+type ScheduleTransportSegment = Pick<
+  Tables<'transport_segments'>,
+  | 'id' | 'mode' | 'origin' | 'destination' | 'depart_at' | 'arrive_at'
+  | 'carrier_operator' | 'vehicle_or_flight_no' | 'booking_reference' | 'status'
+  | 'origin_iata' | 'destination_iata' | 'flight_status'
+  | 'actual_depart_at' | 'actual_arrive_at' | 'gate' | 'terminal' | 'last_tracked_at'
+>
+
+// Mirrors Stay from components/schedule/panels/hotel-panel.tsx
+type ScheduleHotelStay = Pick<
+  Tables<'hotel_stays'>,
+  | 'id' | 'name' | 'address'
+  | 'check_in_date' | 'check_in_time'
+  | 'check_out_date' | 'check_out_time'
+  | 'wifi_network' | 'wifi_password'
+>
+
+// Mirrors DayEvent from components/schedule/panels/event-panel.tsx
+type ScheduleDayEvent = Pick<
+  Tables<'day_events'>,
+  'id' | 'title' | 'starts_at' | 'ends_at' | 'location' | 'notes'
+>
+
 // Tour-specific context passed when opening a contact panel from the people
 // page. Carries the membership fields (type, role, per-tour rates) that live
 // on people / crew_detail, not on the contact itself.
@@ -78,6 +110,36 @@ export type PanelDescriptor =
       tourId: string
       personType: PersonType
       onSuccess: () => void
+    }
+  // Brief 33: schedule day view detail panels. Each carries a stable key so
+  // timeline-card.tsx can compare active state without JSON.stringify, which
+  // Brief 26 flagged as sensitive to key ordering. Not yet opened from
+  // anywhere; the schedule day view still drives its own right column via
+  // stores/schedule-panel-store.ts until that wiring lands.
+  | {
+      type: 'show'
+      key: string
+      showId: string
+      venueName: string
+      timezone: string
+      daySheet: ShowDaySheet | null
+    }
+  | {
+      type: 'transport'
+      key: string
+      segment: ScheduleTransportSegment
+      timezone: string
+    }
+  | {
+      type: 'hotel'
+      key: string
+      stay: ScheduleHotelStay
+    }
+  | {
+      type: 'event'
+      key: string
+      event: ScheduleDayEvent
+      timezone: string
     }
 
 interface SidePanelState {
