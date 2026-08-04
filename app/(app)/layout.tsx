@@ -5,6 +5,7 @@ import { ResizableSidebar } from '@/components/layout/resizable-sidebar'
 import { MobileNavDrawer } from '@/components/layout/mobile-nav-drawer'
 import { AppContent } from '@/components/layout/app-content'
 import { LazyCommandPalette } from '@/components/nav/lazy-command-palette'
+import { Toaster } from '@/components/ui/sonner'
 
 const DEFAULT_SIDEBAR_WIDTH = 220
 const MIN_SIDEBAR_WIDTH = 180
@@ -77,6 +78,12 @@ export default async function AppLayout({
 
       {/* Command palette is lazy-loaded so the first app shell stays light. */}
       <LazyCommandPalette />
+
+      {/* Mounted here, outside AppContent, deliberately: an add form's panel
+          closes on success, and a toast rendered inside the panel would close with
+          it. That case (panel closes, timeline unchanged, no trace of the record)
+          is the whole reason the toast exists. */}
+      <Toaster />
     </div>
   )
 }
