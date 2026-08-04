@@ -121,6 +121,10 @@ export async function recordTransportOption(
 
   void bustTourContextCache(tourId)
   revalidatePath(`/tours/${tourId}/transport`)
+  // The planner writes no tour_date_id, so the segment reaches the day timeline
+  // through the unlinked date-match query rather than through a link. It still
+  // renders there, and /transport was the only route being invalidated.
+  revalidatePath(`/tours/${tourId}/schedule`)
 
   return { error: null, segmentId: segment.id }
 }

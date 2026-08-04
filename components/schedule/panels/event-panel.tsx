@@ -24,8 +24,11 @@ interface EventPanelProps {
 export function EventPanel({ event, timezone }: EventPanelProps) {
   const { submit, pending, error, saved } = useEntityForm({
     action: (fd) => {
+      // title is `required` on the input below and the column is not null, so
+      // it has no cleared state and reads as requiredString. The rest follow
+      // the convention: blank clears, absent is left alone.
       const data = readForm(fd, {
-        title: 'stringOrUndefined',
+        title: 'requiredString',
         starts_at: 'string',
         ends_at: 'string',
         location: 'string',

@@ -44,10 +44,17 @@ export const tourSchema = z.object({
   start_date: z.string().optional(),
   end_date: z.string().optional(),
   territory: z.string().optional(),
-  base_currency: z.string().length(3).default('GBP'),
+  base_currency: z.string().length(3),
   timezone: z.string().optional(),
-  inbound_qa_enabled: z.boolean().optional().default(false),
-  morning_message_enabled: z.boolean().optional().default(false),
+  // Required rather than optional-with-a-default. Both parse functions in
+  // lib/actions/tours.ts always supply a concrete boolean, so the defaults were
+  // dead, and a dead .default() is the worst kind: it is doing nothing until the
+  // day a partial caller appears, at which point it invents a value for a key
+  // nobody submitted and switches a TM's comms off without saying so. Making
+  // these required means the compiler names that caller instead.
+  // scripts/check-conventions.mjs now fails a .default() anywhere in here.
+  inbound_qa_enabled: z.boolean(),
+  morning_message_enabled: z.boolean(),
 })
 
 export type Tour = z.infer<typeof tourSchema>

@@ -149,7 +149,11 @@ export function ShowPanel({ showId, tourId, venueName, timezone, daySheet }: Sho
   // result. action() sets this before calling the server action, and onSuccess
   // always runs after action() resolves, so it is populated by the time it reads.
   // Same shape as show-form.tsx's submittedData.
-  let submittedTimes: Record<string, string | null> | null = null
+  // Undefined is in the value type because readForm can now report a field this
+  // render did not draw. Every SECTIONS field is drawn today, so it does not
+  // occur in practice; typing it out means a future conditional section cannot
+  // silently read as a cleared time here.
+  let submittedTimes: Record<string, string | null | undefined> | null = null
 
   const { submit, pending, error, saved } = useEntityForm({
     action: (fd) => {

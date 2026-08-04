@@ -53,6 +53,13 @@ export async function createTourDate(
     return { error: error.message }
   }
 
+  // A new day is a new row in the Dates sidebar, which is a layout in the
+  // @secondaryPanel slot and therefore unreachable from the client: neither
+  // router.push nor router.refresh re-resolves it. This was correct today only
+  // by accident, because one of its callers happens to call router.refresh(),
+  // which re-renders main and leaves the sidebar exactly as stale as before.
+  revalidatePath(`/tours/${tourId}/schedule`)
+
   return { error: null, tourDateId: row.id }
 }
 
@@ -101,14 +108,21 @@ export async function updateTourDate(
     }
   }
 
-  const { error } = await supabase
+  const { data: row, error } = await supabase
     .from('tour_dates')
     .update(data)
     .eq('id', tourDateId)
+    .select('tour_id')
+    .single()
 
   if (error) {
     return { error: error.message }
   }
+
+  // day_type drives the coloured chip on every row of the Dates sidebar, so a
+  // day changed from travel to show keeps its old colour there until a hard
+  // reload without this.
+  revalidatePath(`/tours/${row.tour_id}/schedule`)
 
   return { error: null, tourDateId }
 }
@@ -145,7 +159,17 @@ export async function deleteTourDate(tourDateId: string): Promise<TourDateAction
 
   const supabase = await createClient()
 
-  // RLS on tour_dates enforces owns_tour(tour_id).
+  // Read before the delete, because the row is the only place the tour id is
+  // and it will not exist afterwards. RLS on tour_dates enforces
+  // owns_tour(tour_id), so this is null when the caller does not own the day.
+  const { data: existing } = await supabase
+    .from('tour_dates')
+    .select('tour_id')
+    .eq('id', tourDateId)
+    .single()
+
+  if (!existing) return { error: 'Day not found.' }
+
   const { error } = await supabase
     .from('tour_dates')
     .delete()
@@ -154,6 +178,11 @@ export async function deleteTourDate(tourDateId: string): Promise<TourDateAction
   if (error) {
     return { error: error.message }
   }
+
+  // Same layout trap as createTourDate, and more visible: the caller pushes to
+  // another date, and the deleted day stayed in the sidebar, clickable, until a
+  // hard reload.
+  revalidatePath(`/tours/${existing.tour_id}/schedule`)
 
   return { error: null }
 }

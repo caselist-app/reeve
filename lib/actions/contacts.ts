@@ -1,7 +1,9 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
+import { definedOnly } from '@/lib/forms/write-row'
 import { contactSchema } from '@/lib/validators/contact'
 import type { Tables } from '@/lib/types/database'
 import type { z } from 'zod'
@@ -92,42 +94,49 @@ export async function getContact(
   return { data: { contact, tours }, error: null }
 }
 
-// Maps the contact form DTO to a contacts row. Empty strings become null so the
-// date column and optional fields are satisfied.
+// Maps the contact form DTO to a contacts row.
+//
+// Every field goes through definedOnly, not just the ones that have already
+// bitten. The rule is uniform because the failure is not: which fields a given
+// save omits depends on which branch of contact-sheet.tsx rendered the form,
+// and the next branch added will omit a different set. Two rounds of this bug
+// were fixed field by field (the four default_* pay columns, then default_role
+// and default_person_type) before it was worth saying that any field can be
+// absent and none of them may be invented.
+//
+// So: undefined is dropped and the stored value survives, null is written and
+// the column is cleared. No `?? null` and no `?? 'crew'` anywhere in here.
+// Those two idioms are what turned "the panel had no input for this" into "the
+// TM cleared this" on every save.
 function toRow(c: z.infer<typeof contactSchema>) {
-  return {
+  return definedOnly({
     name: c.name,
-    contact_email: c.contact_email || null,
-    contact_phone: c.contact_phone || null,
-    operational_channel: c.operational_channel ?? null,
-    email_enabled: c.email_enabled ?? false,
-    whatsapp_number: c.whatsapp_number || null,
-    sms_number: c.sms_number || null,
-    emergency_contact_name: c.emergency_contact_name || null,
-    emergency_contact_phone: c.emergency_contact_phone || null,
-    dietary: c.dietary || null,
-    allergies: c.allergies || null,
-    home_city: c.home_city || null,
-    passport_number: c.passport_number || null,
-    passport_expiry: c.passport_expiry || null,
-    passport_country: c.passport_country || null,
-    passport_first_names: c.passport_first_names || null,
-    passport_surname: c.passport_surname || null,
-    date_of_birth: c.date_of_birth || null,
-    tshirt_size: c.tshirt_size || null,
-    default_person_type: c.default_person_type ?? 'crew',
-    default_role: c.default_role || null,
-    // Pay defaults are conditional: only the roster form submits them. The
-    // tour-context edit path (components/roster/contact-sheet.tsx) builds its
-    // payload from identity fields alone, so coercing `undefined` to null here
-    // wiped a contact's stored rates every time a TM edited anyone from the
-    // tour people page. Absent means "not submitted", so leave the row alone.
-    ...(c.default_per_diem_rate !== undefined && { default_per_diem_rate: c.default_per_diem_rate }),
-    ...(c.default_per_diem_currency !== undefined && { default_per_diem_currency: c.default_per_diem_currency || null }),
-    ...(c.default_daily_wage_rate !== undefined && { default_daily_wage_rate: c.default_daily_wage_rate }),
-    ...(c.default_wage_currency !== undefined && { default_wage_currency: c.default_wage_currency || null }),
-    notes: c.notes || null,
-  }
+    contact_email: c.contact_email,
+    contact_phone: c.contact_phone,
+    operational_channel: c.operational_channel,
+    email_enabled: c.email_enabled,
+    whatsapp_number: c.whatsapp_number,
+    sms_number: c.sms_number,
+    emergency_contact_name: c.emergency_contact_name,
+    emergency_contact_phone: c.emergency_contact_phone,
+    dietary: c.dietary,
+    allergies: c.allergies,
+    home_city: c.home_city,
+    passport_number: c.passport_number,
+    passport_expiry: c.passport_expiry,
+    passport_country: c.passport_country,
+    passport_first_names: c.passport_first_names,
+    passport_surname: c.passport_surname,
+    date_of_birth: c.date_of_birth,
+    tshirt_size: c.tshirt_size,
+    default_person_type: c.default_person_type,
+    default_role: c.default_role,
+    default_per_diem_rate: c.default_per_diem_rate,
+    default_per_diem_currency: c.default_per_diem_currency,
+    default_daily_wage_rate: c.default_daily_wage_rate,
+    default_wage_currency: c.default_wage_currency,
+    notes: c.notes,
+  })
 }
 
 export async function createContact(
@@ -142,9 +151,12 @@ export async function createContact(
 
   const supabase = await createClient()
 
+  // name after the spread: toRow returns a Partial (every key it holds can be
+  // absent by design), and the column is not null, so the required field is
+  // stated here rather than asserted away with a cast.
   const { data: row, error } = await supabase
     .from('contacts')
-    .insert({ account_id: user.id, ...toRow(parsed.data) })
+    .insert({ account_id: user.id, ...toRow(parsed.data), name: parsed.data.name })
     .select('id')
     .single()
 
@@ -182,6 +194,21 @@ export async function updateContact(
       return { error: 'That WhatsApp number is already in use by someone on a shared tour.' }
     }
     return { error: error.message }
+  }
+
+  // A contact is account-level and renders on the day roster of every tour they
+  // are on, so every one of those schedules is stale after a name change. The
+  // form that calls this is the side panel on the people page, which refreshes
+  // itself; the schedule route is the surface with no client-side path back to
+  // it. Nothing here is a schedule redirect stub: /tours/{id}/schedule is the
+  // route the day view actually renders from.
+  const { data: memberships } = await supabase
+    .from('people')
+    .select('tour_id')
+    .eq('contact_id', contactId)
+
+  for (const tourId of new Set((memberships ?? []).map((m) => m.tour_id))) {
+    revalidatePath(`/tours/${tourId}/schedule`)
   }
 
   return { error: null, contactId }
