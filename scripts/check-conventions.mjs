@@ -246,6 +246,61 @@ for (const file of emDashTargets) {
   }
 }
 
+// ---- Rule 8: a destructive migration states its deploy order ----
+// Vercel redeploys on merge. Trigger.dev deploys from its own CI job, and before
+// that job existed it deployed by hand or not at all. A migration that drops a
+// column therefore has to land after BOTH runtimes are running the code that
+// stopped reading it, not after the merge.
+//
+// This bit on 2026-08-04. Brief 36 step 3 dropped shows.load_in_at and
+// shows.curfew_at; Vercel shipped the code that stopped selecting them and
+// Trigger.dev did not, so every inbound /itinerary (which runs only on
+// Trigger.dev) hit a 42703 and told the crew member the tour had no shows. The
+// grep that "proved" no code read those columns had proved it about the repo,
+// never about what was running.
+//
+// The CI deploy job now makes that skew almost impossible, so this check is the
+// second layer rather than the first: it cannot verify that both runtimes are
+// actually current, only force whoever writes the migration to say they thought
+// about it. That is worth having anyway, because the annotation shows up in the
+// diff where a reviewer sees it, and because a deploy job can be removed or fail.
+const DESTRUCTIVE_SQL = /\b(drop\s+column|drop\s+table)\b/i
+const DEPLOY_ORDER_MARKER = /--\s*deploy-order:/i
+
+// Applies to migrations written from 2026-08-05, the day after this rule existed.
+// Four migrations before that line drop something without the annotation, and
+// they are not baselined, because the baseline is for violations that could be
+// fixed and are not yet. These cannot be fixed: all four are already applied to
+// production, the deploy they describe is months past for three of them, and
+// editing an applied migration file to add a comment is not something to do
+// casually (whether the Supabase CLI minds is not verifiable from here, so it is
+// not worth finding out for a retroactive comment).
+//
+// The rule is about a decision taken at the moment a migration is written, so it
+// is genuinely meaningless applied backwards. This is a scope, not a weakening:
+// every future destructive migration is covered, which is the entire population
+// the rule can affect.
+const RULE_APPLIES_FROM = '20260805'
+
+for (const file of walk(join(ROOT, 'supabase', 'migrations')).filter((f) => f.endsWith('.sql'))) {
+  const timestamp = rel(file).split('/').pop().slice(0, 8)
+  if (timestamp < RULE_APPLIES_FROM) continue
+
+  const src = readFileSync(file, 'utf8')
+  const m = DESTRUCTIVE_SQL.exec(src)
+  if (!m) continue
+  if (DEPLOY_ORDER_MARKER.test(src)) continue
+
+  report(
+    'destructive-migration-deploy-order',
+    rel(file),
+    lineOf(src, m.index),
+    `Drops a column or table without a "-- deploy-order:" line. Both Vercel and ` +
+      `Trigger.dev must already be running the code that stopped reading it. ` +
+      `State that in the migration.`,
+  )
+}
+
 // ---- Rule 7: every env var read is declared in .env.example ----
 // And every var reachable from trigger/jobs/ is marked [BOTH], because
 // Trigger.dev cannot see Vercel's environment. When that is wrong the job fails
