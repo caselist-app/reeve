@@ -76,18 +76,29 @@ export function buildHotelChangeMessage(params: {
   })
 }
 
-export function buildShowLoadInChangeMessage(params: {
+// Which time changed is a parameter, not baked into the label.
+//
+// This used to be buildShowLoadInChangeMessage and hardcoded "load-in", while
+// ChangeDescriptor already allowed a curfew change. A curfew alert therefore told
+// crew "load-in at X is now 23:00". It was invisible in practice because the
+// caller resolved a curfew change's value to null and the message said TBC, so
+// the wrong label arrived attached to no time at all. Brief 36 step 3 made the
+// curfew branch resolve a real value, which would have turned a quietly useless
+// message into a confidently wrong one.
+export function buildShowTimeChangeMessage(params: {
   venueName: string
   date: string
-  newLoadIn: string
-  previousLoadIn?: string | null
+  // What the time is called, in the words a TM uses: "load-in", "curfew".
+  timeLabel: string
+  newTime: string
+  previousTime?: string | null
   customMessage?: string | null
 }): string {
   return buildChangeMessage({
     changeType: 'show',
-    label: `load-in at ${params.venueName} on ${params.date}`,
-    newValue: params.newLoadIn,
-    previousValue: params.previousLoadIn ?? null,
+    label: `${params.timeLabel} at ${params.venueName} on ${params.date}`,
+    newValue: params.newTime,
+    previousValue: params.previousTime ?? null,
     customMessage: params.customMessage,
   })
 }

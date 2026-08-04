@@ -5,7 +5,7 @@ import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { getAffectedPeople } from '@/lib/comms/affected'
 import {
-  buildShowLoadInChangeMessage,
+  buildShowTimeChangeMessage,
   buildShowAddressChangeMessage,
   buildDaySheetChangeMessage,
   buildTransportChangeMessage,
@@ -227,11 +227,14 @@ async function buildPreviewMessage(
           })
         : 'TBC'
 
-      return buildShowLoadInChangeMessage({
+      return buildShowTimeChangeMessage({
         venueName,
         date,
-        newLoadIn: newTime,
-        previousLoadIn: previousValue ?? null,
+        // The words a TM uses, so the message names the time that actually moved
+        // rather than calling everything load-in.
+        timeLabel: change.field === 'load_in' ? 'load-in' : 'curfew',
+        newTime,
+        previousTime: previousValue ?? null,
         customMessage,
       })
     }
