@@ -1,7 +1,7 @@
 'use server'
 
-import { createAdminClient } from '@/lib/supabase/admin'
 import { requireUser } from '@/lib/auth/helpers'
+import { createClient } from '@/lib/supabase/server'
 import { redis } from '@/lib/redis'
 import { getFromHub } from '@/lib/logistics/hub-resolver'
 import { AIRPORT_TRANSIT_MIN } from '@/lib/logistics/constants'
@@ -35,18 +35,27 @@ export async function planTravel(
 ): Promise<TravelOption[]> {
   await requireUser()
 
-  const admin = createAdminClient()
+  const supabase = await createClient()
 
   // Read the show and its cached hub resolution. Never call resolveHub() here, 
   // hub resolution runs in a background job. If hub_resolved_at is null the
   // venue has not been resolved yet; surface a clear error to the TM.
-  const { data: show } = await admin
+  const { data: show } = await supabase
     .from('shows')
     .select('tour_id, date, load_in_at, hub_resolved_at, transport_hub_iata, transport_hub_rail, hub_ground_minutes, address, venue_lat, venue_lng')
     .eq('id', input.show_id)
     .single()
 
   if (!show) throw new Error('Show not found.')
+
+  const { data: person } = await supabase
+    .from('people')
+    .select('id')
+    .eq('id', input.person_id)
+    .eq('tour_id', show.tour_id)
+    .single()
+
+  if (!person) throw new Error('Person not found on this tour.')
 
   if (!show.hub_resolved_at) {
     throw new Error('Venue hub not yet resolved. Try again in a moment.')
@@ -133,7 +142,7 @@ export async function planTravel(
           venueLat = geoData.results[0].geometry.location.lat
           venueLng = geoData.results[0].geometry.location.lng
           // Cache on the show row so subsequent plan runs skip this step.
-          await admin.from('shows').update({ venue_lat: venueLat, venue_lng: venueLng }).eq('id', input.show_id)
+          await supabase.from('shows').update({ venue_lat: venueLat, venue_lng: venueLng }).eq('id', input.show_id)
         }
       } catch {
         // Non-fatal, fall back to address-based destination below.

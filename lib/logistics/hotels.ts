@@ -1,7 +1,7 @@
 'use server'
 
-import { createAdminClient } from '@/lib/supabase/admin'
 import { requireUser } from '@/lib/auth/helpers'
+import { createClient } from '@/lib/supabase/server'
 import { redis } from '@/lib/redis'
 import { searchRatehawk } from '@/lib/logistics/adapters/ratehawk'
 import { searchHotelbeds } from '@/lib/logistics/adapters/hotelbeds'
@@ -21,6 +21,7 @@ const MAX_RESULTS_PER_TIER = 5
 // Geocodes a venue address via the Maps Geocoding API and caches the result
 // on the show row. Re-geocodes only when called with a new address.
 async function geocodeVenue(
+  supabase: Awaited<ReturnType<typeof createClient>>,
   showId: string,
   address: string | null
 ): Promise<{ lat: number; lng: number } | null> {
@@ -42,8 +43,7 @@ async function geocodeVenue(
   const { lat, lng } = data.results[0].geometry.location
 
   // Cache on the show row so subsequent calls skip the API.
-  const admin = createAdminClient()
-  await admin.from('shows').update({ venue_lat: lat, venue_lng: lng }).eq('id', showId)
+  await supabase.from('shows').update({ venue_lat: lat, venue_lng: lng }).eq('id', showId)
 
   return { lat, lng }
 }
@@ -53,10 +53,10 @@ export async function planHotels(
 ): Promise<{ artist: HotelOption[]; crew: HotelOption[] }> {
   await requireUser()
 
-  const admin = createAdminClient()
+  const supabase = await createClient()
 
   // Read show including any cached geocode. Never re-geocode on every call.
-  const { data: show } = await admin
+  const { data: show } = await supabase
     .from('shows')
     .select('id, venue_name, address, venue_lat, venue_lng, date')
     .eq('id', input.show_id)
@@ -69,12 +69,12 @@ export async function planHotels(
   let lng = show.venue_lng
 
   if (lat == null || lng == null) {
-    const geocoded = await geocodeVenue(show.id, show.address)
+    const geocoded = await geocodeVenue(supabase, show.id, show.address)
     if (geocoded) {
       lat = geocoded.lat
       lng = geocoded.lng
       // Cache on the show row.
-      await admin
+      await supabase
         .from('shows')
         .update({ venue_lat: lat, venue_lng: lng })
         .eq('id', show.id)
