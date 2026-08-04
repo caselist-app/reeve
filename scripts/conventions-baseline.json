@@ -18,7 +18,6 @@
     "requireUser-first|lib/actions/boarding-pass-upload.ts|uploadBoardingPassAction": "debt: requireUser() is the third statement, after a Zod parse. Brief 39 Part 3. Two line reorder.",
 
     "revalidate-schedule|lib/actions/rehearsals.ts|updateRehearsal": "debt: worst of the set. Its caller is a schedule edit panel with no client refresh, so it says 'Saved.' over stale data today. Brief 37 Part 2.",
-    "revalidate-schedule|lib/actions/shows.ts|updateShow": "debt: revalidates /tours/{id}/shows, which is a redirect stub nothing renders from. Brief 37 Part 2.",
     "revalidate-schedule|lib/actions/extractions.ts|confirmExtraction": "debt: writes three schedule-rendered tables and revalidates nothing. Highest data volume of any action here. Brief 37 Part 2.",
     "revalidate-schedule|lib/actions/rehearsals.ts|createRehearsal": "debt: relies on router.push(), which cannot re-resolve the @secondaryPanel Dates layout, so the new day does not appear until a hard reload. Brief 37 Part 2.",
     "revalidate-schedule|lib/actions/tour-dates.ts|deleteTourDate": "debt: same layout-persistence problem as createRehearsal. Brief 37 Part 2.",

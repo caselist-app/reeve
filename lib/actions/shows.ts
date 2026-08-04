@@ -9,11 +9,44 @@ import { daySheetFormSchema } from '@/lib/validators/day-sheet'
 import { setAdvanceStatus } from '@/lib/shows/advance'
 import { resolveHubJob } from '@/trigger/jobs/resolve-hub'
 import { revertDayTypeIfOrphaned } from '@/lib/schedule/day-type-revert'
+import { resolveTourDateId } from '@/lib/schedule/day-link'
+import { localTimeInZone } from '@/lib/schedule/datetime'
 import type { z } from 'zod'
-import type { TablesUpdate } from '@/lib/types/database'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database, TablesUpdate } from '@/lib/types/database'
 import type { Department, AdvanceStatus } from '@/lib/shows/advance'
 
 export type ShowActionState = { error: string | null; showId?: string }
+
+// Every day_sheets column that stores a time derived from the show's date.
+// Shared by updateDaySheet (which writes them) and shiftDaySheetToDate (which
+// re-derives them when the show moves), so a column added to one is not
+// silently missing from the other.
+//
+// lobby_call_at is deliberately absent: nothing writes it, so it is always
+// null. Brief 36 Part 3 drops it and renames hotel_departure to lobby_call.
+const DAY_SHEET_TIME_FIELDS = [
+  'venue_access',
+  'load_in',
+  'line_check',
+  'soundcheck',
+  'vip',
+  'doors',
+  'support_on',
+  'support_off',
+  'changeover',
+  'headliner_on',
+  'headliner_off',
+  'curfew',
+  'load_out',
+  'hotel_departure',
+  'catering_breakfast_start',
+  'catering_breakfast_end',
+  'catering_lunch_start',
+  'catering_lunch_end',
+  'catering_dinner_start',
+  'catering_dinner_end',
+] as const
 
 // Converts a HH:MM time string plus a date and IANA timezone into a UTC ISO string.
 // All three inserts happen in the IANA timezone; day-sheet times are stored as
@@ -30,6 +63,51 @@ function localTimeToUtcIso(date: string, time: string, tz: string): string {
   // The offset is the gap between what we put in and what the tz displays.
   const offsetMs = ref.getTime() - localAsUtc.getTime()
   return new Date(ref.getTime() + offsetMs).toISOString()
+}
+
+// Day-sheet times are timestamptz derived from the show's own date, so moving a
+// show without moving them leaves the timeline rendering the new day with the
+// old day's load-in, and /itinerary telling crew the same. Re-derives each
+// populated time against the new date from the wall-clock time it reads as in
+// the tour's timezone, rather than adding 24 hours, so a move across a DST
+// boundary keeps load-in at 10:00 instead of shifting it to 09:00.
+//
+// Untouched columns stay untouched: a null time is skipped rather than written,
+// so this cannot null a field the way a whole-row write would.
+async function shiftDaySheetToDate(
+  supabase: SupabaseClient<Database>,
+  showId: string,
+  newDate: string,
+  timezone: string | null,
+): Promise<void> {
+  const { data: sheet } = await supabase
+    .from('day_sheets')
+    .select('*')
+    .eq('show_id', showId)
+    .maybeSingle()
+
+  if (!sheet) return
+
+  const patch: Record<string, string> = {}
+
+  for (const field of DAY_SHEET_TIME_FIELDS) {
+    const stored = sheet[field]
+    if (!stored) continue
+
+    // No tour timezone set: the times were written as UTC by updateDaySheet, so
+    // they have to be read back the same way or the shift moves them.
+    const time = localTimeInZone(stored, timezone ?? 'UTC')
+    patch[field] = timezone
+      ? localTimeToUtcIso(newDate, time, timezone)
+      : `${newDate}T${time}:00.000Z`
+  }
+
+  if (Object.keys(patch).length === 0) return
+
+  await supabase
+    .from('day_sheets')
+    .update(patch as TablesUpdate<'day_sheets'>)
+    .eq('show_id', showId)
 }
 
 export async function createShow(
@@ -94,7 +172,7 @@ export async function updateShow(
   // RLS on shows enforces owns_tour(tour_id). Returns null if caller does not own.
   const { data: existing } = await supabase
     .from('shows')
-    .select('address')
+    .select('address, date, tour_id, tour_date_id')
     .eq('id', showId)
     .single()
 
@@ -103,11 +181,30 @@ export async function updateShow(
   }
 
   const addressChanged = (parsed.data.address ?? null) !== (existing.address ?? null)
+  const dateChanged = parsed.data.date !== existing.date
+
+  // showSchema always carries a date, so this action has always written one.
+  // What it never did was move the tour_date_id with it, which is the whole of
+  // bug 1a: the schedule queries by the link and stayed on the old day while
+  // /itinerary, the morning message and the AI context read the date and moved.
+  let nextTourDateId = existing.tour_date_id
+
+  if (dateChanged) {
+    const resolved = await resolveTourDateId(supabase, existing.tour_id, parsed.data.date, {
+      dayType: 'show',
+    })
+    // Compared against null rather than checked for truthiness: an empty string
+    // is falsy, so `if (resolved.error)` does not narrow the union and the
+    // compiler stops helping on exactly the branch that matters.
+    if (resolved.id === null) return { error: resolved.error }
+    nextTourDateId = resolved.id
+  }
 
   const { error } = await supabase
     .from('shows')
     .update({
       ...parsed.data,
+      ...(dateChanged ? { tour_date_id: nextTourDateId } : {}),
       // Clear the hub cache whenever the address changes so the planner UI
       // shows "Resolving..." until the job completes.
       ...(addressChanged
@@ -125,21 +222,31 @@ export async function updateShow(
     return { error: error.message }
   }
 
+  if (dateChanged) {
+    const { data: tourRow } = await supabase
+      .from('tours')
+      .select('timezone')
+      .eq('id', existing.tour_id)
+      .single()
+
+    await shiftDaySheetToDate(supabase, showId, parsed.data.date, tourRow?.timezone ?? null)
+
+    // After the show row has moved, not before, or the old day still has a show
+    // on it and the revert correctly declines to fire.
+    await revertDayTypeIfOrphaned(supabase, existing.tour_date_id, 'show')
+  }
+
   if (addressChanged) {
     await resolveHubJob.trigger({ show_id: showId })
   }
 
-  // Fetch tour_id for cache bust (not in the existing select above).
-  const { data: showRow } = await supabase
-    .from('shows')
-    .select('tour_id')
-    .eq('id', showId)
-    .single()
-
-  if (showRow) {
-    void bustTourContextCache(showRow.tour_id)
-    revalidatePath(`/tours/${showRow.tour_id}/shows`)
-  }
+  void bustTourContextCache(existing.tour_id)
+  revalidatePath(`/tours/${existing.tour_id}/shows`)
+  // The show, its day-sheet times and the day it sits on all render on the
+  // schedule, and the Dates sidebar is a layout that no client navigation can
+  // re-resolve, so a date change has to be revalidated server-side or the old
+  // day keeps the show and the new day never gains it.
+  revalidatePath(`/tours/${existing.tour_id}/schedule`)
 
   return { error: null, showId }
 }
@@ -212,29 +319,6 @@ export async function updateDaySheet(
 
   const timezone = tourRow?.timezone ?? null
 
-  const TIME_FIELDS = [
-    'venue_access',
-    'load_in',
-    'line_check',
-    'soundcheck',
-    'vip',
-    'doors',
-    'support_on',
-    'support_off',
-    'changeover',
-    'headliner_on',
-    'headliner_off',
-    'curfew',
-    'load_out',
-    'hotel_departure',
-    'catering_breakfast_start',
-    'catering_breakfast_end',
-    'catering_lunch_start',
-    'catering_lunch_end',
-    'catering_dinner_start',
-    'catering_dinner_end',
-  ] as const
-
   const converted: Record<string, string | null> = {}
 
   // Only write fields the caller actually submitted. `null` means the TM
@@ -243,7 +327,7 @@ export async function updateDaySheet(
   // show-panel.tsx, which submits the 14 time fields and no catering, null
   // every catering column on the row each time a TM edited load-in from the
   // day view. Any partial caller added later is safe by construction.
-  for (const field of TIME_FIELDS) {
+  for (const field of DAY_SHEET_TIME_FIELDS) {
     const val = parsed.data[field as keyof typeof parsed.data] as string | null | undefined
     if (val === undefined) {
       continue
