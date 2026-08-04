@@ -4,7 +4,9 @@ import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import type { HotelOption } from '@/lib/logistics/types'
+import type { TablesUpdate } from '@/lib/types/database'
 import { bustTourContextCache } from '@/lib/ai/context'
+import { resolveTourDateId } from '@/lib/schedule/day-link'
 
 export type HotelActionState = { error: string | null; stayId?: string }
 
@@ -171,9 +173,26 @@ export async function createHotelStay(
     }
   }
 
+  // Same rule as updateHotelStay, for the same reason. The Add Hotel form
+  // defaults its check-in date to the day the TM is on but lets them change it,
+  // so passing the caller's tour_date_id straight through would create a stay
+  // whose link and check-in date disagree from the moment it exists. Once the
+  // composite key lands that is a foreign key violation the TM sees, and before
+  // it lands the stay renders on no day. Deriving the link closes the
+  // create/edit split that caused all of Brief 36 rather than patching one side.
+  let tourDateId = stayData.tour_date_id ?? null
+
+  if (stayData.check_in_date) {
+    const resolved = await resolveTourDateId(supabase, tourId, stayData.check_in_date)
+    if (resolved.id === null) return { error: resolved.error }
+    tourDateId = resolved.id
+  }
+
   const { data: stay, error } = await supabase
     .from('hotel_stays')
-    .insert({ tour_id: tourId, status: 'planned', ...stayData })
+    // tour_date_id after the spread: the derived link wins over the one the
+    // form passed.
+    .insert({ tour_id: tourId, status: 'planned', ...stayData, tour_date_id: tourDateId })
     .select('id')
     .single()
 
@@ -215,15 +234,43 @@ export async function updateHotelStay(
 
   const { data: existing } = await supabase
     .from('hotel_stays')
-    .select('tour_id')
+    .select('tour_id, tour_date_id, check_in_date')
     .eq('id', stayId)
     .single()
 
   if (!existing) return { error: 'Hotel stay not found.' }
 
+  const update: TablesUpdate<'hotel_stays'> = { ...data }
+
+  // Bug 1b: this action wrote the dates and left tour_date_id pointing at the
+  // day the stay used to be on. The day view queries linked stays by the link
+  // and then only renders one whose check_in_date matches the day, while the
+  // unlinked fallback requires tour_date_id to be null, so an edited stay was
+  // rejected by the old day and excluded from the new one and rendered on no
+  // schedule day at all. It still existed, and still showed on the Hotels page,
+  // which made it look like the schedule was broken rather than the data.
+  //
+  // check_in_date is the day a stay belongs to, so the link derives from it.
+  // Recomputed whenever the field is submitted at all, even unchanged, which
+  // also repairs planner-created stays (they write check_in_date and no link)
+  // the first time a TM edits one.
+  //
+  // undefined means the form never sent the field and the link must survive.
+  // null means the TM cleared the date, and a stay with no check-in date is on
+  // no day, so the link goes with it.
+  if (data.check_in_date !== undefined) {
+    if (!data.check_in_date) {
+      update.tour_date_id = null
+    } else {
+      const resolved = await resolveTourDateId(supabase, existing.tour_id, data.check_in_date)
+      if (resolved.id === null) return { error: resolved.error }
+      update.tour_date_id = resolved.id
+    }
+  }
+
   const { error } = await supabase
     .from('hotel_stays')
-    .update(data)
+    .update(update)
     .eq('id', stayId)
 
   if (error) return { error: error.message }
