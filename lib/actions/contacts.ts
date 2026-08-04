@@ -117,10 +117,15 @@ function toRow(c: z.infer<typeof contactSchema>) {
     tshirt_size: c.tshirt_size || null,
     default_person_type: c.default_person_type ?? 'crew',
     default_role: c.default_role || null,
-    default_per_diem_rate: c.default_per_diem_rate ?? null,
-    default_per_diem_currency: c.default_per_diem_currency || null,
-    default_daily_wage_rate: c.default_daily_wage_rate ?? null,
-    default_wage_currency: c.default_wage_currency || null,
+    // Pay defaults are conditional: only the roster form submits them. The
+    // tour-context edit path (components/roster/contact-sheet.tsx) builds its
+    // payload from identity fields alone, so coercing `undefined` to null here
+    // wiped a contact's stored rates every time a TM edited anyone from the
+    // tour people page. Absent means "not submitted", so leave the row alone.
+    ...(c.default_per_diem_rate !== undefined && { default_per_diem_rate: c.default_per_diem_rate }),
+    ...(c.default_per_diem_currency !== undefined && { default_per_diem_currency: c.default_per_diem_currency || null }),
+    ...(c.default_daily_wage_rate !== undefined && { default_daily_wage_rate: c.default_daily_wage_rate }),
+    ...(c.default_wage_currency !== undefined && { default_wage_currency: c.default_wage_currency || null }),
     notes: c.notes || null,
   }
 }
