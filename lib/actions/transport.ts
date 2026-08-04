@@ -19,9 +19,48 @@ export async function recordTransportOption(
   personId: string,
   option: TravelOption
 ): Promise<TransportActionState> {
-  await requireUser()
+  const user = await requireUser()
 
   const supabase = await createClient()
+
+  // RLS scopes rows by tour, but it does not check that two ids arriving in
+  // the same payload belong to the same tour. Without these checks a personId
+  // from another account's tour attached cleanly to a segment on this one, and
+  // boardingPassJob then sent that person real travel details to a real phone
+  // number. Verify every id against tourId before writing anything.
+  // sendRider in lib/actions/documents.ts is the reference shape.
+  const { data: tour } = await supabase
+    .from('tours')
+    .select('id')
+    .eq('id', tourId)
+    .eq('account_id', user.id)
+    .single()
+
+  if (!tour) {
+    return { error: 'Tour not found.' }
+  }
+
+  const { data: show } = await supabase
+    .from('shows')
+    .select('id')
+    .eq('id', showId)
+    .eq('tour_id', tourId)
+    .single()
+
+  if (!show) {
+    return { error: 'Show not found on this tour.' }
+  }
+
+  const { data: person } = await supabase
+    .from('people')
+    .select('id')
+    .eq('id', personId)
+    .eq('tour_id', tourId)
+    .single()
+
+  if (!person) {
+    return { error: 'Person not found on this tour.' }
+  }
 
   // Derive source_provider from the raw payload if it carries a recognisable key.
   // Adapters are expected to tag raw with { provider: 'duffel' | 'trainline' | ... }.
@@ -108,7 +147,22 @@ export async function createTransportSegment(
 
   const supabase = await createClient()
 
-  // Ownership check via RLS: owns_tour(tour_id) on insert.
+  // Ownership of the segment itself is covered by RLS: owns_tour(tour_id) on
+  // insert. tour_date_id is not, because RLS cannot see that a day row from
+  // another tour was passed alongside a tour_id this account does own. An
+  // unchecked one attaches the segment to a day in a different tour, so it
+  // disappears from the day the TM added it to.
+  if (data.tour_date_id) {
+    const { data: tourDate } = await supabase
+      .from('tour_dates')
+      .select('id')
+      .eq('id', data.tour_date_id)
+      .eq('tour_id', tourId)
+      .single()
+
+    if (!tourDate) return { error: 'Day not found on this tour.' }
+  }
+
   const { data: row, error } = await supabase
     .from('transport_segments')
     .insert({ tour_id: tourId, status: 'planned', ...data })

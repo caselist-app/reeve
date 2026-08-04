@@ -18,18 +18,49 @@ export async function recordHotelOption(
   option: HotelOption,
   party: { crew_people: string[]; artist_people: string[] }
 ): Promise<HotelActionState> {
-  await requireUser()
+  const user = await requireUser()
 
   const supabase = await createClient()
 
-  // Fetch the show to get check-in / check-out dates.
+  // RLS scopes rows by tour, not ids within one payload. Every id here has to
+  // be checked against tourId or a person from another account's tour lands in
+  // room_assignments and is sent this hotel's details. Same fix as
+  // recordTransportOption; sendRider in lib/actions/documents.ts is the shape.
+  const { data: tour } = await supabase
+    .from('tours')
+    .select('id')
+    .eq('id', tourId)
+    .eq('account_id', user.id)
+    .single()
+
+  if (!tour) return { error: 'Tour not found.' }
+
+  // Scoped by tour_id as well as id: check_in_date is derived from this row,
+  // so an unscoped read here dated the stay off another tour's show.
   const { data: show } = await supabase
     .from('shows')
     .select('date')
     .eq('id', showId)
+    .eq('tour_id', tourId)
     .single()
 
-  if (!show) return { error: 'Show not found.' }
+  if (!show) return { error: 'Show not found on this tour.' }
+
+  const partyIds = [...party.artist_people, ...party.crew_people]
+
+  if (partyIds.length > 0) {
+    const { data: validPeople } = await supabase
+      .from('people')
+      .select('id')
+      .eq('tour_id', tourId)
+      .in('id', partyIds)
+
+    // Compare against the distinct count: a repeated id must not pass by
+    // matching a shorter result set.
+    if ((validPeople?.length ?? 0) !== new Set(partyIds).size) {
+      return { error: 'One or more people are not on this tour.' }
+    }
+  }
 
   const { data: stay, error: stayError } = await supabase
     .from('hotel_stays')
@@ -99,11 +130,46 @@ export async function createHotelStay(
     people?: string[]   // person ids for room_assignments
   },
 ): Promise<HotelActionState> {
-  await requireUser()
+  const user = await requireUser()
 
   const supabase = await createClient()
 
   const { people = [], ...stayData } = data
+
+  // Same cross-tour check as recordHotelOption. tour_date_id is verified too:
+  // an unchecked one attaches the stay to a day row in a different tour, so it
+  // vanishes from the day it was added to.
+  const { data: tour } = await supabase
+    .from('tours')
+    .select('id')
+    .eq('id', tourId)
+    .eq('account_id', user.id)
+    .single()
+
+  if (!tour) return { error: 'Tour not found.' }
+
+  if (stayData.tour_date_id) {
+    const { data: tourDate } = await supabase
+      .from('tour_dates')
+      .select('id')
+      .eq('id', stayData.tour_date_id)
+      .eq('tour_id', tourId)
+      .single()
+
+    if (!tourDate) return { error: 'Day not found on this tour.' }
+  }
+
+  if (people.length > 0) {
+    const { data: validPeople } = await supabase
+      .from('people')
+      .select('id')
+      .eq('tour_id', tourId)
+      .in('id', people)
+
+    if ((validPeople?.length ?? 0) !== new Set(people).size) {
+      return { error: 'One or more people are not on this tour.' }
+    }
+  }
 
   const { data: stay, error } = await supabase
     .from('hotel_stays')
