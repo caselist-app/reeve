@@ -8,9 +8,26 @@ import { tourSchema } from '@/lib/validators/tour'
 
 export type TourActionState = { error: string | null }
 
-// TODO: Brief 02 - replace with the actual trial gate check once billing is wired.
-async function canCreateTour(_accountId: string): Promise<boolean> {
-  return true
+async function canCreateTour(accountId: string): Promise<boolean> {
+  const supabase = await createClient()
+
+  const { data: account } = await supabase
+    .from('accounts')
+    .select('subscription_status')
+    .eq('id', accountId)
+    .single()
+
+  if (!account) return false
+  if (account.subscription_status === 'active') return true
+  if (account.subscription_status !== 'trialing') return false
+
+  const { count } = await supabase
+    .from('tours')
+    .select('id', { count: 'exact', head: true })
+    .eq('account_id', accountId)
+    .neq('status', 'archived')
+
+  return (count ?? 0) < 1
 }
 
 function parseTourFormData(formData: FormData) {
