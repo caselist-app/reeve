@@ -36,14 +36,49 @@ export async function previewBroadcast(
   await requireUser()
 
   const supabase = await createClient()
+
+  // RLS proves the caller owns tourId. It does not prove the id inside `change`
+  // belongs to that tour, and a TM with two tours would otherwise be able to
+  // render tour B's segment into a message and send it to tour A's crew.
+  if (!(await changeBelongsToTour(supabase, tourId, change))) {
+    return { people: [], message: '' }
+  }
+
   const people = await getAffectedPeople(change, tourId, supabase)
 
-  const message = await buildPreviewMessage(supabase, change, previousValue)
+  const message = await buildPreviewMessage(supabase, tourId, change, previousValue)
 
   return {
     people: people.map((p) => ({ id: p.id, name: p.name })),
     message,
   }
+}
+
+// The id carried by a ChangeDescriptor arrives from the client alongside a
+// tourId the caller does own, so it has to be checked against that tour before
+// it is read or used to pick recipients. Scoping every query by tour_id as well
+// (below, and in getAffectedPeople) is the second layer: this one fails loudly,
+// that one fails empty.
+async function changeBelongsToTour(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  tourId: string,
+  change: ChangeDescriptor
+): Promise<boolean> {
+  const [table, id] =
+    change.type === 'transport_segment'
+      ? (['transport_segments', change.segmentId] as const)
+      : change.type === 'hotel_stay'
+        ? (['hotel_stays', change.stayId] as const)
+        : (['shows', change.showId] as const)
+
+  const { data } = await supabase
+    .from(table)
+    .select('id')
+    .eq('id', id)
+    .eq('tour_id', tourId)
+    .maybeSingle()
+
+  return Boolean(data)
 }
 
 // Called when the TM clicks Send in the NotifyPanel.
@@ -60,12 +95,19 @@ export async function sendBroadcast(params: {
   const { tourId, change, previousValue, customMessage } = params
   const supabase = await createClient()
 
+  // Same check as previewBroadcast, and this is the one that matters: without
+  // it a record from another tour decides both the message and, through the
+  // show date, which of this tour's crew receive it.
+  if (!(await changeBelongsToTour(supabase, tourId, change))) {
+    return { error: 'That record is not on this tour.' }
+  }
+
   const people = await getAffectedPeople(change, tourId, supabase)
   if (people.length === 0) {
     return { error: null, sent: 0 }
   }
 
-  const message = await buildPreviewMessage(supabase, change, previousValue, customMessage)
+  const message = await buildPreviewMessage(supabase, tourId, change, previousValue, customMessage)
 
   // A new UUID per send event is the idempotency anchor.
   // If the TM clicks Send twice, the second call generates a new change_id
@@ -88,6 +130,7 @@ export async function sendBroadcast(params: {
 // customMessage, when present, is appended below the auto-generated line.
 async function buildPreviewMessage(
   supabase: Awaited<ReturnType<typeof createClient>>,
+  tourId: string,
   change: ChangeDescriptor,
   previousValue?: string | null,
   customMessage?: string | null
@@ -98,6 +141,7 @@ async function buildPreviewMessage(
         .from('transport_segments')
         .select('carrier_operator, vehicle_or_flight_no, depart_at, mode')
         .eq('id', change.segmentId)
+        .eq('tour_id', tourId)
         .single()
 
       const date = seg?.depart_at ? seg.depart_at.slice(0, 10) : 'TBC'
@@ -124,6 +168,7 @@ async function buildPreviewMessage(
         .from('hotel_stays')
         .select('name, check_in_date, check_in_time')
         .eq('id', change.stayId)
+        .eq('tour_id', tourId)
         .single()
 
       const date = stay?.check_in_date ?? 'TBC'
@@ -143,6 +188,7 @@ async function buildPreviewMessage(
         .from('shows')
         .select('venue_name, date, load_in_at, address')
         .eq('id', change.showId)
+        .eq('tour_id', tourId)
         .single()
 
       const venueName = show?.venue_name ?? 'venue'
@@ -180,6 +226,7 @@ async function buildPreviewMessage(
         .from('shows')
         .select('venue_name, date, day_sheets(load_in)')
         .eq('id', change.showId)
+        .eq('tour_id', tourId)
         .single()
 
       const venueName = show?.venue_name ?? 'venue'
