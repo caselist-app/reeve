@@ -133,10 +133,17 @@ export async function POST(request: NextRequest) {
         // Fetch all matches and select the best one in code: an active or
         // planning tour beats completed or archived. Within the same status,
         // prefer the most recently created tour.
+        // Meta sends `from` in E.164 with no leading plus (447700900123), while
+        // contacts store the plus (+447700900123, enforced by the E.164 regex in
+        // lib/validators/contact.ts). An exact match on the raw value therefore
+        // never hits, and the message is dropped below as an unknown number.
+        // Match both forms rather than assuming every stored row has the plus.
+        const digits = fromNumber.startsWith('+') ? fromNumber.slice(1) : fromNumber
+
         const { data: people } = await admin
           .from('people')
           .select('id, tour_id, tours!inner(id, status, created_at), contacts!inner(whatsapp_number)')
-          .eq('contacts.whatsapp_number', fromNumber)
+          .in('contacts.whatsapp_number', [`+${digits}`, digits])
 
         if (!people || people.length === 0) continue  // Unknown number.
 
