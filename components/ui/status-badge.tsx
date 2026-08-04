@@ -40,7 +40,7 @@ export const TRANSPORT_VARIANT: Record<string, StatusVariant> = {
   cancelled: 'default',
 }
 
-// 'none' and 'ok' are intentionally absent — no badge when passport is fine or not set.
+// 'none' and 'ok' are intentionally absent: no badge when passport is fine or not set.
 export const PASSPORT_VARIANT: Record<string, StatusVariant> = {
   soon: 'warning',
   expired: 'danger',

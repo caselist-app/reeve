@@ -59,7 +59,7 @@ export function DayContentSkeleton() {
           ))}
         </div>
       </div>
-      {/* Day info — hidden on mobile, matches the live static block: toolbar
+      {/* Day info, hidden on mobile, matches the live static block: toolbar
           placeholder at the top, then venue/roster/notes content below. */}
       <div className="hidden lg:flex lg:flex-col w-[260px] shrink-0 min-h-0">
         <div className="flex items-center justify-end gap-1.5 px-4 pt-4 pb-1 shrink-0">

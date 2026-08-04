@@ -19,11 +19,19 @@ interface UseEntityFormOptions<TResult extends EntityActionResult> {
   // Called once the action resolves with error: null. Add forms use this to
   // close the panel; edit panels typically omit it and rely on `saved`.
   onSuccess?: (result: TResult) => void
-  // Add forms create a new timeline item and need router.refresh() so the
-  // server-rendered timeline picks it up. Edit panels mutate a row already
-  // rendered inside the panel's own state and historically have not called
-  // it, showing "Saved." instead. Defaults to false to match the more common
-  // (edit panel) case; add forms pass true explicitly.
+  // Two refresh strategies, and the split is deliberate. Do not "fix" it by
+  // passing true everywhere: that double-renders.
+  //
+  // Add forms pass true. They create a new timeline item and refresh on the
+  // client so the server-rendered timeline picks it up.
+  //
+  // Edit panels leave it false and rely on their server action calling
+  // revalidatePath on the schedule route instead. updateDayEvent,
+  // updateHotelStay, updateTransportSegment and updateDaySheet all do.
+  // If you write a new edit panel, the action is where the refresh belongs,
+  // and forgetting it there is silent: the panel says "Saved." and the
+  // timeline keeps the old value until a navigation. That was a live bug in
+  // updateDaySheet until 2026-08-04.
   refreshOnSuccess?: boolean
 }
 

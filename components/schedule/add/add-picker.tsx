@@ -25,7 +25,7 @@ const CATEGORIES: {
   { id: 'event',  label: 'Event',  description: 'Meal, meeting, other', shortcut: 'E', icon: CalendarPlus },
 ]
 
-// Keyboard shortcut map — scoped to when this component is mounted (i.e. popover is open).
+// Keyboard shortcut map, scoped to when this component is mounted (i.e. popover is open).
 const SHORTCUT_MAP: Record<string, AddCategory> = Object.fromEntries(
   CATEGORIES.map(c => [c.shortcut, c.id])
 )

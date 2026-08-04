@@ -136,7 +136,7 @@ export function ContactDetail({ contact, tours }: Props) {
 
       {error && <p className="mb-4 text-sm text-destructive">{error}</p>}
 
-      {/* Passport expiry alert — only shown when flagged */}
+      {/* Passport expiry alert, only shown when flagged */}
       {(status === 'expired' || status === 'soon') && contact.passport_expiry && (
         <div className={cn(
           'mb-6 flex items-center justify-between rounded-lg border px-4 py-3',

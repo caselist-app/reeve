@@ -22,7 +22,12 @@ export const daySheetFormSchema = z.object({
   load_out: optionalTime,
   hotel_departure: optionalTime,
   // Catering fields: type selector plus meal time windows.
-  catering_type: z.enum(['none', 'buyout', 'provided']).default('none'),
+  // No .default() here on purpose. Not every caller submits catering:
+  // components/schedule/panels/show-panel.tsx sends the 14 time fields only.
+  // A default would invent 'none' for that caller and updateDaySheet would
+  // write it, wiping catering entered on the show page. Absent has to stay
+  // distinguishable from "the TM chose none".
+  catering_type: z.enum(['none', 'buyout', 'provided']).optional(),
   catering_breakfast_start: optionalTime,
   catering_breakfast_end: optionalTime,
   catering_lunch_start: optionalTime,

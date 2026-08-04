@@ -1,5 +1,5 @@
 export const metadata = {
-  title: 'Privacy Policy — Reeve',
+  title: 'Privacy Policy | Reeve',
   description: 'Privacy policy for Reeve, the tour management platform.',
 }
 
@@ -56,14 +56,14 @@ export default function PrivacyPage() {
         <h2 className="text-base font-semibold text-gray-900 mb-3">Third-party services</h2>
         <p className="mb-3">Reeve uses the following services to operate:</p>
         <ul className="list-disc list-inside space-y-1">
-          <li><strong>Supabase</strong> — database and file storage (EU region)</li>
-          <li><strong>Vercel</strong> — application hosting</li>
-          <li><strong>Meta WhatsApp Cloud API</strong> — WhatsApp message delivery</li>
-          <li><strong>Resend</strong> — transactional and operational email delivery</li>
-          <li><strong>Stripe</strong> — payment processing</li>
-          <li><strong>Anthropic</strong> — AI inference for crew question responses</li>
-          <li><strong>Trigger.dev</strong> — background job processing</li>
-          <li><strong>Upstash</strong> — caching and rate limiting</li>
+          <li><strong>Supabase</strong>: database and file storage (EU region)</li>
+          <li><strong>Vercel</strong>: application hosting</li>
+          <li><strong>Meta WhatsApp Cloud API</strong>: WhatsApp message delivery</li>
+          <li><strong>Resend</strong>: transactional and operational email delivery</li>
+          <li><strong>Stripe</strong>: payment processing</li>
+          <li><strong>Anthropic</strong>: AI inference for crew question responses</li>
+          <li><strong>Trigger.dev</strong>: background job processing</li>
+          <li><strong>Upstash</strong>: caching and rate limiting</li>
         </ul>
       </section>
 

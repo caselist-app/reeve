@@ -38,7 +38,7 @@ export default async function TourHomePage({
     redirect(`/tours/${id}/schedule?date=${next.date}`)
   }
 
-  // Tour is in the past — go to the most recent date.
+  // Tour is in the past, so go to the most recent date.
   const { data: last } = await supabase
     .from('tour_dates')
     .select('date')
@@ -52,6 +52,6 @@ export default async function TourHomePage({
     redirect(`/tours/${id}/schedule/${last.date}`)
   }
 
-  // No dates yet — go to the schedule list.
+  // No dates yet, so go to the schedule list.
   redirect(`/tours/${id}/shows`)
 }

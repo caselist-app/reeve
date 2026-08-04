@@ -237,9 +237,17 @@ export async function updateDaySheet(
 
   const converted: Record<string, string | null> = {}
 
+  // Only write fields the caller actually submitted. `null` means the TM
+  // cleared the field and must be written; `undefined` means the form never
+  // sent it and the stored value must survive. Collapsing the two is what let
+  // show-panel.tsx, which submits the 14 time fields and no catering, null
+  // every catering column on the row each time a TM edited load-in from the
+  // day view. Any partial caller added later is safe by construction.
   for (const field of TIME_FIELDS) {
     const val = parsed.data[field as keyof typeof parsed.data] as string | null | undefined
-    if (!val) {
+    if (val === undefined) {
+      continue
+    } else if (!val) {
       converted[field] = null
     } else if (timezone) {
       converted[field] = localTimeToUtcIso(show.date, val, timezone)
@@ -250,7 +258,14 @@ export async function updateDaySheet(
   }
 
   // catering_type is a text column, not a timestamptz: stored as-is.
-  converted.catering_type = parsed.data.catering_type
+  if (parsed.data.catering_type !== undefined) {
+    converted.catering_type = parsed.data.catering_type
+  }
+
+  // Nothing submitted: no-op rather than an empty update.
+  if (Object.keys(converted).length === 0) {
+    return { error: null }
+  }
 
   // Cast required: the Supabase client rejects index-signature types.
   // All keys in converted are valid day_sheets columns.
@@ -264,6 +279,13 @@ export async function updateDaySheet(
   }
 
   void bustTourContextCache(show.tour_id)
+
+  // Day-sheet fields render as timeline items in day-timeline.tsx, so the
+  // schedule route has to be revalidated or the timeline keeps showing the old
+  // load-in, soundcheck, doors and curfew while the panel says "Saved."
+  // show-panel.tsx deliberately does not pass refreshOnSuccess: edit panels
+  // rely on the action revalidating, add forms refresh client-side.
+  revalidatePath(`/tours/${show.tour_id}/schedule`)
 
   return { error: null }
 }

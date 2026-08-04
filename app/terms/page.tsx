@@ -1,5 +1,5 @@
 export const metadata = {
-  title: 'Terms of Service — Reeve',
+  title: 'Terms of Service | Reeve',
   description: 'Terms of service for Reeve, the tour management platform.',
 }
 

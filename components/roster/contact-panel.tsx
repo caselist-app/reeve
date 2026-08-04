@@ -181,7 +181,7 @@ export function ContactPanel({ contactId, tourContext, onSuccess }: Props) {
 
       {contact && (
         <>
-          {/* Passport expiry alert — only shown when flagged */}
+          {/* Passport expiry alert, only shown when flagged */}
           {(status === 'expired' || status === 'soon') && contact.passport_expiry && (
             <div className={cn(
               'mb-5 flex items-center justify-between rounded-lg border px-4 py-3',
@@ -195,7 +195,7 @@ export function ContactPanel({ contactId, tourContext, onSuccess }: Props) {
             </div>
           )}
 
-          {/* Tour terms — only when opened from people page */}
+          {/* Tour terms, only when opened from people page */}
           {tourTermsFields.length > 0 && (
             <>
               <SectionHeader>On this tour</SectionHeader>

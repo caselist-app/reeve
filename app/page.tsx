@@ -29,7 +29,7 @@ export default async function Root() {
     }
   }
 
-  // No cookie or tour gone — fall back to the first tour on the account.
+  // No cookie or tour gone, so fall back to the first tour on the account.
   const supabase = await createClient()
   const { data: firstTour } = await supabase
     .from('tours')

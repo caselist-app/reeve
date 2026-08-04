@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 
-// /shows is no longer a standalone view — redirect to the schedule day view.
+// /shows is no longer a standalone view: redirect to the schedule day view.
 export default async function ShowsPage({
   params,
 }: {

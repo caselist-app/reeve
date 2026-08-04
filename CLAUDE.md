@@ -62,6 +62,7 @@ pnpm dev              # local dev server
 pnpm build            # production build (must pass before merge)
 pnpm lint             # eslint, must be clean
 pnpm typecheck        # tsc --noEmit, must be clean
+pnpm check:conventions # the rules below that CI can enforce, must be clean
 pnpm types:gen        # regenerate lib/types/database.ts from Supabase (see Database workflow)
 
 # Supabase (the only ways schema reaches the database)
@@ -72,6 +73,18 @@ supabase db reset               # rebuild local DB from all migrations (destruct
 ```
 
 `pnpm types:gen` wraps `supabase gen types typescript` and writes to `lib/types/database.ts`. Keep this script in `package.json` so the command is identical for every agent.
+
+## Some of this file is enforced, and you should know which parts
+
+`pnpm check:conventions` runs `scripts/check-conventions.mjs` and is a CI step alongside typecheck, lint and build. It exists because an audit on 2026-08-04 found that every bug in the repo, including two that silently destroyed user data, passed all three of those. This file was complete and correct at the time and its rules were still broken repeatedly by agents that had read it. **A rule that cannot fail the build is a suggestion.**
+
+It currently enforces: `requireUser()` first in every server action, `revalidatePath` on the schedule route for any action writing a schedule-rendered table, no `getSession()`, `cache_control` on every Anthropic call, no unguarded `.in()`, no em-dashes, every `process.env` read declared in `.env.example`, and `[BOTH]` marked on every variable reachable from `trigger/jobs/`.
+
+Known violations that predate the check live in `scripts/conventions-baseline.json`, each with a reason saying whether it is **accepted** (the check is wrong about it) or **debt** (the check is right and the fix is scheduled). That file should only ever shrink. Removing an entry is part of the fix, because a stale entry fails the check too.
+
+If a check fires on you, the default assumption is that the check is right. If it genuinely is not, add a baseline entry explaining why, rather than weakening the rule. Do not delete a check to make the build pass.
+
+These are greps with judgement, not a type system, and they only cover rules mechanical enough to express. Most of this file is still unenforced prose, so the absence of a failure is not evidence that a change is correct.
 
 ## Database workflow (the rule Matt cares about most)
 
@@ -206,6 +219,7 @@ Prompt caching is not optional. Every call to Claude must include `cache_control
 - Server Components by default. Use `'use client'` only for state, effects, or browser APIs.
 - Server actions for mutations. Write API routes only for webhooks, cron, Stripe callbacks, and inbound provider hooks.
 - **A server action behind an uncontrolled form must revalidate, or the save will look like it failed.** React 19 resets a form to its `defaultValue` after a form action succeeds, on the documented assumption that `defaultValue` is the canonical value the server just sent back. If the action does not call `revalidatePath`, the server component still holds the old data and the reset restores it, so the value visibly snaps back until a manual reload. Forms on `useEntityForm` are covered because the hook calls `router.refresh()`; forms using `useActionState` directly are not. Scope the revalidate to the layout when the edited value also renders above the route, for example a tour name in `components/nav/tour-selector.tsx`. Found 2026-08-04 in `updateTourAction`, which was the only action file in the repo with no revalidate.
+- **The same day, mutate the same route.** Any server action that changes something rendered on the schedule must call `revalidatePath` on `/tours/{id}/schedule`, even when the form that called it sits in a panel. The day view's edit panels deliberately do not pass `refreshOnSuccess` to `useEntityForm`; they rely on the action revalidating, while add forms refresh on the client. Both work, and mixing them double-renders, so pick by which kind of form you are writing. Forgetting the revalidate in an edit panel's action is silent: the panel says "Saved." and the timeline keeps the old value. This bit twice on 2026-08-04, in `updateTourAction` and again in `updateDaySheet`, which had no revalidate while its immediate sibling `updateShowNotes` did.
 - Named exports for components. Default exports only for Next.js page, layout, and route files.
 - Functional components and hooks only. No class components.
 - Tailwind utility classes only. No `.css` files unless unavoidable. Merge classes with `cn()` from `@/lib/utils`.
