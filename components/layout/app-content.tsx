@@ -96,11 +96,18 @@ export function AppContent({ children, secondaryPanel }: AppContentProps) {
   }
 
   // md and above: inline panel that shrinks the main content area.
+  //
+  // The gap between main and each side card is a margin on that card, not a
+  // shared `gap-*` utility on the row. A single gap utility applies uniformly
+  // between every pair of flex children, so gating it on
+  // `showPanel || showSecondaryPanel` put an 8px gap next to the side panel
+  // container even while it was closed (w-0), purely because a secondary
+  // panel happened to be present on the route. Margins let each side's
+  // spacing depend only on its own visibility.
   return (
     <div
       className={cn(
-        'flex flex-1 py-2 pr-2 min-h-0 overflow-hidden transition-[gap,padding] duration-200 ease-out',
-        showPanel || showSecondaryPanel ? 'gap-2' : 'gap-0',
+        'flex flex-1 py-2 pr-2 min-h-0 overflow-hidden transition-[padding] duration-200 ease-out',
         showSecondaryPanel ? 'pl-2' : 'pl-0',
       )}
     >
@@ -109,7 +116,7 @@ export function AppContent({ children, secondaryPanel }: AppContentProps) {
           uses to swap the sidebar for the horizontal date strip. Gated on
           pathname, not just the prop, see showSecondaryPanel above. */}
       {showSecondaryPanel && (
-        <div className="hidden lg:flex w-[230px] shrink-0 h-full flex-col bg-background border border-border rounded-3xl overflow-hidden">
+        <div className="hidden lg:flex w-[230px] shrink-0 h-full flex-col bg-background border border-border rounded-3xl overflow-hidden mr-2">
           {secondaryPanel}
         </div>
       )}
@@ -123,11 +130,11 @@ export function AppContent({ children, secondaryPanel }: AppContentProps) {
         {children}
       </main>
 
-      {/* Inline side panel at lg+, full-width takeover at md-lg. Always mounted (even at w-0) so the width transition has a starting value to animate from; only the gap above is gated on showPanel. */}
+      {/* Inline side panel at lg+, full-width takeover at md-lg. Always mounted (even at w-0) so the width transition has a starting value to animate from; its own left margin (not a row gap) is what's gated on isOpen. */}
       <div
         className={cn(
-          'flex-shrink-0 overflow-hidden transition-[width] duration-200 ease-out',
-          isOpen ? 'lg:w-[480px] w-full' : 'w-0',
+          'flex-shrink-0 overflow-hidden transition-[width,margin] duration-200 ease-out',
+          isOpen ? 'lg:w-[480px] w-full ml-2' : 'w-0 ml-0',
         )}
       >
         {panelContent}

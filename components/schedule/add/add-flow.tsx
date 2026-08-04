@@ -1,7 +1,8 @@
 'use client'
 
 import dynamic from 'next/dynamic'
-import { ChevronLeft } from 'lucide-react'
+import { PanelShell } from '@/components/layout/panel-shell'
+import { useSidePanel } from '@/stores/side-panel-store'
 import type { AddCategory } from '@/components/schedule/add/add-picker'
 
 // The add forms only render once a category is picked, so each loads on demand
@@ -19,8 +20,10 @@ interface AddFlowProps {
   date: string
   timezone: string
   category: AddCategory
+  // Leaves this form and reopens the category picker. Supplied by the
+  // side panel descriptor, since that has to coordinate with the popover
+  // or bottom-sheet state day-view-client.tsx owns.
   onBack: () => void
-  onClose: () => void
 }
 
 const CATEGORY_TITLES: Record<AddCategory, string> = {
@@ -32,41 +35,21 @@ const CATEGORY_TITLES: Record<AddCategory, string> = {
   event:  'Add event',
 }
 
-// Renders the form for a pre-selected category. The picker lives in the popover
-// in DayViewClient; this component never shows the picker itself.
-export function AddFlow({ tourId, tourDateId, date, timezone, category, onBack, onClose }: AddFlowProps) {
-  const formProps = { tourId, tourDateId, date, timezone, onBack, onSuccess: onClose }
+// Renders the form for a pre-selected category, on PanelShell like every
+// other schedule panel. The picker itself lives in the popover/sheet in
+// DayViewClient; this component never shows it.
+export function AddFlow({ tourId, tourDateId, date, timezone, category, onBack }: AddFlowProps) {
+  const { close } = useSidePanel()
+  const formProps = { tourId, tourDateId, date, timezone, onBack, onSuccess: close }
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-border shrink-0">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ChevronLeft className="h-3.5 w-3.5" />
-          Back
-        </button>
-        <button
-          onClick={onClose}
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-          aria-label="Close"
-        >
-          ✕
-        </button>
-      </div>
-
-      {/* Body */}
-      <div className="flex-1 overflow-y-auto px-4 py-4">
-        <p className="text-xs font-semibold mb-3">{CATEGORY_TITLES[category]}</p>
-        {category === 'flight' && <AddFlightForm {...formProps} />}
-        {category === 'drive'  && <AddDriveForm  {...formProps} />}
-        {category === 'rail'   && <AddRailForm   {...formProps} />}
-        {category === 'hotel'  && <AddHotelForm  {...formProps} />}
-        {category === 'show'   && <AddShowForm   tourId={tourId} date={date} onBack={onBack} onSuccess={onClose} />}
-        {category === 'event'  && <AddEventForm  {...formProps} />}
-      </div>
-    </div>
+    <PanelShell title={CATEGORY_TITLES[category]}>
+      {category === 'flight' && <AddFlightForm {...formProps} />}
+      {category === 'drive'  && <AddDriveForm  {...formProps} />}
+      {category === 'rail'   && <AddRailForm   {...formProps} />}
+      {category === 'hotel'  && <AddHotelForm  {...formProps} />}
+      {category === 'show'   && <AddShowForm   tourId={tourId} date={date} onBack={onBack} onSuccess={close} />}
+      {category === 'event'  && <AddEventForm  {...formProps} />}
+    </PanelShell>
   )
 }

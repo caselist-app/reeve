@@ -1,6 +1,8 @@
-// Skeleton placeholders for the schedule day view. They mirror the three-column
-// layout (230px date sidebar, flex-1 timeline, 260px info panel) so the frame
+// Skeleton placeholders for the schedule day view. They mirror the layout
+// (230px date sidebar, flex-1 timeline, 260px static day info) so the frame
 // paints instantly with no layout shift while the day's data resolves.
+// Brief 33: day info is a static block now, not a swappable panel, and there
+// is no vertical divider between it and the timeline.
 
 export function SidebarSkeleton() {
   return (
@@ -30,16 +32,12 @@ export function DayContentSkeleton() {
   return (
     <div className="flex flex-1 min-w-0 min-h-0 animate-pulse">
       {/* Timeline */}
-      <div className="relative flex flex-col flex-1 min-w-0 lg:border-r lg:border-border">
+      <div className="relative flex flex-col flex-1 min-w-0">
         {/* Header bar */}
         <div className="flex items-center justify-between px-4 py-3 lg:px-8 lg:py-4 border-b border-border">
           <div className="space-y-2">
             <div className="h-5 w-40 rounded bg-muted" />
             <div className="h-3 w-24 rounded bg-muted" />
-          </div>
-          <div className="flex gap-2">
-            <div className="h-8 w-8 rounded-lg bg-muted" />
-            <div className="h-8 w-8 rounded-lg bg-muted" />
           </div>
         </div>
         {/* Timeline rows */}
@@ -61,21 +59,28 @@ export function DayContentSkeleton() {
           ))}
         </div>
       </div>
-      {/* Info panel — hidden on mobile, matches the live right panel */}
-      <div className="hidden lg:block w-[260px] shrink-0 px-4 py-4 space-y-5">
-        <div className="space-y-2">
-          <div className="h-2.5 w-12 rounded bg-muted" />
-          <div className="h-4 w-32 rounded bg-muted" />
-          <div className="h-3 w-24 rounded bg-muted" />
+      {/* Day info — hidden on mobile, matches the live static block: toolbar
+          placeholder at the top, then venue/roster/notes content below. */}
+      <div className="hidden lg:flex lg:flex-col w-[260px] shrink-0 min-h-0">
+        <div className="flex items-center justify-end gap-1.5 px-4 pt-4 pb-1 shrink-0">
+          <div className="h-8 w-8 rounded-lg bg-muted" />
+          <div className="h-8 w-8 rounded-lg bg-muted" />
         </div>
-        <div className="space-y-2">
-          <div className="h-2.5 w-12 rounded bg-muted" />
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <div className="h-6 w-6 rounded-full bg-muted" />
-              <div className="h-3 w-24 rounded bg-muted" />
-            </div>
-          ))}
+        <div className="flex-1 min-h-0 px-4 py-4 space-y-5">
+          <div className="space-y-2">
+            <div className="h-2.5 w-12 rounded bg-muted" />
+            <div className="h-4 w-32 rounded bg-muted" />
+            <div className="h-3 w-24 rounded bg-muted" />
+          </div>
+          <div className="space-y-2">
+            <div className="h-2.5 w-12 rounded bg-muted" />
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <div className="h-6 w-6 rounded-full bg-muted" />
+                <div className="h-3 w-24 rounded bg-muted" />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>

@@ -6,7 +6,7 @@ import { MoreHorizontal, ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatFlightNumber } from '@/lib/utils/format-flight-number'
 import { placeName } from '@/lib/utils/place-name'
-import { EditPanel } from '@/components/schedule/edit-panel'
+import { PanelShell } from '@/components/layout/panel-shell'
 import { AirlineLogo } from '@/components/schedule/airline-logo'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -29,7 +29,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { updateTransportSegment, deleteTransportSegment } from '@/lib/actions/transport'
-import { useSchedulePanel } from '@/stores/schedule-panel-store'
+import { useSidePanel } from '@/stores/side-panel-store'
 import type { Tables } from '@/lib/types/database'
 import { fromDatetimeLocal, toDatetimeLocal } from '@/lib/schedule/datetime'
 
@@ -81,7 +81,7 @@ const FLIGHT_STATUS_TEXT: Record<string, { label: string; className: string; sta
 
 function DeleteMenu({ segmentId, modeLabel }: { segmentId: string; modeLabel: string }) {
   const router = useRouter()
-  const { setActiveCard } = useSchedulePanel()
+  const { close } = useSidePanel()
   const [open, setOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -92,7 +92,7 @@ function DeleteMenu({ segmentId, modeLabel }: { segmentId: string; modeLabel: st
     setDeleting(false)
     if (result.error) { setError(result.error); return }
     setOpen(false)
-    setActiveCard(null)
+    close()
     router.refresh()
   }
 
@@ -374,9 +374,9 @@ export function TransportPanel({ segment, timezone }: TransportPanelProps) {
   const modeLabel = MODE_LABELS[segment.mode] ?? segment.mode
 
   return (
-    <EditPanel
+    <PanelShell
       title={modeLabel}
-      subtitle={
+      description={
         segment.mode === 'flight'
           ? undefined
           : [segment.origin, segment.destination].filter(Boolean).join(' to ') || undefined
@@ -388,6 +388,6 @@ export function TransportPanel({ segment, timezone }: TransportPanelProps) {
       ) : (
         <EditableSegmentForm segment={segment} timezone={timezone} />
       )}
-    </EditPanel>
+    </PanelShell>
   )
 }

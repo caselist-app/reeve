@@ -13,6 +13,12 @@ const ContactPanel = dynamic(() => import('@/components/roster/contact-panel').t
 const AddShowPanel = dynamic(() => import('@/components/shows/add-show-panel').then((m) => m.AddShowPanel), { ssr: false })
 const SendRiderSheet = dynamic(() => import('@/components/shows/send-rider-sheet').then((m) => m.SendRiderSheet), { ssr: false })
 const AddDayPanel = dynamic(() => import('@/components/schedule/add-day-panel').then((m) => m.AddDayPanel), { ssr: false })
+// Brief 33: schedule day view detail and add panels.
+const ShowPanel = dynamic(() => import('@/components/schedule/panels/show-panel').then((m) => m.ShowPanel), { ssr: false })
+const TransportPanel = dynamic(() => import('@/components/schedule/panels/transport-panel').then((m) => m.TransportPanel), { ssr: false })
+const HotelPanel = dynamic(() => import('@/components/schedule/panels/hotel-panel').then((m) => m.HotelPanel), { ssr: false })
+const EventPanel = dynamic(() => import('@/components/schedule/panels/event-panel').then((m) => m.EventPanel), { ssr: false })
+const AddFlow = dynamic(() => import('@/components/schedule/add/add-flow').then((m) => m.AddFlow), { ssr: false })
 
 // Renders the correct panel content based on the active descriptor.
 // Mounted inside AppContent, which handles the slide-in animation and
@@ -83,6 +89,38 @@ export function ActivePanel() {
           contactId={panel.contactId}
           tourContext={panel.tourContext}
           onSuccess={panel.onSuccess}
+        />
+      )
+    case 'show':
+      return (
+        <ShowPanel
+          showId={panel.showId}
+          venueName={panel.venueName}
+          timezone={panel.timezone}
+          daySheet={panel.daySheet}
+        />
+      )
+    case 'transport':
+      return (
+        <TransportPanel segment={panel.segment} timezone={panel.timezone} />
+      )
+    case 'hotel':
+      return (
+        <HotelPanel stay={panel.stay} />
+      )
+    case 'event':
+      return (
+        <EventPanel event={panel.event} timezone={panel.timezone} />
+      )
+    case 'add-to-day':
+      return (
+        <AddFlow
+          tourId={panel.tourId}
+          tourDateId={panel.tourDateId}
+          date={panel.date}
+          timezone={panel.timezone}
+          category={panel.category}
+          onBack={panel.onBack}
         />
       )
     default:

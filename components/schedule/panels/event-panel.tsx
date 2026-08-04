@@ -1,7 +1,7 @@
 'use client'
 
 import { useTransition, useState } from 'react'
-import { EditPanel } from '@/components/schedule/edit-panel'
+import { PanelShell } from '@/components/layout/panel-shell'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -45,7 +45,7 @@ export function EventPanel({ event, timezone }: EventPanelProps) {
   }
 
   return (
-    <EditPanel title={event.title} subtitle="Event">
+    <PanelShell title={event.title} description="Event">
       <form onSubmit={handleSubmit} className="space-y-3">
         <div className="space-y-1">
           <Label className="text-xs">Title</Label>
@@ -89,6 +89,6 @@ export function EventPanel({ event, timezone }: EventPanelProps) {
         </Button>
         {saved && <p className="text-xs text-muted-foreground text-center">Saved.</p>}
       </form>
-    </EditPanel>
+    </PanelShell>
   )
 }
