@@ -11,12 +11,16 @@ import { resolveHubJob } from '@/trigger/jobs/resolve-hub'
 import { revertDayTypeIfOrphaned } from '@/lib/schedule/day-type-revert'
 import { resolveTourDateId } from '@/lib/schedule/day-link'
 import { localTimeInZone } from '@/lib/schedule/datetime'
+import type { DateMove } from '@/lib/schedule/date-move'
 import type { z } from 'zod'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database, TablesUpdate } from '@/lib/types/database'
 import type { Department, AdvanceStatus } from '@/lib/shows/advance'
 
-export type ShowActionState = { error: string | null; showId?: string }
+// `moved` is set only when the show's date actually changed, which is what makes
+// it safe for useEntityForm to announce unconditionally: this action is called
+// constantly for edits that move nothing. See lib/schedule/date-move.ts.
+export type ShowActionState = { error: string | null; showId?: string; moved?: DateMove | null }
 
 // Every day_sheets column that stores a time derived from the show's date.
 // Shared by updateDaySheet (which writes them) and shiftDaySheetToDate (which
@@ -74,19 +78,24 @@ function localTimeToUtcIso(date: string, time: string, tz: string): string {
 //
 // Untouched columns stay untouched: a null time is skipped rather than written,
 // so this cannot null a field the way a whole-row write would.
+//
+// Returns whether it actually carried anything, so the move can tell the TM
+// "times moved with it" only when times moved. A show whose day sheet is still
+// empty (which is every show the moment it is created) must not be announced as
+// having carried times it never had.
 async function shiftDaySheetToDate(
   supabase: SupabaseClient<Database>,
   showId: string,
   newDate: string,
   timezone: string | null,
-): Promise<void> {
+): Promise<boolean> {
   const { data: sheet } = await supabase
     .from('day_sheets')
     .select('*')
     .eq('show_id', showId)
     .maybeSingle()
 
-  if (!sheet) return
+  if (!sheet) return false
 
   const patch: Record<string, string> = {}
 
@@ -102,12 +111,17 @@ async function shiftDaySheetToDate(
       : `${newDate}T${time}:00.000Z`
   }
 
-  if (Object.keys(patch).length === 0) return
+  if (Object.keys(patch).length === 0) return false
 
-  await supabase
+  const { error } = await supabase
     .from('day_sheets')
     .update(patch as TablesUpdate<'day_sheets'>)
     .eq('show_id', showId)
+
+  // Reported as not carried if the write failed, so the TM is never told times
+  // moved when they did not. The move itself still happened and is still worth
+  // announcing, which is why this does not fail the action.
+  return !error
 }
 
 export async function createShow(
@@ -188,6 +202,7 @@ export async function updateShow(
   // bug 1a: the schedule queries by the link and stayed on the old day while
   // /itinerary, the morning message and the AI context read the date and moved.
   let nextTourDateId = existing.tour_date_id
+  let dayCreated = false
 
   if (dateChanged) {
     const resolved = await resolveTourDateId(supabase, existing.tour_id, parsed.data.date, {
@@ -198,6 +213,7 @@ export async function updateShow(
     // compiler stops helping on exactly the branch that matters.
     if (resolved.id === null) return { error: resolved.error }
     nextTourDateId = resolved.id
+    dayCreated = resolved.created
   }
 
   const { error } = await supabase
@@ -222,6 +238,8 @@ export async function updateShow(
     return { error: error.message }
   }
 
+  let carriedTimes = false
+
   if (dateChanged) {
     const { data: tourRow } = await supabase
       .from('tours')
@@ -229,7 +247,12 @@ export async function updateShow(
       .eq('id', existing.tour_id)
       .single()
 
-    await shiftDaySheetToDate(supabase, showId, parsed.data.date, tourRow?.timezone ?? null)
+    carriedTimes = await shiftDaySheetToDate(
+      supabase,
+      showId,
+      parsed.data.date,
+      tourRow?.timezone ?? null,
+    )
 
     // After the show row has moved, not before, or the old day still has a show
     // on it and the revert correctly declines to fire.
@@ -248,7 +271,22 @@ export async function updateShow(
   // day keeps the show and the new day never gains it.
   revalidatePath(`/tours/${existing.tour_id}/schedule`)
 
-  return { error: null, showId }
+  return {
+    error: null,
+    showId,
+    // Null unless the date changed. The show now correctly renders on a day the
+    // TM is not looking at, and moving it also carried the day-sheet times and
+    // possibly extended the tour's day list, none of which is visible from where
+    // they are standing.
+    moved: dateChanged
+      ? {
+          tourId: existing.tour_id,
+          date: parsed.data.date,
+          dayCreated,
+          carriedTimes,
+        }
+      : null,
+  }
 }
 
 export async function deleteShow(showId: string): Promise<ShowActionState> {

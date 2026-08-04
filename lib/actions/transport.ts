@@ -10,8 +10,15 @@ import type { TablesUpdate } from '@/lib/types/database'
 import { bustTourContextCache } from '@/lib/ai/context'
 import { resolveTourDateId } from '@/lib/schedule/day-link'
 import { localDateInZone } from '@/lib/schedule/datetime'
+import type { DateMove } from '@/lib/schedule/date-move'
 
-export type TransportActionState = { error: string | null; segmentId?: string }
+// `moved` is set only when the segment actually landed on a day other than the
+// one the TM was looking at. See lib/schedule/date-move.ts.
+export type TransportActionState = {
+  error: string | null
+  segmentId?: string
+  moved?: DateMove | null
+}
 
 // Records a planner option as a transport_segment with status='planned'.
 // Never sets status='booked'. The TM promotes to booked after booking
@@ -178,6 +185,8 @@ export async function createTransportSegment(
   // obey one rule. The create/edit split is the whole root cause of Brief 36,
   // so closing it on both sides is the fix, not just repairing the edit half.
   let tourDateId = data.tour_date_id ?? null
+  let dayCreated = false
+  let landedOn: string | null = null
 
   if (data.depart_at) {
     const { data: tourRow } = await supabase
@@ -190,7 +199,20 @@ export async function createTransportSegment(
     const resolved = await resolveTourDateId(supabase, tourId, localDate)
     if (resolved.id === null) return { error: resolved.error }
     tourDateId = resolved.id
+    dayCreated = resolved.created
+    landedOn = localDate
   }
+
+  // Add a flight from the 14th, set the departure to the 15th, save: the panel
+  // closes and the timeline in front of the TM is unchanged. Nothing says the
+  // segment exists, which reads as the app having dropped it, and the natural
+  // response is to add it again.
+  //
+  // Compared by day id because the date the form was opened from is not passed
+  // here, only that day's id, and both ids are on this tour (checked above). A
+  // caller with no tour_date_id has no opened day to have moved away from.
+  const movedFromOpenedDay =
+    !!data.tour_date_id && !!tourDateId && tourDateId !== data.tour_date_id
 
   const { data: row, error } = await supabase
     .from('transport_segments')
@@ -204,7 +226,21 @@ export async function createTransportSegment(
 
   void bustTourContextCache(tourId)
   revalidatePath(`/tours/${tourId}/schedule`)
-  return { error: null, segmentId: row.id }
+
+  return {
+    error: null,
+    segmentId: row.id,
+    moved:
+      movedFromOpenedDay && landedOn
+        ? {
+            tourId,
+            date: landedOn,
+            dayCreated,
+            // Transport has no day sheet.
+            carriedTimes: false,
+          }
+        : null,
+  }
 }
 
 // Updates an existing transport segment. Used by the timeline edit panel.
@@ -228,9 +264,15 @@ export async function updateTransportSegment(
   const supabase = await createClient()
 
   // RLS on transport_segments enforces owns_tour(tour_id).
+  //
+  // tour_dates(date) is embedded rather than queried separately so the day the
+  // segment is currently on costs no extra round trip. It is a plain embed being
+  // read, not filtered on, so !inner does not apply: tour_date_id is nullable
+  // (the planner writes segments without a link) and a null embed is the correct
+  // answer for those, not a row that should have been excluded.
   const { data: existing } = await supabase
     .from('transport_segments')
-    .select('tour_id, tour_date_id, depart_at')
+    .select('tour_id, tour_date_id, depart_at, tour_dates(date)')
     .eq('id', segmentId)
     .single()
 
@@ -251,6 +293,9 @@ export async function updateTransportSegment(
   // undefined means the form never sent it (the booking-reference control sends
   // that field alone) and the link must survive. null means the TM cleared the
   // departure, and a segment with no departure is on no day.
+  let dayCreated = false
+  let movedTo: string | null = null
+
   if (data.depart_at !== undefined) {
     if (!data.depart_at) {
       update.tour_date_id = null
@@ -261,10 +306,28 @@ export async function updateTransportSegment(
         .eq('id', existing.tour_id)
         .single()
 
-      const localDate = localDateInZone(data.depart_at, tourRow?.timezone ?? 'UTC')
+      const timezone = tourRow?.timezone ?? 'UTC'
+      const localDate = localDateInZone(data.depart_at, timezone)
       const resolved = await resolveTourDateId(supabase, existing.tour_id, localDate)
       if (resolved.id === null) return { error: resolved.error }
       update.tour_date_id = resolved.id
+      dayCreated = resolved.created
+
+      // Where the segment was, in the same terms. The link is the source of
+      // truth for that, and the departure is the fallback for a planner-created
+      // segment that has no link yet, so editing one does not report its repair
+      // as a move onto the day it was already on.
+      //
+      // Both dates are tour-local, which matters here more than anywhere: this is
+      // the one record type with no database constraint holding the link and the
+      // date together, so a UTC comparison would announce a move on any tour not
+      // on UTC every time a departure crossed a UTC midnight without changing its
+      // local day.
+      const previousDate =
+        existing.tour_dates?.date ??
+        (existing.depart_at ? localDateInZone(existing.depart_at, timezone) : null)
+
+      if (localDate !== previousDate) movedTo = localDate
     }
   }
 
@@ -277,7 +340,19 @@ export async function updateTransportSegment(
 
   void bustTourContextCache(existing.tour_id)
   revalidatePath(`/tours/${existing.tour_id}/schedule`)
-  return { error: null, segmentId }
+
+  return {
+    error: null,
+    segmentId,
+    // Bug 1c was the hardest of the three to notice because the segment did not
+    // vanish: it stayed on the old day showing the new day's time. Now that it
+    // correctly leaves, this is the only thing that says so. Clearing the
+    // departure takes it off the schedule rather than to another day, so there is
+    // nothing to link to.
+    moved: movedTo
+      ? { tourId: existing.tour_id, date: movedTo, dayCreated, carriedTimes: false }
+      : null,
+  }
 }
 
 // Deletes a transport segment outright. Used by the schedule edit panel's
