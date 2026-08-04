@@ -24,7 +24,7 @@ const DAY_TYPES: {
   { id: 'day_off',   label: 'Day off',   description: 'Rest or free day',     shortcut: 'O', icon: Coffee     },
 ]
 
-// Keyboard shortcut map — only active while this component is mounted (popover open).
+// Keyboard shortcut map, only active while this component is mounted (popover open).
 const SHORTCUT_MAP: Record<string, DayTypeOption> = Object.fromEntries(
   DAY_TYPES.map(d => [d.shortcut, d.id])
 )

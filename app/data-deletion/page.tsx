@@ -1,5 +1,5 @@
 export const metadata = {
-  title: 'Data Deletion — Reeve',
+  title: 'Data Deletion | Reeve',
   description: 'How to request deletion of your data from Reeve.',
 }
 

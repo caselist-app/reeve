@@ -245,7 +245,7 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
           <Input id={`${formId}-name`} name="name" defaultValue={contact?.name} required />
         </div>
 
-        {/* Tour terms section — only shown when opened from the people page */}
+        {/* Tour terms section, only shown when opened from the people page */}
         {hasTourContext && (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -282,7 +282,7 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
           </>
         )}
 
-        {/* Default type/role — only shown in roster context */}
+        {/* Default type/role, only shown in roster context */}
         {!hasTourContext && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-2">
@@ -509,7 +509,7 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
           />
         </div>
 
-        {/* Pay section — tour rates when in tour context (crew only), default rates in roster context */}
+        {/* Pay section: tour rates when in tour context (crew only), default rates in roster context */}
         {(isCrewInTourContext || !hasTourContext) && (
           <>
             <Separator />

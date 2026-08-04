@@ -6,7 +6,7 @@ import { useSidePanel } from '@/stores/side-panel-store'
 interface PanelShellProps {
   title: string
   description?: string
-  // Renders between the title and the close button — use for a sticky save or primary action.
+  // Renders between the title and the close button. Use for a sticky save or primary action.
   headerAction?: React.ReactNode
   children: React.ReactNode
 }

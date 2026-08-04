@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 
-// Old per-date route — redirect to the unified schedule view with the date as a query param.
+// Old per-date route: redirect to the unified schedule view with the date as a query param.
 export default async function LegacyDatePage({
   params,
 }: {

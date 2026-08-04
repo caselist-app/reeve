@@ -132,7 +132,7 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
     if (!dayMeta) return
     setDeleting(true)
     await deleteTourDate(dayMeta.tourDateId)
-    // Navigate to schedule root — the sidebar will show the next available day.
+    // Navigate to schedule root. The sidebar will show the next available day.
     router.push(`/tours/${addContext.tourId}/schedule`)
   }
 
