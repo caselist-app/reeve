@@ -232,6 +232,11 @@ const emDashTargets = [
   ...sourceFiles,
   ...walk(join(ROOT, 'supabase', 'migrations')).filter((f) => f.endsWith('.sql')),
   ...PROSE_FILES.map((f) => join(ROOT, f)).filter(existsSync),
+  // The workflow files carry real explanatory prose now (the deploy job's comment
+  // block is a dozen lines), and nothing was checking them. Added 2026-08-04 on
+  // noticing that the file where the two-runtime lesson is written down was
+  // outside every check in this script.
+  ...walk(join(ROOT, '.github')).filter((f) => f.endsWith('.yml') || f.endsWith('.yaml')),
 ]
 // Built from its code point rather than written as a literal, so this file does
 // not trip its own check. Found by running the check on itself, which is the
