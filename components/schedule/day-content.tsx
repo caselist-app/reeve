@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { fetchDayRecords } from '@/lib/schedule/day-records'
 import { fetchDayRoster } from '@/lib/schedule/day-roster'
-import { DayViewClient, type DayPanelData } from '@/components/schedule/day-view-client'
+import { DayViewClient } from '@/components/schedule/day-view-client'
 import { DayTimeline } from '@/components/schedule/day-timeline'
 import { DayInfoPanel } from '@/components/schedule/day-info-panel'
 import { DayInfoDock } from '@/components/schedule/day-info-dock'
@@ -41,25 +41,6 @@ export async function DayContent({ tourId, tourName, timezone, selectedDate, tou
     date: selectedDate,
   })
 
-  // Deduplicate hotels by id for the edit panels (the timeline keeps the
-  // check-in / check-out split it needs for the spine).
-  const hotelMap = new Map<string, (typeof records.hotelsLinked)[number]>()
-  for (const h of [...records.hotelsLinked, ...records.hotelsCheckin, ...records.hotelsCheckout]) {
-    hotelMap.set(h.id, h)
-  }
-
-  const panelData: DayPanelData = {
-    shows: records.shows.map((s) => ({
-      id: s.id,
-      venue_name: s.venue_name,
-      day_sheets: s.day_sheets,
-    })),
-    segments: records.segments,
-    hotels: Array.from(hotelMap.values()),
-    events: records.events,
-    timezone,
-  }
-
   // Roster fetched once here and shared by the info panel and the mobile dock.
   const roster = await fetchDayRoster(supabase, {
     tourId,
@@ -69,7 +50,6 @@ export async function DayContent({ tourId, tourName, timezone, selectedDate, tou
 
   return (
     <DayViewClient
-      panelData={panelData}
       dateStrip={
         <DateStrip
           tourId={tourId}

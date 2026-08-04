@@ -42,6 +42,9 @@ type ScheduleDayEvent = Pick<
   'id' | 'title' | 'starts_at' | 'ends_at' | 'location' | 'notes'
 >
 
+// Mirrors AddCategory from components/schedule/add/add-picker.tsx
+type ScheduleAddCategory = 'flight' | 'drive' | 'rail' | 'hotel' | 'show' | 'event'
+
 // Tour-specific context passed when opening a contact panel from the people
 // page. Carries the membership fields (type, role, per-tour rates) that live
 // on people / crew_detail, not on the contact itself.
@@ -113,9 +116,7 @@ export type PanelDescriptor =
     }
   // Brief 33: schedule day view detail panels. Each carries a stable key so
   // timeline-card.tsx can compare active state without JSON.stringify, which
-  // Brief 26 flagged as sensitive to key ordering. Not yet opened from
-  // anywhere; the schedule day view still drives its own right column via
-  // stores/schedule-panel-store.ts until that wiring lands.
+  // Brief 26 flagged as sensitive to key ordering.
   | {
       type: 'show'
       key: string
@@ -140,6 +141,19 @@ export type PanelDescriptor =
       key: string
       event: ScheduleDayEvent
       timezone: string
+    }
+  // Brief 33: the add-to-day form, opened from the category popover/sheet in
+  // day-view-client.tsx. onBack closes this panel and reopens that picker,
+  // a closure rather than a stored value since it has to coordinate with
+  // local popover/sheet state day-view-client.tsx owns.
+  | {
+      type: 'add-to-day'
+      tourId: string
+      tourDateId: string
+      date: string
+      timezone: string
+      category: ScheduleAddCategory
+      onBack: () => void
     }
 
 // The subset of PanelDescriptor that timeline-card.tsx can open: the four
