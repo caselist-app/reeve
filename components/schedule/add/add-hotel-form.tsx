@@ -1,11 +1,11 @@
 'use client'
 
-import { useTransition, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { createHotelStay } from '@/lib/actions/hotels'
+import { useEntityForm } from '@/hooks/use-entity-form'
+import { readForm } from '@/lib/forms/read-form'
 
 interface AddHotelFormProps {
   tourId: string
@@ -16,32 +16,24 @@ interface AddHotelFormProps {
 }
 
 export function AddHotelForm({ tourId, tourDateId, date, onBack, onSuccess }: AddHotelFormProps) {
-  const router = useRouter()
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
-
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-
-    startTransition(async () => {
-      const result = await createHotelStay(tourId, {
-        tour_date_id:   tourDateId,
-        name:           (fd.get('name') as string) || null,
-        address:        (fd.get('address') as string) || null,
-        check_in_date:  (fd.get('check_in_date') as string) || null,
-        check_in_time:  (fd.get('check_in_time') as string) || null,
-        check_out_date: (fd.get('check_out_date') as string) || null,
-        check_out_time: (fd.get('check_out_time') as string) || null,
+  const { submit, pending, error } = useEntityForm({
+    refreshOnSuccess: true,
+    onSuccess,
+    action: (fd) => {
+      const data = readForm(fd, {
+        name: 'string',
+        address: 'string',
+        check_in_date: 'string',
+        check_in_time: 'string',
+        check_out_date: 'string',
+        check_out_time: 'string',
       })
-      if (result.error) { setError(result.error); return }
-      router.refresh()
-      onSuccess()
-    })
-  }
+      return createHotelStay(tourId, { tour_date_id: tourDateId, ...data })
+    },
+  })
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
+    <form onSubmit={submit} className="space-y-3">
       <div className="space-y-1">
         <Label className="text-xs">Hotel name</Label>
         <Input name="name" placeholder="Ace Hotel London" className="h-7 text-xs" />

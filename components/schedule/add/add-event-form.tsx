@@ -1,13 +1,13 @@
 'use client'
 
-import { useTransition, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
 import { createDayEvent } from '@/lib/actions/day-events'
 import { fromDatetimeLocal } from '@/lib/schedule/datetime'
+import { useEntityForm } from '@/hooks/use-entity-form'
+import { readForm } from '@/lib/forms/read-form'
 
 interface AddEventFormProps {
   tourId: string
@@ -21,32 +21,31 @@ interface AddEventFormProps {
 // tourDateId is part of the shared add-form props but unused here: day events
 // key off the date, not a tour_date_id link.
 export function AddEventForm({ tourId, date, timezone, onBack, onSuccess }: AddEventFormProps) {
-  const router = useRouter()
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
-
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const fd = new FormData(e.currentTarget)
-
-    startTransition(async () => {
-      const result = await createDayEvent({
-        tour_id:   tourId,
-        date,
-        title:     fd.get('title') as string,
-        starts_at: fromDatetimeLocal((fd.get('starts_at') as string) || null, timezone),
-        ends_at:   fromDatetimeLocal((fd.get('ends_at') as string) || null, timezone),
-        location:  (fd.get('location') as string) || null,
-        notes:     (fd.get('notes') as string) || null,
+  const { submit, pending, error } = useEntityForm({
+    refreshOnSuccess: true,
+    onSuccess,
+    action: (fd) => {
+      const data = readForm(fd, {
+        title: 'requiredString',
+        starts_at: 'string',
+        ends_at: 'string',
+        location: 'string',
+        notes: 'string',
       })
-      if (result.error) { setError(result.error); return }
-      router.refresh()
-      onSuccess()
-    })
-  }
+      return createDayEvent({
+        tour_id: tourId,
+        date,
+        title: data.title,
+        starts_at: fromDatetimeLocal(data.starts_at, timezone),
+        ends_at: fromDatetimeLocal(data.ends_at, timezone),
+        location: data.location,
+        notes: data.notes,
+      })
+    },
+  })
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
+    <form onSubmit={submit} className="space-y-3">
       <div className="space-y-1">
         <Label className="text-xs">Title</Label>
         <Input name="title" placeholder="After show, press call..." required className="h-7 text-xs" />

@@ -20,7 +20,11 @@ Do not add the card token to a panel component. Doing so draws a card inside a c
 
 If a panel needs to look like a standalone card, the fix is to render it as a sibling of `<main>` in `app-content.tsx`, not to give it a border where it stands.
 
-Never use shadcn `Sheet`, `Drawer`, or `Dialog` for an in-page panel. `components/ui/sheet.tsx` is dead code, do not import it. Mobile slide-in/bottom-sheet behavior is hand-built directly against `@radix-ui/react-dialog` (aliased `SheetPrimitive`) in `day-view-client.tsx`, `app-content.tsx`, and `mobile-nav-drawer.tsx` — follow that existing pattern for a new mobile sheet, do not add a fifth implementation or resurrect `sheet.tsx`.
+Never use shadcn `Sheet`, `Drawer`, or `Dialog` for an in-page panel. `components/ui/sheet.tsx` is dead code, do not import it (it does not exist in the repo; don't resurrect it).
+
+For a bottom-anchored mobile sheet, use `components/ui/bottom-sheet.tsx` (wraps `@radix-ui/react-dialog` directly, with a `titleClassName` prop for sheets that render their own header row, and a `maxHeight` prop). Both of `day-view-client.tsx`'s sheets (day info, add-to-day picker) go through it. Never hand-roll a new `SheetPrimitive.Root`/`Portal`/`Overlay`/`Content` block for a bottom sheet; that duplication is exactly what this component replaced (Brief 32 Phase 4).
+
+`app-content.tsx` (mobile global-panel takeover, slides in from the right) and `mobile-nav-drawer.tsx` (main nav, slides in from the left) also wrap `@radix-ui/react-dialog` directly, and legitimately don't go through `BottomSheet`: they're edge drawers, not bottom sheets, each is a single non-duplicated instance in its own file, and forcing them through a component named and shaped for bottom anchoring would be a false abstraction, the same reason `command-palette.tsx` (a centred modal) stays on its own. `@radix-ui/react-dialog` is imported in exactly four files for this reason: `bottom-sheet.tsx`, `app-content.tsx`, `mobile-nav-drawer.tsx`, `command-palette.tsx`. If a second bottom-anchored, left-drawer, or right-drawer instance shows up anywhere, that's the third-occurrence signal (see below) to extract that shape too, not to bend `BottomSheet` to fit it.
 
 `AlertDialog` (`components/ui/alert-dialog.tsx`) is the one legitimate dialog primitive. Use it only for blocking yes/no destructive confirmations. Never repurpose it as an in-page panel.
 
@@ -35,6 +39,10 @@ Never use shadcn `Sheet`, `Drawer`, or `Dialog` for an in-page panel. `component
 Default to Server Components. `'use client'` only for state, effects, or browser APIs, per CLAUDE.md.
 
 The real pattern in the schedule day view is not "only `day-view-client.tsx` is a client component." It is: `day-view-client.tsx` owns popover/bottom-sheet/dialog UI state and mobile vs desktop rendering via local `useState`, plus `useSidePanel` (`stores/side-panel-store.ts`) for opening the global side panel; timeline cards (`timeline-card.tsx`) and all four panel forms (`show-panel.tsx`, `transport-panel.tsx`, `hotel-panel.tsx`, `event-panel.tsx`) also use `useSidePanel` directly and are thin client components wherever they need interactivity, click-to-select, or local form state. Don't force a new panel form to be a Server Component to match a literal reading of the old rule; match the actual pattern instead.
+
+**Brief 32 Phase 6 audit (2026-08-04):** 75 of 97 `.tsx` files under `components/` carry `'use client'`. Every one was checked for a reason (local state/reducer, an effect, a transition, routing hooks, a `stores/` subscription, an inline event handler, a direct browser API, or a ref) before concluding this wasn't a pool of accidentally-client feature components. 70 of the 75 have one of those directly in the file. The other 5 (`label.tsx`, `tooltip.tsx`, `switch.tsx`, `separator.tsx`, `dropdown-menu.tsx`) are shadcn wrappers with no visible hook of their own, `'use client'` because the Radix primitive they wrap needs the boundary, not a candidate for conversion. Server Components in `components/`: mostly `components/ui/` primitives that are pure presentational wrappers (`button.tsx`, `input.tsx`, `card.tsx`, and others, 11 files) plus 11 schedule/hotel/transport feature components (`day-content.tsx`, `day-header.tsx`, `day-info-panel.tsx`, `day-timeline.tsx`, `schedule-skeleton.tsx`, `stay-row.tsx`, `segment-row.tsx`, `page-header.tsx`, `page-layout.tsx`, `context-summary.tsx`) that render server-fetched data with no interactivity of their own.
+
+The 2026-07-31 perf audit's "client boundary sits high in the day view tree" theory doesn't hold up against the current tree: `timeline-card.tsx`'s own `'use client'` is there because it calls `useSidePanel` directly (click-to-select), which is the documented, intentional pattern above, not an accident. If day-view latency work continues, look at data-fetching waterfalls (already P0-fixed on `perf-p0-day-view`) rather than the client/server split. No components were converted by this audit; this note is the record of having checked, per the brief's "investigate first, only then decide what to convert" instruction.
 
 ## Data model rules enforced at the component layer
 
@@ -60,6 +68,16 @@ Adding or renaming a day-sheet field (load-in, curfew, etc.) requires updating a
 - `components/people/person-sheet.tsx` vs `components/roster/contact-sheet.tsx`: the roster one is live and canonical, the people one is likely dead.
 - `components/schedule/schedule-view.tsx` (tour-level schedule list, own hardcoded colors) vs `components/schedule/date-sidebar.tsx` (day-view Dates panel, CLAUDE.md's documented chip colors). These two have different, unreconciled color maps for the same day types. Confirm which is actually live before copying either one's color logic.
 
+## Form submission: every form goes through `useEntityForm`
+
+Every form that calls a server action goes through `hooks/use-entity-form.ts`. Never hand-roll `useTransition` plus an error `useState` plus `router.refresh()`. Never read `FormData` with an `fd.get(name) as string` cast: use `lib/forms/read-form.ts`'s `readForm(fd, shape)` instead, which gives every field a single, reviewed conversion (`'string'`, `'stringOrUndefined'`, `'requiredString'`, `'number'`, `'numberOrUndefined'`).
+
+`useEntityForm({ action, onSuccess, refreshOnSuccess })` owns pending state, error state, the submit handler, and the success path. `action` reads the FormData (via `readForm`) and calls the server action; it can do async work first (a drive-time lookup, a Zod parse) as long as it resolves to something with `error`. `refreshOnSuccess` defaults to `false`: add forms that create a new timeline item pass `true` so the server-rendered timeline picks it up; edit panels that mutate a row already rendered inside their own panel state leave it `false` and rely on the hook's `saved` flag to flash "Saved." instead. See `components/schedule/add/add-hotel-form.tsx` (simple add form), `components/schedule/panels/event-panel.tsx` (simple edit panel), and `components/shows/show-form.tsx` or `components/roster/contact-sheet.tsx` (multi-branch submit logic, still funnelled through one `action`) for the range of real usage.
+
+Genuine exceptions exist and are fine: a control that mutates on a plain button click with no `<form>` (`transport-panel.tsx`'s `BookingReferenceField`, saving one field from a controlled input) has nothing for `useEntityForm` to wrap, since there's no `FormData` to read. A multi-step wizard driven by many small button-click mutations across steps, not one field-name-to-server-action submission (`add-flight-form.tsx`'s search wizard, planner workspaces, the command palette), is also a legitimate `useTransition` holdout. What is not an exception: a real `<form onSubmit>` with named fields and one server action call, no matter how large.
+
+**Known gap, tracked, not yet closed:** as of Brief 32 Phase 2, `useEntityForm`/`readForm` cover the forms the brief's audit named by number (the five schedule add-forms, the four schedule panels, `add-flight-form.tsx`'s wizard split out its manual-entry form, `show-form.tsx`, `contact-sheet.tsx`). Roughly 27 other files still hand-roll the old pattern (`settings-form.tsx`, `new-tour-form.tsx`, `rehearsal-form.tsx`, `day-sheet-form.tsx`, the planner and roster panels, and others) and were out of this pass's explicit scope, not confirmed exceptions. Migrate a file to `useEntityForm` the next time you touch it for an unrelated reason, don't leave it as the pattern to copy for a new form.
+
 ## When building a new form or panel
 
 1. Pick the right panel system (global or secondary) per the table above, not a new one.
@@ -67,3 +85,8 @@ Adding or renaming a day-sheet field (load-in, curfew, etc.) requires updating a
 3. Validate through a Zod schema in `lib/validators/`, matching the existing `showSchema`/`contactSchema` pattern.
 4. If the form touches a datetime, check which of the four existing tz-handling approaches actually matches the column before picking one.
 5. Never apply the card token to the panel component itself, `PanelShell` already sits inside one. See "app-content.tsx owns every card wrapper" above.
+6. Wire the submit path through `useEntityForm` and `readForm`, per "Form submission" above. Don't hand-roll `useTransition` for a new form; that is exactly the pattern Brief 32 removed.
+
+## The third-occurrence rule
+
+The second time a pattern is written by hand, note it in a comment. The third time, extract it into a shared file (`hooks/`, `lib/`, or `components/ui/`) and write the rule here. Don't document a duplicated pattern as the approved approach to follow, which is how the pre-Brief-32 bottom-sheet and form-boilerplate duplication both got institutionalised in this file.

@@ -1,9 +1,9 @@
 'use client'
 
-import { useTransition, useState, useId } from 'react'
+import { useState, useId } from 'react'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { createShow, updateShow } from '@/lib/actions/shows'
+import { createShow, updateShow, type ShowActionState } from '@/lib/actions/shows'
 import { showSchema } from '@/lib/validators/show'
 import type { z } from 'zod'
 import { Button } from '@/components/ui/button'
@@ -20,6 +20,8 @@ import {
 import { NotifyPanel } from '@/components/broadcast/notify-panel'
 import { PlacesAddressInput } from '@/components/shows/places-address-input'
 import type { ChangeDescriptor } from '@/lib/comms/affected'
+import { useEntityForm } from '@/hooks/use-entity-form'
+import { readForm } from '@/lib/forms/read-form'
 
 // Fields that warrant a crew notification when changed.
 // load_in_at: affects everyone traveling to the show that day.
@@ -57,9 +59,6 @@ function toDatetimeLocal(iso: string | null | undefined): string {
 export function ShowForm({ tourId, showId, initialData, onSuccess, className }: ShowFormProps) {
   const formId = useId()
   const router = useRouter()
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
   // Set after a successful update if a notification-worthy field changed.
   const [notify, setNotify] = useState<NotifyState | null>(null)
 
@@ -76,42 +75,52 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
     initialData?.showers == null ? '' : initialData.showers ? 'yes' : 'no'
   )
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setSaved(false)
-    setNotify(null)
-    const fd = new FormData(e.currentTarget)
+  // The notify-diff check in onSuccess needs the exact data just submitted,
+  // not just the result. action() sets this before calling the server
+  // action; onSuccess() always runs after action() resolves, so it is set by
+  // the time onSuccess reads it.
+  let submittedData: ShowData | null = null
 
-    const data: ShowData = {
-      date: fd.get('date') as string,
-      venue_name: venueName || (fd.get('venue_name') as string),
-      address: address || null,
-      venue_type: (venueType as ShowData['venue_type']) || null,
-      capacity: fd.get('capacity') ? Number(fd.get('capacity')) : null,
-      load_in_at: (fd.get('load_in_at') as string) || null,
-      curfew_at: (fd.get('curfew_at') as string) || null,
-      stage_dimensions: (fd.get('stage_dimensions') as string) || null,
-      parking: (fd.get('parking') as string) || null,
-      shore_power: (fd.get('shore_power') as string) || null,
-      union_stage: parseBool(unionStage),
-      stagehands: fd.get('stagehands') ? Number(fd.get('stagehands')) : null,
-      dressing_rooms: (fd.get('dressing_rooms') as string) || null,
-      production_office: parseBool(productionOffice),
-      showers: parseBool(showers),
-      house_pa_spec: (fd.get('house_pa_spec') as string) || null,
-      house_lighting_plot: (fd.get('house_lighting_plot') as string) || null,
-    }
-
-    startTransition(async () => {
-      const result = showId ? await updateShow(showId, data) : await createShow(tourId, data)
-
-      if (result.error) {
-        setError(result.error)
-        return
+  const { submit, pending, error, saved } = useEntityForm<ShowActionState>({
+    action: (fd) => {
+      setNotify(null)
+      const fields = readForm(fd, {
+        date: 'requiredString',
+        venue_name: 'requiredString',
+        capacity: 'number',
+        load_in_at: 'string',
+        curfew_at: 'string',
+        stage_dimensions: 'string',
+        parking: 'string',
+        shore_power: 'string',
+        stagehands: 'number',
+        dressing_rooms: 'string',
+        house_pa_spec: 'string',
+        house_lighting_plot: 'string',
+      })
+      const data: ShowData = {
+        date: fields.date,
+        venue_name: venueName || fields.venue_name,
+        address: address || null,
+        venue_type: (venueType as ShowData['venue_type']) || null,
+        capacity: fields.capacity,
+        load_in_at: fields.load_in_at,
+        curfew_at: fields.curfew_at,
+        stage_dimensions: fields.stage_dimensions,
+        parking: fields.parking,
+        shore_power: fields.shore_power,
+        union_stage: parseBool(unionStage),
+        stagehands: fields.stagehands,
+        dressing_rooms: fields.dressing_rooms,
+        production_office: parseBool(productionOffice),
+        showers: parseBool(showers),
+        house_pa_spec: fields.house_pa_spec,
+        house_lighting_plot: fields.house_lighting_plot,
       }
-
-      setError(null)
-
+      submittedData = data
+      return showId ? updateShow(showId, data) : createShow(tourId, data)
+    },
+    onSuccess: (result) => {
       if (onSuccess && result.showId) {
         onSuccess(result.showId)
         return
@@ -124,19 +133,18 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
       }
 
       // Existing show was updated. Check if any notification-worthy field changed.
-      setSaved(true)
-      const notifyField = detectNotifyField(data, initialData)
+      const notifyField = submittedData ? detectNotifyField(submittedData, initialData) : null
       if (notifyField) {
         setNotify({
           change: { type: 'show', showId, field: notifyField },
           previousValue: formatPreviousValue(notifyField, initialData),
         })
       }
-    })
-  }
+    },
+  })
 
   return (
-    <form onSubmit={handleSubmit} className={cn('space-y-5', className)}>
+    <form onSubmit={submit} className={cn('space-y-5', className)}>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label htmlFor={`${formId}-date`}>Date</Label>

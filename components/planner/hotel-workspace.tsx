@@ -6,6 +6,7 @@ import { HotelOptionCard } from '@/components/planner/hotel-option-card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 import type { HotelOption } from '@/lib/logistics/types'
 
 interface Person {
@@ -143,12 +144,10 @@ export function HotelWorkspace({
           />
         </div>
         <div className="flex items-center gap-2 pb-1">
-          <input
+          <Switch
             id="parking"
-            type="checkbox"
             checked={parkingRequired}
-            onChange={(e) => setParkingRequired(e.target.checked)}
-            className="h-4 w-4 rounded border-input"
+            onCheckedChange={setParkingRequired}
           />
           <Label htmlFor="parking" className="text-sm font-normal">
             Bus/truck parking required

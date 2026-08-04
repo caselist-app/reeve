@@ -1,5 +1,12 @@
 'use client'
 
+// Manual fallback for the Add Flight wizard: "Find by route" turned up
+// nothing, or the TM just wants to type everything by hand. Same shape as
+// the flat form add-flight-form.tsx replaced - no AirLabs involved. Split
+// into its own file per Brief 32 Phase 2, since it is a genuine standalone
+// form (unlike the rest of the wizard, which is one multi-step component
+// with shared state across steps) and migrates cleanly to useEntityForm.
+
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -8,7 +15,7 @@ import { fromDatetimeLocal } from '@/lib/schedule/datetime'
 import { useEntityForm } from '@/hooks/use-entity-form'
 import { readForm } from '@/lib/forms/read-form'
 
-interface AddRailFormProps {
+interface ManualFlightFormProps {
   tourId: string
   tourDateId: string
   date: string
@@ -17,7 +24,7 @@ interface AddRailFormProps {
   onSuccess: () => void
 }
 
-export function AddRailForm({ tourId, tourDateId, date, timezone, onBack, onSuccess }: AddRailFormProps) {
+export function ManualFlightForm({ tourId, tourDateId, date, timezone, onBack, onSuccess }: ManualFlightFormProps) {
   const { submit, pending, error } = useEntityForm({
     refreshOnSuccess: true,
     onSuccess,
@@ -28,16 +35,18 @@ export function AddRailForm({ tourId, tourDateId, date, timezone, onBack, onSucc
         depart_at: 'string',
         arrive_at: 'string',
         carrier_operator: 'string',
+        vehicle_or_flight_no: 'string',
         booking_reference: 'string',
       })
       return createTransportSegment(tourId, {
         tour_date_id: tourDateId,
-        mode: 'rail',
+        mode: 'flight',
         origin: data.origin,
         destination: data.destination,
         depart_at: fromDatetimeLocal(data.depart_at, timezone),
         arrive_at: fromDatetimeLocal(data.arrive_at, timezone),
         carrier_operator: data.carrier_operator,
+        vehicle_or_flight_no: data.vehicle_or_flight_no,
         booking_reference: data.booking_reference,
       })
     },
@@ -47,39 +56,45 @@ export function AddRailForm({ tourId, tourDateId, date, timezone, onBack, onSucc
     <form onSubmit={submit} className="space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
-          <Label className="text-xs">From station</Label>
-          <Input name="origin" placeholder="London St Pancras" className="h-7 text-xs" />
+          <Label className="text-xs">Airline</Label>
+          <Input name="carrier_operator" placeholder="BA" className="h-7 text-xs" />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">To station</Label>
-          <Input name="destination" placeholder="Paris Gare du Nord" className="h-7 text-xs" />
+          <Label className="text-xs">Flight number</Label>
+          <Input name="vehicle_or_flight_no" placeholder="BA0123" className="h-7 text-xs" />
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label className="text-xs">From</Label>
+          <Input name="origin" placeholder="LHR" className="h-7 text-xs" />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">To</Label>
+          <Input name="destination" placeholder="CDG" className="h-7 text-xs" />
         </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">Departs</Label>
-          <Input name="depart_at" type="datetime-local" defaultValue={`${date}T09:00`} className="h-7 text-xs" />
+          <Input name="depart_at" type="datetime-local" defaultValue={`${date}T07:00`} className="h-7 text-xs" />
         </div>
         <div className="space-y-1">
           <Label className="text-xs">Arrives</Label>
           <Input name="arrive_at" type="datetime-local" className="h-7 text-xs" />
         </div>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label className="text-xs">Operator</Label>
-          <Input name="carrier_operator" placeholder="Eurostar" className="h-7 text-xs" />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">Reference</Label>
-          <Input name="booking_reference" placeholder="ABC123" className="h-7 text-xs" />
-        </div>
+      <div className="space-y-1">
+        <Label className="text-xs">Booking reference</Label>
+        <Input name="booking_reference" placeholder="ABC123" className="h-7 text-xs" />
       </div>
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex gap-2">
-        <Button type="button" variant="ghost" size="sm" onClick={onBack} className="flex-1">Back</Button>
+        <Button type="button" variant="ghost" size="sm" onClick={onBack} className="flex-1">
+          Back
+        </Button>
         <Button type="submit" size="sm" disabled={pending} className="flex-1">
-          {pending ? 'Adding...' : 'Add train'}
+          {pending ? 'Adding...' : 'Add flight'}
         </Button>
       </div>
     </form>
