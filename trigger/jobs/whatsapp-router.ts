@@ -1,7 +1,7 @@
 import { task } from '@trigger.dev/sdk/v3'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redis } from '@/lib/redis'
-import { whatsappAiRatelimit } from '@/lib/ratelimit'
+import { whatsappAiRatelimit, withinAiRateLimit } from '@/lib/ratelimit'
 import { routeInbound } from '@/lib/comms/router'
 import { sendWhatsApp, sendInteractiveWhatsApp } from '@/lib/comms/whatsapp'
 import { answerCrewQuestion } from '@/lib/ai/answer'
@@ -81,8 +81,9 @@ export const whatsappRouterJob = task({
       return { action: 'ai_disabled', sent: false }
     }
 
-    // Per-number rate limit on the AI path.
-    const { success: withinLimit } = await whatsappAiRatelimit.limit(payload.from_number)
+    // Per-number rate limit on the AI path. Guarded: a Redis outage must not
+    // silence crew Q&A, see withinAiRateLimit.
+    const withinLimit = await withinAiRateLimit(whatsappAiRatelimit, payload.from_number)
     if (!withinLimit) {
       return { action: 'rate_limited', sent: false }
     }

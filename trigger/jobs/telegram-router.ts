@@ -1,7 +1,7 @@
 import { task } from '@trigger.dev/sdk/v3'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redis } from '@/lib/redis'
-import { telegramAiRatelimit } from '@/lib/ratelimit'
+import { telegramAiRatelimit, withinAiRateLimit } from '@/lib/ratelimit'
 import { routeInbound } from '@/lib/comms/router'
 import { sendTelegramMessage } from '@/lib/comms/telegram'
 import { answerCrewQuestion } from '@/lib/ai/answer'
@@ -84,8 +84,9 @@ export const telegramRouterJob = task({
       return { action: 'ai_disabled', sent: false }
     }
 
-    // Per-chat rate limit on the AI path.
-    const { success: withinLimit } = await telegramAiRatelimit.limit(String(payload.chat_id))
+    // Per-chat rate limit on the AI path. Guarded: a Redis outage must not
+    // silence crew Q&A, see withinAiRateLimit.
+    const withinLimit = await withinAiRateLimit(telegramAiRatelimit, String(payload.chat_id))
     if (!withinLimit) {
       return { action: 'rate_limited', sent: false }
     }
