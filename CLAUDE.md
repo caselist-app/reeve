@@ -194,7 +194,9 @@ Prompt caching is not optional. Every call to Claude must include `cache_control
 - Middleware is `middleware.ts`, exports `middleware`, and uses `getUser()`. Never use `getSession()` anywhere.
 - The service role key is server-side admin only (webhooks, cron, Trigger.dev jobs). Never in client code.
 - **Every server action calls `requireUser()` as its first statement**, before any other logic. No exceptions, even for actions that seem low-risk without auth. Server actions are publicly POSTable endpoints.
-- **The admin (service role) client bypasses RLS.** Every server action that uses it must first verify tour ownership via the RLS client, then scope all admin queries with `.eq('tour_id', tourId)`. The RLS check is not redundant; it is the ownership gate the admin client cannot provide. See `lib/actions/boarding-pass-upload.ts` for the correct pattern.
+- **Server actions use the RLS client. The admin client is for jobs, webhooks and cron.** `createClient()` from `lib/supabase/server` is the default in every server action, and `owns_tour()` is then the authorization gate, so no extra ownership query is needed. Reach for `createAdminClient()` in a server action only when the action must legitimately bypass RLS, for example writing to a table the TM cannot write directly. Reference for the default case: `lib/logistics/plan.ts` and `lib/logistics/hotels.ts`.
+- **When a server action does use the admin client, it bypasses RLS.** Verify tour ownership via the RLS client first, then scope every admin query with `.eq('tour_id', tourId)`. The RLS check is not redundant; it is the ownership gate the admin client cannot provide. See `lib/actions/boarding-pass-upload.ts` for the correct pattern.
+- **RLS scopes rows by tour, it does not check that two ids in the same payload belong to the same tour.** Any action taking more than one entity id must verify they share a `tour_id` before using them together. A show id the caller owns plus a person id from another tour will pass RLS on both reads and still be wrong. See the person check at the top of `planTravel()` in `lib/logistics/plan.ts`.
 - **Webhook signature checks fail closed.** If the env var holding the secret is absent, return 401 immediately. Never fall back to an empty string, a default value, or a conditional check. A missing secret means the environment is misconfigured; accepting the request in that state opens the endpoint to anyone. See `app/api/whatsapp/inbound/route.ts` and `app/api/email/inbound/route.ts` for the pattern.
 
 ## Code style
@@ -209,6 +211,21 @@ Prompt caching is not optional. Every call to Claude must include `cache_control
 - Async APIs (`cookies`, `params`, `searchParams`) are awaited in Next.js 16.
 - Validate every external URL before redirecting. Only allow relative paths starting with `/` and not `//`.
 - Comments explain WHY when non-obvious, never WHAT.
+
+## Performance conventions
+
+The day view is the surface a TM hits hundreds of times a day, so latency there is a product problem, not a nicety. These are the rules that keep it fast.
+
+- **Never issue a Supabase `.in()` with an empty array.** Guard the call and resolve `{ data: [] }` instead. An empty `.in()` is a full network round trip that can only ever return nothing. If every id array in a fetch is empty, return early before touching the database at all. Reference: `lib/schedule/day-roster.ts`, and the same pattern in `lib/comms/affected.ts`.
+- **Parallelise independent queries with `Promise.all`.** Never chain awaits that do not depend on each other. Serial waves are the main cause of day-view latency.
+- **Heavy client components that are not visible on first paint load through `next/dynamic` with `ssr: false`.** Anything pulling in a Radix dialog, a large icon set, or a search UI belongs behind a lazy wrapper rather than in the app shell bundle. Current uses: `components/nav/lazy-command-palette.tsx`, `components/schedule/add/add-flow.tsx`, `components/layout/active-panel.tsx`. Where the lazy wrapper gates a keyboard shortcut, the wrapper holds a minimal listener itself until first open, then unbinds and hands off to the real component.
+
+## Environment variables
+
+`.env.example` is the contract. Every variable the code reads must be listed there, even the optional ones. Two rules that are easy to get wrong:
+
+- **One secret, one name.** `META_APP_SECRET` and `WHATSAPP_APP_SECRET` are currently two names for the same Meta app secret, read by `app/api/data-deletion/route.ts` and `app/api/whatsapp/inbound/route.ts` respectively. Because webhook signature checks fail closed, whichever name is unset makes that endpoint reject everything. Consolidate on `META_APP_SECRET`. Do not add a third name for it.
+- **`NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` is browser-exposed by design** (Places autocomplete in `components/shows/places-address-input.tsx`). It must be a separate key from the server-side `GOOGLE_MAPS_API_KEY` and must be HTTP-referrer restricted in Google Cloud. Never reuse the server key with a `NEXT_PUBLIC_` prefix.
 
 ## Brand and copy
 
@@ -228,7 +245,11 @@ Short sentences. Plain English. No corporate language. No em-dashes. Use industr
 - Do not build system prompts dynamically at runtime. Static constants only.
 - Do not call the Anthropic SDK without `cache_control: { type: 'ephemeral' }` on the first system block.
 - Do not scope storage bucket policies by authentication alone. Scope by tour ownership using `owns_tour()` on the path's tour id.
-- Do not use the admin (service role) client in a server action without first verifying tour ownership via the RLS client.
+- Do not reach for the admin (service role) client in a server action because it is easier. Default to the RLS client. If an action genuinely needs the admin client, verify tour ownership via the RLS client first.
+- Do not accept two entity ids in one action without checking they belong to the same tour.
+- Do not issue a Supabase `.in()` with an empty array. Guard it.
+- Do not import a Radix dialog or other heavy client component into the app shell. Lazy-load it.
+- Do not read an env var the code depends on without adding it to `.env.example`.
 - Do not verify a webhook signature against an empty string or a missing env var. Return 401 when the secret is absent.
 - Do not enqueue an inbound webhook message without first deduplicating on the message ID via Redis SET NX.
 - Do not send proactive WhatsApp messages (outside a 24-hour reply window) as free-form messages. Use approved templates.

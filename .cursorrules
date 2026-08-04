@@ -92,7 +92,13 @@ Commit all three together (migration, code using it, regenerated types) in one c
 - Server actions for mutations. Write API routes only for webhooks, cron, Stripe callbacks, and inbound provider hooks.
 - Every server action calls `requireUser()` as its first statement. No exceptions. Server actions are publicly POSTable.
 - Always use Supabase RLS. The service role key is server-side admin only (webhooks, cron, Trigger.dev jobs), never client code.
-- Every server action that uses the admin (service role) client must first verify tour ownership via the RLS client, then scope all admin queries with `.eq('tour_id', tourId)`.
+- Server actions use the RLS client (`createClient()` from lib/supabase/server). owns_tour() is the authorization gate. Reference: lib/logistics/plan.ts, lib/logistics/hotels.ts.
+- Every server action that does use the admin (service role) client must first verify tour ownership via the RLS client, then scope all admin queries with `.eq('tour_id', tourId)`.
+- RLS scopes rows by tour, it does not check that two ids in one payload belong to the same tour. Any action taking more than one entity id verifies they share a tour_id first.
+- Never issue a Supabase `.in()` with an empty array. Guard the call and resolve { data: [] }. Return early if every id array is empty. Reference: lib/schedule/day-roster.ts.
+- Parallelise independent queries with Promise.all. Never chain awaits that do not depend on each other.
+- Heavy client components not visible on first paint load via next/dynamic with ssr: false. Reference: components/nav/lazy-command-palette.tsx.
+- Every env var the code reads is listed in .env.example, including optional ones.
 - Webhook signature checks fail closed: return 401 immediately when the secret env var is absent. Never verify against an empty string or a default fallback.
 - All forms and all external payloads (including webhook payloads) validate with Zod schemas in lib/validators/.
 - Async APIs (cookies, params, searchParams) must be awaited in Next.js 16.
@@ -134,7 +140,11 @@ Commit all three together (migration, code using it, regenerated types) in one c
 - Do not hand-edit lib/types/database.ts or invent table or column names.
 - Do not disable RLS, and do not use the service role key from client code.
 - Do not scope storage bucket policies by authentication alone. Scope by tour ownership using `owns_tour()` on the path's tour id.
-- Do not use the admin (service role) client in a server action without first verifying tour ownership via the RLS client.
+- Do not reach for the admin (service role) client in a server action because it is easier. Default to the RLS client. If an action genuinely needs admin, verify tour ownership via the RLS client first.
+- Do not accept two entity ids in one action without checking they belong to the same tour.
+- Do not issue a Supabase `.in()` with an empty array. Guard it.
+- Do not import a Radix dialog or other heavy client component into the app shell. Lazy-load it.
+- Do not read an env var the code depends on without adding it to .env.example.
 - Do not verify a webhook signature against an empty string or a missing env var. Return 401 when the secret is absent.
 - Do not enqueue an inbound webhook message without first deduplicating on the message ID via Redis SET NX.
 - Do not set an idempotency claim before a send and leave it set if the send fails. Claim, send, release on failure.

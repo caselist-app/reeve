@@ -1,6 +1,6 @@
 # COMPONENTS.md
 
-Strict component rules for Reeve. Read this before touching anything in `components/`. This is the trimmed, operational version of the full audit at `docs/briefs/26-component-library-audit.md` (in the separate docs project, not this repo) — that doc has the reasoning behind every rule here, this file has the rule only. If a rule here and the full audit disagree, the full audit is the source of truth for reasoning but this file wins for what to actually do, and both should be updated together.
+Strict component rules for Reeve. Read this before touching anything in `components/`. This is the trimmed, operational version of the full audit, Brief 26 in Notion (briefs live in Notion only, not in this repo). That brief has the reasoning behind every rule here, this file has the rule only. If a rule here and the full audit disagree, the full audit is the source of truth for reasoning but this file wins for what to actually do, and both should be updated together.
 
 ## The two real panel systems, and only two
 
@@ -43,6 +43,15 @@ The real pattern in the schedule day view is not "only `day-view-client.tsx` is 
 **Brief 32 Phase 6 audit (2026-08-04):** 75 of 97 `.tsx` files under `components/` carry `'use client'`. Every one was checked for a reason (local state/reducer, an effect, a transition, routing hooks, a `stores/` subscription, an inline event handler, a direct browser API, or a ref) before concluding this wasn't a pool of accidentally-client feature components. 70 of the 75 have one of those directly in the file. The other 5 (`label.tsx`, `tooltip.tsx`, `switch.tsx`, `separator.tsx`, `dropdown-menu.tsx`) are shadcn wrappers with no visible hook of their own, `'use client'` because the Radix primitive they wrap needs the boundary, not a candidate for conversion. Server Components in `components/`: mostly `components/ui/` primitives that are pure presentational wrappers (`button.tsx`, `input.tsx`, `card.tsx`, and others, 11 files) plus 11 schedule/hotel/transport feature components (`day-content.tsx`, `day-header.tsx`, `day-info-panel.tsx`, `day-timeline.tsx`, `schedule-skeleton.tsx`, `stay-row.tsx`, `segment-row.tsx`, `page-header.tsx`, `page-layout.tsx`, `context-summary.tsx`) that render server-fetched data with no interactivity of their own.
 
 The 2026-07-31 perf audit's "client boundary sits high in the day view tree" theory doesn't hold up against the current tree: `timeline-card.tsx`'s own `'use client'` is there because it calls `useSidePanel` directly (click-to-select), which is the documented, intentional pattern above, not an accident. If day-view latency work continues, look at data-fetching waterfalls (already P0-fixed on `perf-p0-day-view`) rather than the client/server split. No components were converted by this audit; this note is the record of having checked, per the brief's "investigate first, only then decide what to convert" instruction.
+
+## Lazy-loaded components, keep them out of the app shell
+
+Three components load through `next/dynamic` with `ssr: false` rather than being imported directly, and they should stay that way:
+
+- `components/nav/lazy-command-palette.tsx` wraps `command-palette.tsx`. Added by the Vercel agent PR #18 (`vercel-agent/no-cost-performance`, 2026-08-04) to keep the Radix Dialog, the Lucide search icons and the palette search UI out of the first app shell bundle. The wrapper holds its own Cmd+K listener while the real palette is unloaded, then unbinds on first open and hands off. `app/(app)/layout.tsx` renders the wrapper, never `CommandPalette` directly.
+- `components/schedule/add/add-flow.tsx` and `components/layout/active-panel.tsx` follow the same pattern for panel and add-form content.
+
+The rule for anything new: if a client component is not visible on first paint and pulls in a Radix primitive, a large icon set, or a search UI, it goes behind a lazy wrapper. Note this interacts with the `@radix-ui/react-dialog` four-file count above: `command-palette.tsx` still imports it, but no longer in the shell's initial bundle.
 
 ## Data model rules enforced at the component layer
 
