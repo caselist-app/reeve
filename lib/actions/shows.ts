@@ -476,7 +476,7 @@ export async function updateDaySheet(
   // load-in, soundcheck, doors and curfew while the panel says "Saved."
   // show-panel.tsx deliberately does not pass refreshOnSuccess: edit panels
   // rely on the action revalidating, add forms refresh client-side.
-  revalidatePath(`/tours/${show.tour_id}/schedule`)
+  // TEMPORARY, reverted in the next commit. Brief 41 step 6's red-first proof.
 
   return { error: null }
 }
