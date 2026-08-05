@@ -477,6 +477,73 @@ export type Database = {
           },
         ]
       }
+      day_items: {
+        Row: {
+          created_at: string
+          ends_at: string | null
+          id: string
+          kind: string
+          location: string | null
+          notes: string | null
+          show_id: string | null
+          starts_at: string | null
+          title: string | null
+          tour_date_id: string
+          tour_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          kind: string
+          location?: string | null
+          notes?: string | null
+          show_id?: string | null
+          starts_at?: string | null
+          title?: string | null
+          tour_date_id: string
+          tour_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          ends_at?: string | null
+          id?: string
+          kind?: string
+          location?: string | null
+          notes?: string | null
+          show_id?: string | null
+          starts_at?: string | null
+          title?: string | null
+          tour_date_id?: string
+          tour_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "day_items_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "day_items_tour_date_id_fkey"
+            columns: ["tour_date_id"]
+            isOneToOne: false
+            referencedRelation: "tour_dates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "day_items_tour_id_fkey"
+            columns: ["tour_id"]
+            isOneToOne: false
+            referencedRelation: "tours"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       day_sheets: {
         Row: {
           catering_breakfast_end: string | null
@@ -1125,6 +1192,7 @@ export type Database = {
         Row: {
           address: string | null
           capacity: number | null
+          catering_type: string
           created_at: string
           date: string
           dressing_rooms: string | null
@@ -1154,6 +1222,7 @@ export type Database = {
         Insert: {
           address?: string | null
           capacity?: number | null
+          catering_type?: string
           created_at?: string
           date: string
           dressing_rooms?: string | null
@@ -1183,6 +1252,7 @@ export type Database = {
         Update: {
           address?: string | null
           capacity?: number | null
+          catering_type?: string
           created_at?: string
           date?: string
           dressing_rooms?: string | null
@@ -1580,6 +1650,15 @@ export type Database = {
           p_tour_id: string
         }
         Returns: string
+      }
+      backfill_day_items: {
+        Args: { p_tour_id?: string }
+        Returns: {
+          catering_pairs_skipped: number
+          event_ends_dropped: number
+          items_created: number
+          tour_dates_created: number
+        }[]
       }
       create_show_with_dependents: {
         Args: { p_show_data: Json; p_tour_id: string }
