@@ -20,11 +20,17 @@ test('an edited load-in shows on the timeline without a reload', async ({ page }
 
   await page.goto(`/tours/${seed.a.tourId}/schedule?date=${seed.a.date}`)
 
+  // The timeline card itself, not the bare time. Each card renders its time
+  // twice (a desktop column and a mobile inline copy), so matching on "16:00"
+  // alone hits six elements and fails on strict mode. The card is a button
+  // whose accessible name carries the label, which is a stable handle.
+  const loadInCard = page.getByRole('button', { name: /Load-in/ }).first()
+
   // The seeded value, so the assertion below cannot pass on a page that never
   // showed a load-in at all.
-  await expect(page.getByText(E2E_SEEDED_LOAD_IN_LOCAL)).toBeVisible()
+  await expect(loadInCard).toContainText(E2E_SEEDED_LOAD_IN_LOCAL)
 
-  await page.getByText('Load-in').first().click()
+  await loadInCard.click()
 
   // The panel's heading is the venue name; "Day sheet" is its description.
   await expect(page.getByText('Day sheet')).toBeVisible()
@@ -41,12 +47,14 @@ test('an edited load-in shows on the timeline without a reload', async ({ page }
 
   // No reload anywhere in this test. If the action stops revalidating the
   // schedule route, the panel still says "Saved." and this line goes red.
-  await expect(page.getByText(newTime)).toBeVisible()
+  await expect(page.getByRole('button', { name: /Load-in/ }).first()).toContainText(newTime)
 
   // Restore, so nothing downstream reads a time this spec invented.
   await loadIn.fill(E2E_SEEDED_LOAD_IN_LOCAL)
   await page.getByRole('button', { name: 'Save', exact: true }).click()
-  await expect(page.getByText(E2E_SEEDED_LOAD_IN_LOCAL)).toBeVisible()
+  await expect(page.getByRole('button', { name: /Load-in/ }).first()).toContainText(
+    E2E_SEEDED_LOAD_IN_LOCAL
+  )
 })
 
 test('a new day appears in the Dates sidebar without a reload', async ({ page }) => {
@@ -101,11 +109,16 @@ test('a renamed tour updates in the sidebar and does not snap back', async ({ pa
   await expect(page.getByLabel('Tour name')).toHaveValue(seed.a.tourName)
 })
 
-// The sidebar renders each day as a link to ?date=. Matching on the href rather
-// than the visible text because the visible text is a day number and a month
-// abbreviation, which repeat across a tour.
+// The sidebar renders each day as a link to ?date=. Matched on the href rather
+// than the visible text, because the visible text is a day number and a month
+// abbreviation and those repeat across a tour.
+//
+// :visible matters. The day list renders twice, in the desktop sidebar and in
+// the mobile date strip, so an unfiltered locator finds two links for one day
+// and the count assertion reads as a duplicate-day bug. On the desktop viewport
+// these specs run at, exactly one of the two is displayed.
 function sidebarLinkFor(page: import('@playwright/test').Page, date: string) {
-  return page.locator(`a[href*="date=${date}"]`)
+  return page.locator(`a[href*="date=${date}"]:visible`)
 }
 
 function addDays(date: string, days: number): string {
