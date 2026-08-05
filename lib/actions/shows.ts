@@ -550,7 +550,7 @@ export async function getShowAdvance(
   if (!show) return { data: null, error: 'Show not found on this tour.' }
 
   const [
-    { data: advance },
+    { data: advance, error: advanceError },
     { data: documents, error: documentsError },
     { data: shares, error: sharesError },
     { data: people, error: peopleError },
@@ -589,7 +589,7 @@ export async function getShowAdvance(
   // A failed read must not render as an empty result. An empty document list
   // reads as "this tour has no riders" and an empty recipient list reads as
   // "nobody to send to", and both are confident, plausible and wrong.
-  const failure = documentsError ?? sharesError ?? peopleError
+  const failure = advanceError ?? documentsError ?? sharesError ?? peopleError
   if (failure) {
     console.error('[getShowAdvance] read failed:', failure.message)
     return { data: null, error: 'Could not load the advance for this show.' }
