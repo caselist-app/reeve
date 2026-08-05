@@ -57,7 +57,21 @@ test('an edited load-in shows on the timeline without a reload', async ({ page }
   )
 })
 
-test('a new day appears in the Dates sidebar without a reload', async ({ page }) => {
+// A rehearsal day, deliberately, and not the "Day off" this spec was written
+// with first. Both add a day, and only one of them can catch the bug.
+//
+// add-day-panel.tsx calls router.refresh() after createTourDate, and refresh
+// DOES re-resolve the @secondaryPanel slot: with createTourDate's
+// revalidatePath deleted, this spec still passed. The rehearsal branch calls
+// router.push() instead, and push does not re-resolve a layout, so there the
+// server-side revalidate is the only thing that can put the day in the sidebar.
+// That is also the history: createRehearsal shipped stale (it pushes) and the
+// add-day path never did (it refreshes).
+//
+// CLAUDE.md says neither push nor refresh can re-resolve the slot. On Next
+// 15.5.19 that is right about push and wrong about refresh, proved by the
+// experiment above.
+test('a new rehearsal day appears in the Dates sidebar without a reload', async ({ page }) => {
   const seed = readSeed()
 
   // A date the tour does not have, and one no other spec looks at.
@@ -67,19 +81,16 @@ test('a new day appears in the Dates sidebar without a reload', async ({ page })
   await expect(sidebarLinkFor(page, newDate)).toHaveCount(0)
 
   await page.getByRole('button', { name: 'Add day' }).click()
-  await page.getByRole('button', { name: /Day off/ }).click()
+  await page.getByRole('button', { name: /Rehearsal/ }).click()
 
   // Scoped to the form holding the Date field: the sidebar's trigger and the
   // panel's submit button have the same accessible name, and `form` is a
   // semantic element rather than a styling hook.
   const panel = page.locator('form').filter({ has: page.getByLabel('Date') })
   await panel.getByLabel('Date').fill(newDate)
+  await panel.getByLabel('Location').fill('Metropolis Studios')
   await panel.getByRole('button', { name: 'Add day' }).click()
 
-  // The sidebar is the @secondaryPanel slot, which is a layout. router.push and
-  // router.refresh cannot re-resolve it, so only a server-side revalidatePath
-  // puts the new day here. This is the exact failure createRehearsal and
-  // deleteTourDate shipped with.
   await expect(sidebarLinkFor(page, newDate)).toHaveCount(1)
 })
 
