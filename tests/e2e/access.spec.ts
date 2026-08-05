@@ -38,12 +38,29 @@ test.describe('one tour manager and another account', () => {
   test('cannot open a tour belonging to a different account', async ({ page }) => {
     const seed = readSeed()
 
-    await page.goto(`/tours/${seed.b.tourId}/schedule`)
+    const response = await page.goto(`/tours/${seed.b.tourId}/schedule`)
 
-    // The schedule page redirects to / when getScheduleShell returns no tour,
-    // which is what RLS causes here: account A is signed in, and account B owns
-    // this tour.
-    expect(new URL(page.url()).pathname).not.toContain(seed.b.tourId)
+    // The claim that matters, asserted on the bytes the server sent: account
+    // B's tour name never reaches account A's browser. Everything below is
+    // about where the browser ends up, which is a worse thing to have wrong but
+    // a lesser thing to leak.
+    expect(await response!.text()).not.toContain(seed.b.tourName)
+
+    // The redirect here is NOT an HTTP redirect, and reading page.url() the
+    // instant the load event fires says the browser is still on B's tour.
+    //
+    // Three loading.tsx files sit above this route (app/(app), the schedule
+    // folder, and the @secondaryPanel slot), so Next streams the shell before
+    // getScheduleShell resolves. By the time the page calls redirect('/') the
+    // response is already committed as a 200, so the navigation is delivered
+    // inside the stream and performed by the browser afterwards. Poll for it.
+    //
+    // The signed-out case above is different and genuinely is a 307, because
+    // the (app) layout's requireUser() runs before anything streams.
+    await expect
+      .poll(() => new URL(page.url()).pathname, { timeout: 10_000 })
+      .not.toContain(seed.b.tourId)
+
     await expect(page.getByText(seed.b.tourName)).toHaveCount(0)
   })
 
