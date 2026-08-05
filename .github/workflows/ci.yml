@@ -209,8 +209,33 @@ jobs:
         env:
           NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
 
+      # Keyed on the Playwright version, because the browser build is pinned to
+      # it: a version bump has to miss the cache or the run gets a browser the
+      # library refuses to drive.
+      - name: Read the Playwright version
+        run: |
+          echo "PLAYWRIGHT_VERSION=$(node -p "require('./package.json').devDependencies['@playwright/test'].replace(/^[^0-9]*/, '')")" >> "$GITHUB_ENV"
+
+      - name: Restore the browser cache
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}
+
+      # --only-shell installs chromium-headless-shell rather than full Chromium,
+      # which is a much smaller download and is what a headless run uses anyway.
+      # The OS libraries (--with-deps, an apt install needing sudo) are the slow
+      # half and are only needed when the cache misses.
       - name: Install Chromium
-        run: pnpm exec playwright install --with-deps chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps --only-shell chromium
+
+      # A cache hit restores the browser but not the apt packages, which live
+      # outside the cached path.
+      - name: Install the browser's OS libraries
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm exec playwright install-deps chromium
 
       - name: End-to-end tests
         run: pnpm test:e2e
