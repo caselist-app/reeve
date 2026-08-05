@@ -34,7 +34,7 @@ const GENERATED = new Set(['lib/types/database.ts'])
 // because the day view's edit panels deliberately do not refresh client side.
 const SCHEDULE_TABLES = [
   'shows', 'day_sheets', 'transport_segments', 'transport_assignments',
-  'hotel_stays', 'room_assignments', 'day_events', 'tour_dates',
+  'hotel_stays', 'room_assignments', 'day_events', 'day_items', 'tour_dates',
   'rehearsals', 'people', 'contacts',
 ]
 
@@ -494,6 +494,97 @@ if (existsSync(E2E_LOGIN_ROUTE)) {
         "secret's presence instead.",
       'e2e-login-guards|node-env'
     )
+  }
+}
+
+// ---- Rule 10: the day item kind list agrees with the database ----
+// Brief 42 replaced twenty day_sheets columns with rows in day_items, and the
+// set of kinds a row may hold is stated twice: as a check constraint in the
+// migration, and as the array in lib/schedule/day-item-kinds.ts that the combo
+// box, the timeline, the comms templates and the parser all read.
+//
+// Nothing else can catch them disagreeing. Add a kind to the array alone and
+// every write of it fails at runtime with a constraint violation, on a TM's day
+// view, because tsc cannot see a SQL string. Add it to the constraint alone and
+// it is a kind the app can store and cannot label, which renders as a raw
+// 'press_call' on the timeline.
+//
+// The constraint is read from the LAST migration that mentions day_items, not
+// from the create-table one, so a future migration that drops and re-adds the
+// constraint to add a kind is picked up rather than ignored.
+const KIND_LIST_PATH = join(ROOT, 'lib', 'schedule', 'day-item-kinds.ts')
+const MIGRATIONS_DIR = join(ROOT, 'supabase', 'migrations')
+
+if (existsSync(KIND_LIST_PATH) && existsSync(MIGRATIONS_DIR)) {
+  const kindListSrc = readFileSync(KIND_LIST_PATH, 'utf8')
+
+  // Matches the array entries (kind: 'load_in',) and not the interface field
+  // (kind: string), because the latter has no quotes.
+  const listKinds = [...kindListSrc.matchAll(/^\s*kind:\s*'([a-z_]+)'/gm)].map((m) => m[1])
+
+  let constraintKinds = null
+  let constraintFile = null
+
+  for (const name of readdirSync(MIGRATIONS_DIR).sort()) {
+    if (!name.endsWith('.sql')) continue
+    const src = readFileSync(join(MIGRATIONS_DIR, name), 'utf8')
+    if (!src.includes('day_items')) continue
+
+    // The check constraint body, whether written inline on the column or added
+    // later with `add constraint ... check (kind in (...))`.
+    const match = [...src.matchAll(/check\s*\(\s*kind\s+in\s*\(([\s\S]*?)\)/g)].pop()
+    if (!match) continue
+
+    constraintKinds = [...match[1].matchAll(/'([a-z_]+)'/g)].map((m) => m[1])
+    constraintFile = name
+  }
+
+  // Both halves have to be non-empty, or a regex that quietly stopped matching
+  // would make this rule pass while comparing nothing. Same reasoning as the
+  // file-count guard in tests/unit/no-retired-routes.test.ts.
+  if (listKinds.length === 0) {
+    report(
+      'day-item-kinds',
+      rel(KIND_LIST_PATH),
+      1,
+      'Found no kinds in the array. Either the file changed shape or this check ' +
+        'is broken; either way it is no longer comparing anything.',
+      'day-item-kinds|empty-list'
+    )
+  } else if (constraintKinds === null) {
+    report(
+      'day-item-kinds',
+      'supabase/migrations',
+      1,
+      'No migration states a check constraint on day_items.kind, so the kind ' +
+        'list is unenforced at the database.',
+      'day-item-kinds|no-constraint'
+    )
+  } else {
+    const inListOnly = listKinds.filter((k) => !constraintKinds.includes(k))
+    const inDbOnly = constraintKinds.filter((k) => !listKinds.includes(k))
+
+    if (inListOnly.length > 0) {
+      report(
+        'day-item-kinds',
+        rel(KIND_LIST_PATH),
+        lineOf(kindListSrc, kindListSrc.indexOf(`kind: '${inListOnly[0]}'`)),
+        `${inListOnly.join(', ')} in the kind list but not in the day_items check ` +
+          `constraint (${constraintFile}). Writing one would fail on a TM's day view.`,
+        'day-item-kinds|list-only'
+      )
+    }
+
+    if (inDbOnly.length > 0) {
+      report(
+        'day-item-kinds',
+        `supabase/migrations/${constraintFile}`,
+        1,
+        `${inDbOnly.join(', ')} allowed by the check constraint but missing from ` +
+          'the kind list. The app can store it and cannot label it.',
+        'day-item-kinds|db-only'
+      )
+    }
   }
 }
 
