@@ -9,17 +9,11 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { sendRider } from '@/lib/actions/documents'
 
-export type SendableDocument = {
-  id: string
-  title: string
-  doc_type: string
-}
+// Re-exported for existing importers. The shapes themselves live in
+// lib/shows/advance.ts, which server code can import and this file cannot be.
+import type { SendableDocument, ContactablePerson } from '@/lib/shows/advance'
 
-export type ContactablePerson = {
-  id: string
-  name: string
-  contact_email: string
-}
+export type { SendableDocument, ContactablePerson }
 
 interface Props {
   tourId: string

@@ -36,7 +36,7 @@ export default async function HotelsPage({
       .eq('tour_id', id),
   ])
 
-  if (!show) redirect(`/tours/${id}/shows`)
+  if (!show) redirect(`/tours/${id}/schedule`)
 
   // Pre-fill arrive_at / depart_at from any planned transport segment for this show.
   // This is best-effort: if no segment exists the TM fills in manually.
@@ -67,7 +67,7 @@ export default async function HotelsPage({
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
       <Link
-        href={`/tours/${id}/shows/${showId}`}
+        href={`/tours/${id}/schedule?date=${show.date}`}
         className="mb-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
         <ChevronLeft className="h-4 w-4" />

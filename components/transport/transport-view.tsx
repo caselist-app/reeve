@@ -90,7 +90,7 @@ export function TransportView({ tourId, timezone, segments, focusDate }: Transpo
           Add segments via the planner on each show.
         </p>
         <Link
-          href={`/tours/${tourId}/shows`}
+          href={`/tours/${tourId}/schedule`}
           className="mt-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           Go to Schedule &rarr;

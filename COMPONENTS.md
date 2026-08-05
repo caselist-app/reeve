@@ -10,6 +10,8 @@ Strict component rules for Reeve. Read this before touching anything in `compone
 
 Do not invent a third. `components/nav/tour-settings-panel.tsx` is a known bespoke exception (nav-rail slide-over, not a content panel), do not use it as precedent for a new panel type.
 
+**A panel that needs more than its ids fetches on open; it does not ride on the descriptor.** `contact-panel.tsx` (via `getContact`), `venue-panel.tsx` (via `getShowVenueDetail`) and `advance-panel.tsx` (via `getShowAdvance`) all take ids, call a server action in an effect, and hold their own loading and error state. The alternative is making the surface that opens the panel fetch the data, which means every day view paying for four queries and a dozen columns to fill a panel a TM opens occasionally. The rule of thumb: if the descriptor would carry more than what the panel header needs, fetch instead. And a failed fetch says so, never renders an empty panel: "no riders on this tour" is a confident, plausible, wrong answer a TM would act on.
+
 **`app-content.tsx` owns every card wrapper. Panel components never carry the card token.**
 
 The token `rounded-3xl border border-border bg-background` is applied in exactly one file: `components/layout/app-content.tsx`, on four wrappers (the secondary panel, `<main>`, the desktop side panel, and the mobile main). Anything rendered inside one of those wrappers is already sitting on a card.
@@ -64,7 +66,7 @@ The rule for anything new: if a client component is not visible on first paint a
 ## Known duplicated/inconsistent code, don't extend it further
 
 - Timezone conversion (`fromDatetimeLocal`/`toDatetimeLocal`) is duplicated verbatim between `event-panel.tsx` and `transport-panel.tsx`, absent entirely in `hotel-panel.tsx` (plain date/time strings), and naive/non-tz-aware in `rehearsal-form.tsx`. Before adding a fifth datetime form, ask which of these is actually correct for the column type, don't just copy the nearest one.
-- Advance status has three incompatible vocabularies across `advance-dots.tsx` (`confirmed/in_progress/not_started/na`), `advance-tracker.tsx` (`not_started/in_progress/done`), and `shows-view.tsx` (ad hoc). Check `lib/shows/advance.ts` and the DB constraint for the real enum before touching any of these three files.
+- ~~Advance status has three incompatible vocabularies~~. Resolved 2026-08-05: `advance-dots.tsx` and `shows-view.tsx` do not exist and had not for some time, so this rule was describing a conflict between one real file and two ghosts. `lib/shows/advance.ts` is the source of truth for the enum (`not_started | in_progress | done`), the five departments, the four that send a rider, and the doc_type each one uses. Import from there rather than restating any of it: the department-to-rider map existed twice, in opposite directions, until Brief 36 step 6 merged them.
 - `components/nav/theme-toggle.tsx` (binary) and `components/tours/settings-form.tsx`'s inline theme picker (3-way) are two separate, un-reconciled theme switchers. Don't add a third.
 
 ## Day-sheet fields have twelve sources of truth, keep them in sync
