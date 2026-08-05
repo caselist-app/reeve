@@ -8,17 +8,6 @@ import type { Tables } from '@/lib/types/database'
 
 export default async function PeoplePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-
-  // TEMPORARY, reverted in the next commit. Brief 41 step 4's red-first proof:
-  // a smoke test that has only ever been seen green proves nothing about
-  // whether it can see a broken page. Exactly /tours/{tourId}/people should go
-  // red and every other route stay green.
-  //
-  // Conditional rather than a bare throw so the rest of the function stays
-  // reachable for tsc. A bare throw fails typecheck on the narrowing below,
-  // which would turn the build job red as well and prove something else.
-  if (id) throw new Error('Brief 41 red-first proof: the people page is deliberately broken')
-
   const user = await requireUser()
   const supabase = await createClient()
 
