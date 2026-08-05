@@ -59,6 +59,10 @@ Twilio                          WhatsApp and SMS fallback
 
 ```bash
 pnpm check            # all five gates in CI's order. This is the one to run before asking for a merge.
+                      # typecheck clears .next/types first, deliberately: tsconfig.json includes
+                      # those generated route types, they are stale after a route is deleted, and
+                      # a fresh CI checkout does not have them at all. Without the clear, the local
+                      # gate fails on files CI never sees. next build regenerates them at the end.
 pnpm dev              # local dev server
 pnpm build            # production build (must pass before merge)
 pnpm lint             # eslint, must be clean
