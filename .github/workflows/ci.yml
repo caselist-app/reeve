@@ -223,19 +223,19 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}
 
-      # --only-shell installs chromium-headless-shell rather than full Chromium,
-      # which is a much smaller download and is what a headless run uses anyway.
-      # The OS libraries (--with-deps, an apt install needing sudo) are the slow
-      # half and are only needed when the cache misses.
+      # --only-shell installs chromium-headless-shell rather than full Chromium:
+      # a much smaller download, and what a headless run uses anyway.
+      #
+      # Deliberately no --with-deps and no install-deps. That is an apt install
+      # needing sudo, it cannot be cached because the packages land outside
+      # ~/.cache/ms-playwright, and it was taking longer than everything else in
+      # this job put together. The ubuntu-latest image already ships the
+      # libraries headless Chromium needs. If that stops being true, the browser
+      # fails to launch with a message naming the missing library, which is a
+      # loud failure rather than a slow one, and the fix is to add it back.
       - name: Install Chromium
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: pnpm exec playwright install --with-deps --only-shell chromium
-
-      # A cache hit restores the browser but not the apt packages, which live
-      # outside the cached path.
-      - name: Install the browser's OS libraries
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
-        run: pnpm exec playwright install-deps chromium
+        run: pnpm exec playwright install --only-shell chromium
 
       - name: End-to-end tests
         run: pnpm test:e2e
