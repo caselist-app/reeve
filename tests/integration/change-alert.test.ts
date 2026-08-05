@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { createFixture, destroyFixture, type Fixture } from './fixture'
-import { updateDaySheet } from '@/lib/actions/shows'
+import { createDayItem } from '@/lib/actions/day-items'
 import { previewBroadcast } from '@/lib/actions/broadcast'
 
 // Brief 36 step 3 moved load-in and curfew onto the day sheet, and the crew
@@ -30,11 +30,23 @@ describe('the day sheet change alert', () => {
   beforeEach(async () => {
     fixture = await createFixture({ date: DATE, timezone: TIMEZONE })
 
-    const seeded = await updateDaySheet(fixture.showId, {
-      load_in: '10:00',
-      curfew: '23:00',
-    })
-    if (seeded.error) throw new Error(`could not seed the day sheet: ${seeded.error}`)
+    // Brief 42: the times are day_items rows and the alert reads them through
+    // fetchShowItems. Seeded through the one writer, which is now the same one
+    // the day view uses, so a change alert quoting a stale time is impossible by
+    // construction rather than by agreement.
+    for (const [kind, clock] of [
+      ['load_in', '10:00'],
+      ['curfew', '23:00'],
+    ] as const) {
+      const seeded = await createDayItem({
+        tour_id: fixture.tourId,
+        tour_date_id: fixture.tourDateId,
+        show_id: fixture.showId,
+        kind,
+        start_clock: clock,
+      })
+      if (seeded.error) throw new Error(`could not seed the ${kind}: ${seeded.error}`)
+    }
   })
 
   afterEach(async () => {

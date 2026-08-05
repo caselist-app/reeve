@@ -5,7 +5,6 @@ import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { showSchema } from '@/lib/validators/show'
 import { bustTourContextCache } from '@/lib/ai/context'
-import { daySheetFormSchema } from '@/lib/validators/day-sheet'
 import {
   setAdvanceStatus,
   DEPARTMENT_DOC_TYPE,
@@ -18,13 +17,10 @@ import {
 import { resolveHubJob } from '@/trigger/jobs/resolve-hub'
 import { revertDayTypeIfOrphaned } from '@/lib/schedule/day-type-revert'
 import { resolveTourDateId } from '@/lib/schedule/day-link'
-import { localTimeInZone, localDateInZone } from '@/lib/schedule/datetime'
-import { resolveDayOffsets, addDays, daysBetween } from '@/lib/schedule/day-sheet-times'
 import { shiftDayItemsToDate } from '@/lib/schedule/day-items'
 import type { DateMove } from '@/lib/schedule/date-move'
 import type { z } from 'zod'
-import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database, Tables, TablesUpdate } from '@/lib/types/database'
+import type { Tables } from '@/lib/types/database'
 import type { Department, AdvanceStatus } from '@/lib/shows/advance'
 
 // `moved` is set only when the show's date actually changed, which is what makes
@@ -32,122 +28,11 @@ import type { Department, AdvanceStatus } from '@/lib/shows/advance'
 // constantly for edits that move nothing. See lib/schedule/date-move.ts.
 export type ShowActionState = { error: string | null; showId?: string; moved?: DateMove | null }
 
-// Every day_sheets column that stores a time derived from the show's date.
-// Shared by updateDaySheet (which writes them) and shiftDaySheetToDate (which
-// re-derives them when the show moves), so a column added to one is not
-// silently missing from the other.
-//
-// This list is NOT chronological and must not be read as if it were. The six
-// catering fields sit at the end, after load_out, which is why the roll-over
-// rule in lib/schedule/day-sheet-times.ts runs over its own two groups rather
-// than over this one in order.
-const DAY_SHEET_TIME_FIELDS = [
-  'lobby_call',
-  'venue_access',
-  'load_in',
-  'line_check',
-  'soundcheck',
-  'vip',
-  'doors',
-  'support_on',
-  'support_off',
-  'changeover',
-  'headliner_on',
-  'headliner_off',
-  'curfew',
-  'load_out',
-  'catering_breakfast_start',
-  'catering_breakfast_end',
-  'catering_lunch_start',
-  'catering_lunch_end',
-  'catering_dinner_start',
-  'catering_dinner_end',
-] as const
-
-// Converts a HH:MM time string plus a date and IANA timezone into a UTC ISO string.
-// All three inserts happen in the IANA timezone; day-sheet times are stored as
-// proper timestamptz so they survive DST changes and cross-timezone comparisons.
-// Falls back to treating the time as UTC if no timezone is provided.
-function localTimeToUtcIso(date: string, time: string, tz: string): string {
-  // Treat the date+time as UTC first to create a reference point.
-  const ref = new Date(`${date}T${time}:00.000Z`)
-  // Find how the target timezone reads at that UTC instant (sv-SE gives "YYYY-MM-DD HH:MM:SS").
-  const localStr = ref.toLocaleString('sv-SE', { timeZone: tz })
-  const [localDate, localTime] = localStr.split(' ')
-  // Reconstruct a UTC date from that local representation.
-  const localAsUtc = new Date(`${localDate}T${localTime}.000Z`)
-  // The offset is the gap between what we put in and what the tz displays.
-  const offsetMs = ref.getTime() - localAsUtc.getTime()
-  return new Date(ref.getTime() + offsetMs).toISOString()
-}
-
-// Day-sheet times are timestamptz derived from the show's own date, so moving a
-// show without moving them leaves the timeline rendering the new day with the
-// old day's load-in, and /itinerary telling crew the same. Re-derives each
-// populated time against the new date from the wall-clock time it reads as in
-// the tour's timezone, rather than adding 24 hours, so a move across a DST
-// boundary keeps load-in at 10:00 instead of shifting it to 09:00.
-//
-// Untouched columns stay untouched: a null time is skipped rather than written,
-// so this cannot null a field the way a whole-row write would.
-//
-// Returns whether it actually carried anything, so the move can tell the TM
-// "times moved with it" only when times moved. A show whose day sheet is still
-// empty (which is every show the moment it is created) must not be announced as
-// having carried times it never had.
-async function shiftDaySheetToDate(
-  supabase: SupabaseClient<Database>,
-  showId: string,
-  oldDate: string,
-  newDate: string,
-  timezone: string | null,
-): Promise<boolean> {
-  const { data: sheet } = await supabase
-    .from('day_sheets')
-    .select('*')
-    .eq('show_id', showId)
-    .maybeSingle()
-
-  if (!sheet) return false
-
-  const patch: Record<string, string> = {}
-
-  for (const field of DAY_SHEET_TIME_FIELDS) {
-    const stored = sheet[field]
-    if (!stored) continue
-
-    // No tour timezone set: the times were written as UTC by updateDaySheet, so
-    // they have to be read back the same way or the shift moves them.
-    const zone = timezone ?? 'UTC'
-    const time = localTimeInZone(stored, zone)
-
-    // Carry the day offset the stored time already has, rather than flattening
-    // every time onto the new show date. A 01:30 curfew is stored on the
-    // morning after the show, so moving the show from the 14th to the 20th has
-    // to put it on the 21st at 01:30, not the 20th. Re-deriving from
-    // wall-clock alone silently undid the roll-over, and it took two actions in
-    // sequence before anything looked wrong: the same shape as every Brief 36
-    // bug, edit something and then look somewhere else.
-    const offset = daysBetween(oldDate, localDateInZone(stored, zone))
-    const date = addDays(newDate, offset)
-
-    patch[field] = timezone
-      ? localTimeToUtcIso(date, time, timezone)
-      : `${date}T${time}:00.000Z`
-  }
-
-  if (Object.keys(patch).length === 0) return false
-
-  const { error } = await supabase
-    .from('day_sheets')
-    .update(patch as TablesUpdate<'day_sheets'>)
-    .eq('show_id', showId)
-
-  // Reported as not carried if the write failed, so the TM is never told times
-  // moved when they did not. The move itself still happened and is still worth
-  // announcing, which is why this does not fail the action.
-  return !error
-}
+// DAY_SHEET_TIME_FIELDS, localTimeToUtcIso and shiftDaySheetToDate all went with
+// updateDaySheet in Brief 42. A day's times are day_items rows, written by
+// lib/actions/day-items.ts, and a show that moves date carries them through
+// shiftDayItemsToDate. day_sheets is not written by anything any more; REE-23
+// drops it.
 
 export async function createShow(
   tourId: string,
@@ -368,128 +253,10 @@ export async function deleteShow(showId: string): Promise<ShowActionState> {
   return { error: null }
 }
 
-export async function updateDaySheet(
-  showId: string,
-  data: z.infer<typeof daySheetFormSchema>
-): Promise<ShowActionState> {
-  await requireUser()
-
-  const parsed = daySheetFormSchema.safeParse(data)
-  if (!parsed.success) {
-    return { error: parsed.error.issues[0].message }
-  }
-
-  const supabase = await createClient()
-
-  // Fetch show date and tour timezone in two queries to avoid join typing issues.
-  const { data: show } = await supabase
-    .from('shows')
-    .select('date, tour_id')
-    .eq('id', showId)
-    .single()
-
-  if (!show) {
-    return { error: 'Show not found.' }
-  }
-
-  const { data: tourRow } = await supabase
-    .from('tours')
-    .select('timezone')
-    .eq('id', show.tour_id)
-    .single()
-
-  const timezone = tourRow?.timezone ?? null
-
-  // The stored row, read as HH:MM in the tour's timezone, so the roll-over rule
-  // sees the whole day sheet rather than just this payload. A partial caller
-  // (confirmExtraction sends load_in and curfew alone) would otherwise have no
-  // daytime time to anchor against and would fall back on every save.
-  const { data: storedSheet } = await supabase
-    .from('day_sheets')
-    .select('*')
-    .eq('show_id', showId)
-    .maybeSingle()
-
-  const merged: Record<string, string | null> = {}
-  for (const field of DAY_SHEET_TIME_FIELDS) {
-    const submitted = parsed.data[field as keyof typeof parsed.data] as string | null | undefined
-    if (submitted !== undefined) {
-      merged[field] = submitted
-      continue
-    }
-    const stored = storedSheet?.[field as keyof typeof storedSheet] as string | null | undefined
-    merged[field] = stored ? localTimeInZone(stored, timezone ?? 'UTC') : null
-  }
-
-  // Which of these fall on the morning after the show. See
-  // lib/schedule/day-sheet-times.ts: a curfew of 01:30 is a real 01:30 the next
-  // day, and it still renders under this show because the timeline reaches
-  // day-sheet times through the show rather than through their own date.
-  const offsets = resolveDayOffsets(merged)
-
-  const converted: Record<string, string | null> = {}
-
-  // Only write fields the caller actually submitted. `null` means the TM
-  // cleared the field and must be written; `undefined` means the form never
-  // sent it and the stored value must survive. Collapsing the two is what let
-  // show-panel.tsx, which submits the 14 time fields and no catering, null
-  // every catering column on the row each time a TM edited load-in from the
-  // day view. Any partial caller added later is safe by construction.
-  //
-  // The roll-over is computed over the merged view but applied only to the
-  // submitted fields, so this stays a partial write. A save that does not
-  // mention curfew does not rewrite curfew, even if adding a late doors time
-  // has just changed which day the curfew belongs on. That is the correct
-  // trade: show-panel resubmits the whole sheet on every save, so the normal
-  // path self-corrects, and silently rewriting a column the caller never sent
-  // is the exact bug Brief 37 closed.
-  for (const field of DAY_SHEET_TIME_FIELDS) {
-    const val = parsed.data[field as keyof typeof parsed.data] as string | null | undefined
-    if (val === undefined) {
-      continue
-    } else if (!val) {
-      converted[field] = null
-    } else {
-      const date = addDays(show.date, offsets[field] ?? 0)
-      converted[field] = timezone
-        ? localTimeToUtcIso(date, val, timezone)
-        // No tour timezone set: treat as UTC to avoid silent data loss.
-        : `${date}T${val}:00.000Z`
-    }
-  }
-
-  // catering_type is a text column, not a timestamptz: stored as-is.
-  if (parsed.data.catering_type !== undefined) {
-    converted.catering_type = parsed.data.catering_type
-  }
-
-  // Nothing submitted: no-op rather than an empty update.
-  if (Object.keys(converted).length === 0) {
-    return { error: null }
-  }
-
-  // Cast required: the Supabase client rejects index-signature types.
-  // All keys in converted are valid day_sheets columns.
-  const { error } = await supabase
-    .from('day_sheets')
-    .update(converted as TablesUpdate<'day_sheets'>)
-    .eq('show_id', showId)
-
-  if (error) {
-    return { error: error.message }
-  }
-
-  void bustTourContextCache(show.tour_id)
-
-  // Day-sheet fields render as timeline items in day-timeline.tsx, so the
-  // schedule route has to be revalidated or the timeline keeps showing the old
-  // load-in, soundcheck, doors and curfew while the panel says "Saved."
-  // show-panel.tsx deliberately does not pass refreshOnSuccess: edit panels
-  // rely on the action revalidating, add forms refresh client-side.
-  revalidatePath(`/tours/${show.tour_id}/schedule`)
-
-  return { error: null }
-}
+// updateDaySheet is gone. It wrote twenty columns on a table nothing reads, and
+// leaving it callable meant a caller could save a load-in successfully and have
+// it appear nowhere. Its partial-write behaviour, its roll-over and its
+// revalidate all live in lib/actions/day-items.ts now.
 
 // updateShowNotes is gone. Notes belong to the day, not the show, and are
 // written by updateDayNotes in lib/actions/tour-dates.ts. See Brief 36 Part 4.

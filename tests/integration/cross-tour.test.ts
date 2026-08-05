@@ -3,7 +3,6 @@ import { testDb } from './test-db'
 import { createFixture, createSecondTour, destroyFixture, type Fixture } from './fixture'
 import { recordTransportOption, createTransportSegment } from '@/lib/actions/transport'
 import { recordHotelOption, createHotelStay } from '@/lib/actions/hotels'
-import { createDayEvent, updateDayEvent } from '@/lib/actions/day-events'
 import { createDayItem, updateDayItem } from '@/lib/actions/day-items'
 import { sendBroadcast, previewBroadcast } from '@/lib/actions/broadcast'
 
@@ -162,30 +161,6 @@ describe('cross-tour id checks', () => {
         name: 'Test Hotel',
         check_in_date: fixture.date,
       })
-      expect(result.error).toBeTruthy()
-    })
-  })
-
-  describe('day events', () => {
-    it('rejects a show from another tour on create', async () => {
-      const result = await createDayEvent({
-        tour_id: fixture.tourId,
-        date: fixture.date,
-        title: 'Press call',
-        show_id: other.showId,
-      })
-      expect(result.error).toBeTruthy()
-    })
-
-    it('rejects a show from another tour on update', async () => {
-      const created = await createDayEvent({
-        tour_id: fixture.tourId,
-        date: fixture.date,
-        title: 'Press call',
-      })
-      expect(created.error).toBeNull()
-
-      const result = await updateDayEvent(created.eventId!, { show_id: other.showId })
       expect(result.error).toBeTruthy()
     })
   })

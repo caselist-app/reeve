@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { testDb } from './test-db'
 import { createFixture, destroyFixture, type Fixture } from './fixture'
-import { updateShow, updateDaySheet } from '@/lib/actions/shows'
+import { updateShow } from '@/lib/actions/shows'
+import { createDayItem } from '@/lib/actions/day-items'
 import { updateHotelStay } from '@/lib/actions/hotels'
 import { updateTransportSegment, createTransportSegment } from '@/lib/actions/transport'
 import { createHotelStay } from '@/lib/actions/hotels'
@@ -117,31 +118,49 @@ describe('the day link survives an edit', () => {
       expect(before.shows).toHaveLength(0)
     })
 
-    it('carries the day sheet times onto the new date, so /itinerary and the timeline agree', async () => {
+    it('carries the running order onto the new date, so /itinerary and the timeline agree', async () => {
       // The times a TM would have entered before realising the date was wrong.
-      const seeded = await updateDaySheet(fixture.showId, {
-        venue_access: '09:00',
-        load_in: '10:00',
-        soundcheck: '15:00',
-        doors: '19:00',
-      })
-      expect(seeded.error).toBeNull()
+      for (const [kind, clock] of [
+        ['venue_access', '09:00'],
+        ['load_in', '10:00'],
+        ['soundcheck', '15:00'],
+        ['doors', '19:00'],
+      ] as const) {
+        const seeded = await createDayItem({
+          tour_id: fixture.tourId,
+          tour_date_id: fixture.tourDateId,
+          show_id: fixture.showId,
+          kind,
+          start_clock: clock,
+        })
+        expect(seeded.error).toBeNull()
+      }
 
       const moved = await updateShow(fixture.showId, showPayload(NEXT_DAY))
       expect(moved.error).toBeNull()
 
-      const { data: sheet } = await testDb
-        .from('day_sheets')
-        .select('venue_access, load_in, soundcheck, doors')
+      const { data: items } = await testDb
+        .from('day_items')
+        .select('kind, tour_date_id, starts_at')
         .eq('show_id', fixture.showId)
-        .single()
 
-      // Stored as timestamptz derived from the show's date. Every populated one
-      // has to land on the new day, or the timeline renders the show on the
-      // 15th with times belonging to the 14th.
-      for (const value of [sheet?.venue_access, sheet?.load_in, sheet?.soundcheck, sheet?.doors]) {
-        expect(value).not.toBeNull()
-        expect(new Date(value as string).toISOString().slice(0, 10)).toBe(NEXT_DAY)
+      // Both facts move together or neither is right. The day link decides which
+      // day the timeline renders it on, the instant decides what /itinerary says,
+      // and Brief 19 is the bug where one moved and the other did not.
+      expect(items ?? []).toHaveLength(4)
+
+      const { data: newDay } = await testDb
+        .from('tour_dates')
+        .select('id')
+        .eq('tour_id', fixture.tourId)
+        .eq('date', NEXT_DAY)
+        .single()
+      if (!newDay) throw new Error('the show did not get a day to move to')
+
+      for (const item of items ?? []) {
+        expect(item.tour_date_id).toBe(newDay.id)
+        expect(item.starts_at).not.toBeNull()
+        expect(new Date(item.starts_at as string).toISOString().slice(0, 10)).toBe(NEXT_DAY)
       }
 
       // The same fields as the crew see them. Asserting the day rather than the

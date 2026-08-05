@@ -5,7 +5,7 @@ import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import type { ExtractionProposal } from '@/lib/ai/extract'
 import { bustTourContextCache } from '@/lib/ai/context'
-import { updateDaySheet } from '@/lib/actions/shows'
+import { createDayItem } from '@/lib/actions/day-items'
 
 export type ExtractionActionState = { error: string | null }
 
@@ -61,20 +61,49 @@ export async function confirmExtraction(
       continue
     }
 
-    // Brief 36 step 3: the times the email carried go to the day sheet, through
-    // the one writer, rather than to two show columns the day view could not edit.
-    // Written after the show exists because the day sheet hangs off it, and only
-    // when there is something to write, so an email with no times does not touch
-    // the row the RPC just created.
+    // Brief 36 step 3 sent the times the email carried to the day sheet rather
+    // than to two show columns the day view could not edit. Brief 42 makes them
+    // day_items rows, through the one writer, which is now the same writer the
+    // day view uses. Written after the show exists because an item hangs off the
+    // day the show is on, and only when there is something to write, so an email
+    // with no times adds nothing.
     if (showId && (show.load_in || show.curfew)) {
-      const daySheetResult = await updateDaySheet(showId, {
-        ...(show.load_in ? { load_in: show.load_in } : {}),
-        ...(show.curfew ? { curfew: show.curfew } : {}),
-      })
-      // Reported rather than thrown: the show landed, and losing the whole
-      // extraction because one time did not parse would be the worse trade.
-      if (daySheetResult.error) {
-        errors.push(`Show times (${show.venue_name}): ${daySheetResult.error}`)
+      // create_show_with_dependents resolves and writes the day link, so the
+      // show row is where the day comes from. An item has no date column of its
+      // own, deliberately, so this is the only thing that places it.
+      const { data: created } = await supabase
+        .from('shows')
+        .select('tour_date_id')
+        .eq('id', showId)
+        .maybeSingle()
+
+      if (!created?.tour_date_id) {
+        errors.push(`Show times (${show.venue_name}): the show has no day to put them on.`)
+        continue
+      }
+
+      // One call per time, because a day is rows. Ordered load-in first so the
+      // curfew's roll-over has a daytime time to anchor against: a curfew added
+      // to an empty day falls back to the 18:00 anchor, which still rolls 01:30
+      // correctly but does more work than it needs to.
+      for (const [kind, clock] of [
+        ['load_in', show.load_in],
+        ['curfew', show.curfew],
+      ] as const) {
+        if (!clock) continue
+
+        const result = await createDayItem({
+          tour_id: tourId,
+          tour_date_id: created.tour_date_id,
+          show_id: showId,
+          kind,
+          start_clock: clock,
+        })
+        // Reported rather than thrown: the show landed, and losing the whole
+        // extraction because one time did not parse would be the worse trade.
+        if (result.error) {
+          errors.push(`Show times (${show.venue_name}): ${result.error}`)
+        }
       }
     }
   }
