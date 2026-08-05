@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { testDb } from './setup'
+import { testDb } from './test-db'
 import { createFixture, destroyFixture, type Fixture } from './fixture'
 import { updateDaySheet, updateShow } from '@/lib/actions/shows'
 import { localDateInZone, localTimeInZone } from '@/lib/schedule/datetime'

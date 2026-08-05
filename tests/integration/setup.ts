@@ -14,11 +14,17 @@ import { testDb, setTestUserId, currentTestUserId } from './test-db'
 // exists to catch (partial writes nulling columns, PostgREST embed semantics)
 // only exist at that layer. A mocked Supabase client would pass on all of them.
 
-// The client and the mocked-user state live in ./test-db, which imports
-// nothing from vitest, so the Playwright global setup can seed through
-// fixture.ts without pulling this file's mocks into a plain Node process.
-// Re-exported here because every integration test imports them from './setup'.
-export { testDb, setTestUserId }
+// The client and the mocked-user state live in ./test-db, which imports nothing
+// from vitest, so the Playwright global setup can seed through fixture.ts
+// without pulling this file's mocks into a plain Node process.
+//
+// Import them from './test-db', never from here. This file was briefly
+// re-exporting both, and it silently broke every mock: a setup file is
+// transformed with the mock registry applied, so a test importing testDb
+// through it got a different instance from the one the factories below close
+// over, and `createClient()` stopped being the test database. Nothing failed to
+// compile. 60 integration tests went red at once, which is the only reason it
+// was caught in the same hour.
 
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),

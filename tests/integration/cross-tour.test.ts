@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { testDb } from './setup'
+import { testDb } from './test-db'
 import { createFixture, createSecondTour, destroyFixture, type Fixture } from './fixture'
 import { recordTransportOption, createTransportSegment } from '@/lib/actions/transport'
 import { recordHotelOption, createHotelStay } from '@/lib/actions/hotels'
