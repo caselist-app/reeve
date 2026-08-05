@@ -12,6 +12,7 @@ import {
   buildHotelChangeMessage,
 } from '@/lib/comms/templates/change-alert'
 import { broadcastJob } from '@/trigger/jobs/broadcast'
+import { fetchShowItems, firstItemOfKind } from '@/lib/schedule/day-items'
 import type { ChangeDescriptor, AffectedPerson } from '@/lib/comms/affected'
 
 export type BroadcastPreview = {
@@ -195,7 +196,7 @@ async function buildPreviewMessage(
       const [{ data: show }, { data: tour }] = await Promise.all([
         supabase
           .from('shows')
-          .select('venue_name, date, address, day_sheets(load_in, curfew)')
+          .select('venue_name, date, address')
           .eq('id', change.showId)
           .eq('tour_id', tourId)
           .single(),
@@ -213,12 +214,15 @@ async function buildPreviewMessage(
         })
       }
 
-      const daySheet = Array.isArray(show?.day_sheets)
-        ? (show.day_sheets[0] ?? null)
-        : (show?.day_sheets ?? null)
+      // Brief 42: the time is a day_items row. Fetched after the ownership check
+      // above rather than beside it, so a show on another tour never reaches a
+      // second query at all.
+      const { items } = await fetchShowItems(supabase, change.showId)
 
-      // load_in or curfew change: show the new time with "was" context.
-      const fieldValue = change.field === 'load_in' ? daySheet?.load_in : daySheet?.curfew
+      // load_in or curfew change: show the new time with "was" context. The
+      // earliest of a repeated kind, which is the one the alert is about: a TM
+      // who moves the load-in moves the one crew are called for.
+      const fieldValue = firstItemOfKind(items, change.field)?.starts_at ?? null
       const newTime = fieldValue
         ? new Date(fieldValue).toLocaleTimeString('en-GB', {
             hour: '2-digit',
@@ -242,7 +246,7 @@ async function buildPreviewMessage(
     case 'day_sheet': {
       const { data: show } = await supabase
         .from('shows')
-        .select('venue_name, date, day_sheets(load_in)')
+        .select('venue_name, date')
         .eq('id', change.showId)
         .eq('tour_id', tourId)
         .single()
@@ -250,10 +254,13 @@ async function buildPreviewMessage(
       const venueName = show?.venue_name ?? 'venue'
       const date = show?.date ?? 'TBC'
 
-      // day_sheets is a one-to-one join - supabase returns it as an object, not array
-      const ds = show?.day_sheets as { load_in: string | null } | null
-      const newLoadIn = ds?.load_in
-        ? new Date(ds.load_in).toLocaleTimeString('en-GB', {
+      // Ownership is established by the query above returning a row, so this one
+      // cannot reach another tour's show.
+      const { items } = await fetchShowItems(supabase, change.showId)
+      const loadIn = firstItemOfKind(items, 'load_in')?.starts_at ?? null
+
+      const newLoadIn = loadIn
+        ? new Date(loadIn).toLocaleTimeString('en-GB', {
             hour: '2-digit',
             minute: '2-digit',
             timeZone: 'UTC',

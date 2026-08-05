@@ -10,17 +10,10 @@ type PersonType = 'artist' | 'crew' | 'management' | 'support'
 type SendableDocument = { id: string; title: string; doc_type: string }
 type ContactablePerson = { id: string; name: string; contact_email: string }
 
-// Mirrors DaySheet from components/schedule/panels/show-panel.tsx
-type ShowDaySheet = Pick<
-  Tables<'day_sheets'>,
-  | 'lobby_call' | 'venue_access' | 'load_in' | 'line_check' | 'soundcheck' | 'vip'
-  | 'doors' | 'support_on' | 'support_off' | 'changeover'
-  | 'headliner_on' | 'headliner_off' | 'curfew' | 'load_out'
-  | 'catering_type'
-  | 'catering_breakfast_start' | 'catering_breakfast_end'
-  | 'catering_lunch_start' | 'catering_lunch_end'
-  | 'catering_dinner_start' | 'catering_dinner_end'
->
+// ShowDaySheet is gone. Brief 42: a show's times are day_items rows and are
+// edited one at a time through the 'day-item' descriptor below. The rest of a
+// show (venue, catering, advance, delete) is the 'venue' descriptor, reached
+// from the venue block in day info.
 
 // Mirrors Segment from components/schedule/panels/transport-panel.tsx
 type ScheduleTransportSegment = Pick<
@@ -40,10 +33,12 @@ type ScheduleHotelStay = Pick<
   | 'wifi_network' | 'wifi_password'
 >
 
-// Mirrors DayEvent from components/schedule/panels/event-panel.tsx
-type ScheduleDayEvent = Pick<
-  Tables<'day_events'>,
-  'id' | 'title' | 'starts_at' | 'ends_at' | 'location' | 'notes'
+// Mirrors DayItem from components/schedule/panels/day-item-panel.tsx. Brief 42
+// replaced the day-event descriptor with this: a freeform event is now an item
+// of kind 'other', so one panel edits everything on a day.
+type ScheduleDayItem = Pick<
+  Tables<'day_items'>,
+  'id' | 'show_id' | 'kind' | 'title' | 'starts_at' | 'ends_at' | 'location' | 'notes'
 >
 
 // Mirrors AddCategory from components/schedule/add/add-picker.tsx
@@ -132,18 +127,6 @@ export type PanelDescriptor =
   // timeline-card.tsx can compare active state without JSON.stringify, which
   // Brief 26 flagged as sensitive to key ordering.
   | {
-      type: 'show'
-      key: string
-      showId: string
-      // Needed by the day sheet's change alert: previewBroadcast and sendBroadcast
-      // are both tour-scoped, since who to notify is resolved from the tour's
-      // people and the show's date.
-      tourId: string
-      venueName: string
-      timezone: string
-      daySheet: ShowDaySheet | null
-    }
-  | {
       type: 'transport'
       key: string
       segment: ScheduleTransportSegment
@@ -155,9 +138,13 @@ export type PanelDescriptor =
       stay: ScheduleHotelStay
     }
   | {
-      type: 'event'
+      // Brief 42: one panel for anything on a day, replacing the show panel's
+      // twenty-field day sheet and the event panel. `tourId` is here for the
+      // change alert: who to notify is resolved from the tour's people.
+      type: 'day-item'
       key: string
-      event: ScheduleDayEvent
+      tourId: string
+      item: ScheduleDayItem
       timezone: string
     }
   // Brief 33: the add-to-day form, opened from the category popover/sheet in
@@ -174,12 +161,12 @@ export type PanelDescriptor =
       onBack: () => void
     }
 
-// The subset of PanelDescriptor that timeline-card.tsx can open: the four
-// variants that carry a stable key, used for active-state comparison instead
-// of JSON.stringify.
+// The subset of PanelDescriptor that timeline-card.tsx can open: the variants
+// that carry a stable key, used for active-state comparison instead of
+// JSON.stringify.
 export type SchedulePanelDescriptor = Extract<
   PanelDescriptor,
-  { type: 'show' | 'transport' | 'hotel' | 'event' }
+  { type: 'transport' | 'hotel' | 'day-item' }
 >
 
 interface SidePanelState {

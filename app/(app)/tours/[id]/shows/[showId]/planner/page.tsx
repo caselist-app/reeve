@@ -5,6 +5,7 @@ import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { PlannerWorkspace } from '@/components/planner/planner-workspace'
 import { BoardingPassUploader, type TransportAssignmentRow } from '@/components/planner/boarding-pass-uploader'
+import { requiredSiteArrivalFor } from '@/lib/shows/load-in'
 
 export default async function PlannerPage({
   params,
@@ -25,12 +26,13 @@ export default async function PlannerPage({
     supabase
       .from('shows')
       .select(
-        // Brief 36 step 3: load-in comes from the day sheet, which is the only
-        // place that holds it. Read through the same embed the planner's server
-        // action reads it through, so the number the TM sees in the workspace and
-        // the number the feasibility ranking uses cannot come apart. That drift is
-        // exactly what the two columns caused.
-        'id, tour_id, venue_name, date, hub_resolved_at, transport_hub_iata, transport_hub_rail, hub_ground_minutes, day_sheets(load_in)'
+        // Brief 42: load-in is a day_items row. Read below through
+        // requiredSiteArrivalFor, the same function the planner's server action
+        // ranks against, so the number the TM sees in the workspace and the
+        // number the feasibility ranking uses cannot come apart. Reading it
+        // through one function rather than two queries is the whole point of
+        // that helper, and it is what the two columns got wrong.
+        'id, tour_id, venue_name, date, hub_resolved_at, transport_hub_iata, transport_hub_rail, hub_ground_minutes'
       )
       .eq('id', showId)
       .eq('tour_id', id)
@@ -58,6 +60,11 @@ export default async function PlannerPage({
 
   if (!tour) redirect('/')
   if (!show) redirect(`/tours/${id}/schedule`)
+
+  // The deadline the workspace displays, read through the one function the
+  // feasibility ranking uses. Fetched after the redirect guard because it needs
+  // a show that exists.
+  const requiredSiteArrival = await requiredSiteArrivalFor(supabase, showId)
 
   // Prior show, needs show.date, so fetched after the redirect guard.
   const { data: priorShowRaw } = await supabase
@@ -146,6 +153,7 @@ export default async function PlannerPage({
         <div className="space-y-10">
           <PlannerWorkspace
             show={show}
+            requiredSiteArrival={requiredSiteArrival}
             people={peopleList}
             tourId={id}
             timezone={tour.timezone}

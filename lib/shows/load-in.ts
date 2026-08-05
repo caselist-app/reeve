@@ -27,18 +27,35 @@ export async function requiredSiteArrivalFor(
   supabase: Client,
   showId: string,
 ): Promise<string | null> {
-  // Selected from day_sheets directly rather than through an embed on shows.
-  // There is one row per show, so this is the same single round trip, and it
-  // keeps the caller free to fetch whatever else it needs from shows without
-  // this function dictating that query's shape.
-  const { data } = await supabase
-    .from('day_sheets')
-    .select('load_in')
+  // Selected from day_items directly rather than through an embed on shows, so
+  // this function does not dictate the caller's query shape.
+  //
+  // Brief 42: a show can hold two load-ins now, and the planner has to pick one.
+  // The EARLIEST is the answer, and that is not arbitrary. This value is what
+  // door_to_site_at is ranked against, so it is "when must crew be on site by".
+  // A second load-in later in the day does not relax the first one, and ranking
+  // against it would call a flight feasible that lands after the crew were due.
+  // Ordering ascending with nulls last and taking the first row is that rule.
+  const { data, error } = await supabase
+    .from('day_items')
+    .select('starts_at')
     .eq('show_id', showId)
+    .eq('kind', 'load_in')
+    .not('starts_at', 'is', null)
+    .order('starts_at', { ascending: true })
+    .limit(1)
     .maybeSingle()
 
-  // maybeSingle rather than single: a show with no day sheet row is not an error
-  // here, it is a show with no load-in. create_show_with_dependents always
-  // inserts the row, so this is the defensive branch rather than the common one.
-  return data?.load_in ?? null
+  // A failed read reads as "no load-in set", which makes every option feasible
+  // rather than none, so it has to be visible. Logged rather than thrown: the
+  // planner ranking is not worth taking a page down for, and the caller already
+  // handles a null by not filtering on feasibility.
+  if (error) {
+    console.error('[load-in] could not read the show load-in:', error.message, { showId })
+    return null
+  }
+
+  // A show with no load-in row is not an error, it is a show whose TM has not
+  // set one yet. Every show starts in exactly that state.
+  return data?.starts_at ?? null
 }

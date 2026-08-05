@@ -142,7 +142,7 @@ export const E2E_TOUR_B_NAME = 'Harbour Sessions Tour'
 
 // A load-in on account A's show day, so the revalidate spec has a time to edit
 // and the day timeline has a card to click. Set here rather than in
-// createFixture, because the integration tests assert on an empty day sheet and
+// createFixture, because the integration tests assert on a day with no items and
 // a default time would quietly change what they are testing.
 //
 // The tour is Europe/London and the seeded date is in June, so 15:00Z renders
@@ -178,10 +178,19 @@ export async function createE2eSeed(): Promise<E2eSeed> {
   const a = await createFixture({ tourName: E2E_TOUR_A_NAME, artistName: 'Seeded Artist' })
   const b = await createFixture({ tourName: E2E_TOUR_B_NAME, artistName: 'Other Artist' })
 
-  const { error: loadInError } = await testDb
-    .from('day_sheets')
-    .update({ load_in: `${a.date}${E2E_SEEDED_LOAD_IN_UTC}` })
-    .eq('show_id', a.showId)
+  // A day_items row since Brief 42, not a day_sheets column. Inserted directly
+  // rather than through createDayItem because this runs in Playwright's global
+  // setup, which is plain Node with no mocked requireUser, and a server action
+  // needs one. The instant is written straight in for the same reason: the
+  // action's roll-over resolution is what would otherwise derive it, and this is
+  // a daytime time on an otherwise empty day, so there is nothing to resolve.
+  const { error: loadInError } = await testDb.from('day_items').insert({
+    tour_id: a.tourId,
+    tour_date_id: a.tourDateId,
+    show_id: a.showId,
+    kind: 'load_in',
+    starts_at: `${a.date}${E2E_SEEDED_LOAD_IN_UTC}`,
+  })
   if (loadInError) throw new Error(`seed: could not set the load-in: ${loadInError.message}`)
 
   // Same day as the show, so the stay sits on the day view the schedule specs

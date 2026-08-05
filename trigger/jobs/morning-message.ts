@@ -11,6 +11,8 @@ import {
   type WrapOnwardLeg,
   type BlockType,
 } from '@/lib/comms/blocks/select'
+import { showBlockTimesFromItems, type ShowBlockTimes } from '@/lib/comms/blocks/show-times'
+import { fetchShowItems } from '@/lib/schedule/day-items'
 import type {
   OpenerData,
   ShowInfoData,
@@ -75,22 +77,33 @@ export const morningMessageSchedule = schedules.task({
     const today = localDate(timezone)
     const artistName = (tour.artists as { name: string } | null)?.name ?? ''
 
+    // catering_type comes off the show since REE-19 moved it there.
     const { data: show } = await admin
       .from('shows')
-      .select('id, venue_name, date')
+      .select('id, venue_name, date, catering_type')
       .eq('tour_id', tourId)
       .eq('date', today)
       .maybeSingle()
 
     if (!show) return { skipped: true, reason: 'no_show_today', date: today }
 
-    // Fetch the day sheet for block selection and rendering.
-    // Single literal string required for Supabase to infer column types.
-    const { data: daySheet } = await admin
-      .from('day_sheets')
-      .select('load_in, soundcheck, changeover, headliner_on, curfew, doors, catering_type, catering_breakfast_start, catering_breakfast_end, catering_lunch_start, catering_lunch_end, catering_dinner_start, catering_dinner_end')
-      .eq('show_id', show.id)
-      .maybeSingle()
+    // The show's running order, collapsed to one value per kind for the Meta
+    // templates, which have fixed placeholders. See lib/comms/blocks/show-times.ts
+    // for why that collapse is the channel's constraint and not a return to
+    // columns.
+    const { items, error: itemsError } = await fetchShowItems(admin, show.id)
+
+    // A failed read is not a day with no times. Sending an opener and a wrap
+    // block with no show information, to everyone on the tour, because a query
+    // failed, is worse than sending nothing: the TM sees a delivered morning
+    // message and has no reason to look. Skipped and named so the Trigger.dev
+    // run says why, which is the only place this is visible.
+    if (itemsError) {
+      console.error('[morning-message] day items lookup failed:', itemsError, { tourId })
+      return { skipped: true, reason: 'day_items_read_failed', date: today }
+    }
+
+    const daySheet = showBlockTimesFromItems(items, show.catering_type)
 
     // Everyone on the tour with at least one usable address.
     const { data: peopleRows } = await admin
@@ -143,18 +156,9 @@ export const morningMessageSchedule = schedules.task({
           }
         }
 
-        // Block plan: which blocks fire today for this person.
-        const blockInput: DayBlockInput = {
-          load_in: daySheet?.load_in ?? null,
-          soundcheck: daySheet?.soundcheck ?? null,
-          changeover: daySheet?.changeover ?? null,
-          headliner_on: daySheet?.headliner_on ?? null,
-          curfew: daySheet?.curfew ?? null,
-          catering_type: daySheet?.catering_type ?? 'none',
-          catering_breakfast_start: daySheet?.catering_breakfast_start ?? null,
-          catering_lunch_start: daySheet?.catering_lunch_start ?? null,
-          catering_dinner_start: daySheet?.catering_dinner_start ?? null,
-        }
+        // Block plan: which blocks fire today for this person. ShowBlockTimes is
+        // a superset of DayBlockInput, so the resolved times are the input.
+        const blockInput: DayBlockInput = daySheet
 
         const blockPlan = resolveDayBlocks(blockInput, onwardLeg)
 
@@ -227,20 +231,10 @@ function buildBlockData(
     artistName: string
     show: { venue_name: string; date: string }
     today: string
-    daySheet: {
-      load_in: string | null
-      soundcheck: string | null
-      changeover: string | null
-      headliner_on: string | null
-      curfew: string | null
-      catering_type: string
-      catering_breakfast_start: string | null
-      catering_breakfast_end: string | null
-      catering_lunch_start: string | null
-      catering_lunch_end: string | null
-      catering_dinner_start: string | null
-      catering_dinner_end: string | null
-    } | null
+    // Named daySheet still, and it is a day_items view now. Renaming it reaches
+    // every branch below for no behaviour change, and the contract migration
+    // (REE-23) is where that vocabulary sweep belongs.
+    daySheet: ShowBlockTimes
     onwardLeg: WrapOnwardLeg | null
     timezone: string
     blockInput: DayBlockInput

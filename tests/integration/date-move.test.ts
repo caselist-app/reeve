@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { testDb } from './test-db'
 import { createFixture, destroyFixture, type Fixture } from './fixture'
-import { updateShow, updateDaySheet } from '@/lib/actions/shows'
+import { updateShow } from '@/lib/actions/shows'
+import { createDayItem } from '@/lib/actions/day-items'
 import { createHotelStay, updateHotelStay } from '@/lib/actions/hotels'
 import { createTransportSegment, updateTransportSegment } from '@/lib/actions/transport'
 
@@ -50,20 +51,85 @@ describe('a move is reported back to the TM', () => {
         tourId: fixture.tourId,
         date: NEXT_DAY,
         dayCreated: true,
-        // The fixture's day sheet exists with every column null, which is exactly
-        // what create_show_with_dependents leaves behind, so a show moved before
-        // any times were entered must not claim times moved with it.
+        // A show with no items on it yet, which is every show the moment it is
+        // created, must not claim a running order moved with it.
         carriedTimes: false,
       })
     })
 
     it('reports that the times came too, once there are times to carry', async () => {
-      const seeded = await updateDaySheet(fixture.showId, { load_in: '10:00', doors: '19:00' })
+      const seeded = await createDayItem({
+        tour_id: fixture.tourId,
+        tour_date_id: fixture.tourDateId,
+        show_id: fixture.showId,
+        kind: 'load_in',
+        start_clock: '10:00',
+      })
       expect(seeded.error).toBeNull()
 
       const result = await updateShow(fixture.showId, showPayload(NEXT_DAY))
 
       expect(result.moved?.carriedTimes).toBe(true)
+    })
+
+    it('takes the whole running order with it, day link and instants together', async () => {
+      // The bug this replaces shiftDaySheetToDate to avoid. Items point at a
+      // tour_date_id, so a show that moves without them leaves its entire running
+      // order on a day that no longer has a show, visible to nobody who is
+      // looking at the show.
+      for (const [kind, clock] of [
+        ['load_in', '10:00'],
+        ['curfew', '01:30'],
+      ] as const) {
+        const seeded = await createDayItem({
+          tour_id: fixture.tourId,
+          tour_date_id: fixture.tourDateId,
+          show_id: fixture.showId,
+          kind,
+          start_clock: clock,
+        })
+        expect(seeded.error).toBeNull()
+      }
+
+      const result = await updateShow(fixture.showId, showPayload(NEXT_DAY))
+      expect(result.error).toBeNull()
+
+      const { data: newDay } = await testDb
+        .from('tour_dates')
+        .select('id')
+        .eq('tour_id', fixture.tourId)
+        .eq('date', NEXT_DAY)
+        .single()
+      if (!newDay) throw new Error('the show did not get a day to move to')
+
+      const { data: items } = await testDb
+        .from('day_items')
+        .select('kind, tour_date_id, starts_at')
+        .eq('show_id', fixture.showId)
+        .order('kind')
+
+      // Both moved, and neither was left behind on the old day.
+      expect(items ?? []).toHaveLength(2)
+      for (const item of items ?? []) {
+        expect(item.tour_date_id).toBe(newDay.id)
+        expect(item.tour_date_id).not.toBe(fixture.tourDateId)
+      }
+
+      const curfew = (items ?? []).find((i) => i.kind === 'curfew')
+      const loadIn = (items ?? []).find((i) => i.kind === 'load_in')
+      if (!curfew || !loadIn) throw new Error('an item did not survive the move')
+
+      // The load-in is on the new date. The curfew is on the morning AFTER the
+      // new date, because its day offset was carried rather than flattened.
+      // Re-deriving from the wall clock alone would put 01:30 on the 15th, which
+      // reads as correct right up until a crew member is told the wrong night.
+      // Europe/London in June is BST, so 10:00 local is 09:00Z.
+      // Compared as instants rather than as strings: PostgREST renders a
+      // timestamptz with "+00:00" rather than "Z", which is a serialisation
+      // detail and not the thing under test.
+      const instant = (iso: string | null) => (iso ? new Date(iso).toISOString() : null)
+      expect(instant(loadIn.starts_at)).toBe(`${NEXT_DAY}T09:00:00.000Z`)
+      expect(instant(curfew.starts_at)).toBe('2030-06-16T00:30:00.000Z')
     })
 
     it('does not claim the day was added when the day was already on the tour', async () => {

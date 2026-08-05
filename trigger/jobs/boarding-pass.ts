@@ -1,5 +1,6 @@
 import { task } from '@trigger.dev/sdk/v3'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { fetchShowItems, firstItemOfKind } from '@/lib/schedule/day-items'
 import {
   buildLegLabel,
   formatDeparture,
@@ -105,16 +106,24 @@ export const boardingPassJob = task({
         .format(new Date(seg.arrive_at))
       const { data: destShow } = await admin
         .from('shows')
-        .select('venue_name, day_sheets(load_in)')
+        .select('id, venue_name')
         .eq('tour_id', payload.tour_id)
         .eq('date', arriveDate)
         .maybeSingle()
 
       if (destShow) {
         destinationVenue = destShow.venue_name
-        const daySheet = destShow.day_sheets as { load_in: string | null } | null
-        if (daySheet?.load_in) {
-          loadIn = formatTime(daySheet.load_in, timezone)
+
+        // Brief 42: the load-in is a day_items row. Read through the same helper
+        // the planner and the day header use, so the time on a crew member's
+        // boarding pass and the time on the TM's timeline cannot come apart.
+        //
+        // The earliest load-in, because that is when crew are called. A second,
+        // later one does not move the time this person has to land by.
+        const { items } = await fetchShowItems(admin, destShow.id)
+        const showLoadIn = firstItemOfKind(items, 'load_in')?.starts_at ?? null
+        if (showLoadIn) {
+          loadIn = formatTime(showLoadIn, timezone)
         }
       }
     }

@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { redis } from '@/lib/redis'
+import { fetchItemsForShows } from '@/lib/schedule/day-items'
 
 // TourContext is assembled once per inference call and passed explicitly
 // in the user turn. Claude has no standing database access. It never sees
@@ -36,7 +37,7 @@ export type TourContext = {
     venue_name: string
     address: string | null
     venue_type: string | null
-    // Brief 36 step 3: load-in and curfew live on day_sheet below and nowhere
+    // Brief 36 step 3: load-in and curfew live on the day's items and nowhere
     // else. This type used to carry load_in_at and curfew_at alongside the day
     // sheet's load_in and curfew, so the model was handed two answers to the same
     // question with no rule for which one won.
@@ -47,15 +48,23 @@ export type TourContext = {
       status_hospitality: string
       status_travel: string
     } | null
-    day_sheet: {
-      venue_access: string | null
-      load_in: string | null
-      soundcheck: string | null
-      doors: string | null
-      headliner_on: string | null
-      curfew: string | null
-      lobby_call: string | null
-    } | null
+    // Brief 42: an array of what is actually on the day, in running order,
+    // rather than a wide object of mostly-null columns. Three things follow.
+    //
+    // The model can now see a second soundcheck and a press call, which columns
+    // could not express, so it can answer a question about them.
+    // An absent item is absent rather than present as null, which is a smaller
+    // payload and a clearer signal: "there is no soundcheck" and "soundcheck is
+    // null" read the same to a model and mean the same thing here.
+    // `kind` is the machine name ('load_in'), not the label. It is stable, it is
+    // what the check constraint holds, and the model reads it fine.
+    items: Array<{
+      kind: string
+      title: string | null
+      starts_at: string | null
+      ends_at: string | null
+      location: string | null
+    }>
   }>
   people: Array<{
     id: string
@@ -125,10 +134,13 @@ export async function assembleTourContext(tour_id: string): Promise<TourContext>
       admin.from('tours').select('id, name, artists(name), territory, base_currency').eq('id', tour_id).single(),
       admin
         .from('shows')
+        // The day_sheets embed is gone. It was the second of the two untyped
+        // select strings that had to agree about what can be on a day, and the
+        // one that runs on Trigger.dev, so a missed field here was invisible on
+        // Vercel and reached a crew member. Items are fetched below instead.
         .select(`
           id, date, venue_name, address, venue_type,
-          show_advance ( status_audio, status_lighting, status_staging, status_hospitality, status_travel ),
-          day_sheets ( lobby_call, venue_access, load_in, soundcheck, doors, headliner_on, curfew )
+          show_advance ( status_audio, status_lighting, status_staging, status_hospitality, status_travel )
         `)
         .eq('tour_id', tour_id)
         .order('date', { ascending: true }),
@@ -160,6 +172,14 @@ export async function assembleTourContext(tour_id: string): Promise<TourContext>
 
   const rawTour = tourRes.data
 
+  // A second round trip rather than an embed, because items are their own rows
+  // now. One query for the whole tour, grouped in memory, so this does not
+  // become a query per show.
+  const { byShow: itemsByShow } = await fetchItemsForShows(
+    admin,
+    (showsRes.data ?? []).map((s) => s.id),
+  )
+
   const context: TourContext = {
     tour: {
       id: rawTour.id,
@@ -175,7 +195,13 @@ export async function assembleTourContext(tour_id: string): Promise<TourContext>
       address: s.address,
       venue_type: s.venue_type,
       advance: Array.isArray(s.show_advance) ? (s.show_advance[0] ?? null) : (s.show_advance ?? null),
-      day_sheet: Array.isArray(s.day_sheets) ? (s.day_sheets[0] ?? null) : (s.day_sheets ?? null),
+      items: (itemsByShow.get(s.id) ?? []).map((item) => ({
+        kind: item.kind,
+        title: item.title,
+        starts_at: item.starts_at,
+        ends_at: item.ends_at,
+        location: item.location,
+      })),
     })),
     people: (peopleRes.data ?? []).map((p) => {
       const c = p.contacts as {

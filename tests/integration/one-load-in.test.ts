@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { testDb } from './test-db'
 import { createFixture, destroyFixture, type Fixture } from './fixture'
-import { updateDaySheet } from '@/lib/actions/shows'
+import { createDayItem } from '@/lib/actions/day-items'
 import { requiredSiteArrivalFor } from '@/lib/shows/load-in'
 import { fetchDayRecords } from '@/lib/schedule/day-records'
 import { renderItinerary } from '@/lib/comms/templates/itinerary'
@@ -49,18 +49,23 @@ describe('load-in and curfew have one home', () => {
     await destroyFixture(fixture)
   })
 
-  // The stored instant, read back from the one column that is allowed to hold it.
+  // The stored instant, read back from the one row that is allowed to hold it.
   // Every assertion below compares against this rather than against a hardcoded
   // timestamp, so the test says "they agree" rather than encoding a timezone
   // calculation of its own and then checking its own arithmetic.
-  async function storedDaySheet() {
+  //
+  // Brief 42 moved the home from a day_sheets column to a day_items row. The
+  // question this file asks is unchanged: is there exactly one, and does every
+  // surface read it.
+  async function storedTime(kind: string) {
     const { data, error } = await testDb
-      .from('day_sheets')
-      .select('load_in, curfew')
+      .from('day_items')
+      .select('starts_at')
       .eq('show_id', fixture.showId)
+      .eq('kind', kind)
       .single()
-    if (error) throw new Error(`could not read the day sheet: ${error.message}`)
-    return data
+    if (error) throw new Error(`could not read the ${kind} item: ${error.message}`)
+    return data.starts_at
   }
 
   describe('there is nowhere else to put one', () => {
@@ -69,9 +74,9 @@ describe('load-in and curfew have one home', () => {
     // regenerated, `select('load_in_at')` is a compile error, which is a useful
     // guard but not a runtime one. Types can be stale against the database, and
     // the database is what the crew-facing reads actually hit.
-    async function selectShowColumn(column: string) {
+    async function selectColumn(table: string, column: string) {
       const res = await fetch(
-        `${process.env.SUPABASE_TEST_URL}/rest/v1/shows?select=${column}&limit=1`,
+        `${process.env.SUPABASE_TEST_URL}/rest/v1/${table}?select=${column}&limit=1`,
         {
           headers: {
             apikey: process.env.SUPABASE_TEST_SERVICE_ROLE_KEY ?? '',
@@ -81,6 +86,8 @@ describe('load-in and curfew have one home', () => {
       )
       return { status: res.status, body: await res.json() }
     }
+
+    const selectShowColumn = (column: string) => selectColumn('shows', column)
 
     it('has dropped shows.load_in_at', async () => {
       const { status, body } = await selectShowColumn('load_in_at')
@@ -99,42 +106,50 @@ describe('load-in and curfew have one home', () => {
       expect(body.code).toBe('42703')
     })
 
-    it('still has the day sheet columns that replaced them', async () => {
-      // The inverse case. Two of the three tests above would also pass if the
-      // day sheet had been dropped instead, or if the table had been renamed, so
-      // this pins down that the survivor survived.
-      const { status } = await selectShowColumn('id')
-      expect(status).toBe(200)
-
-      const sheet = await storedDaySheet()
-      expect(sheet).toHaveProperty('load_in')
-      expect(sheet).toHaveProperty('curfew')
+    it('answers on day_items instead', async () => {
+      // The inverse case. Both tests above would also pass if the whole schema
+      // had been dropped or a table renamed, which is a far worse migration and
+      // an identical error code, so this pins down that the survivor survived.
+      //
+      // Structural, like its siblings, and asserting nothing about the contents.
+      // This block seeds no times: the surfaces-agree block below does that, and
+      // an assertion here that needed a row would fail on an empty table for a
+      // reason that has nothing to do with what it claims to check.
+      expect((await selectShowColumn('id')).status).toBe(200)
+      expect((await selectColumn('day_items', 'kind,starts_at')).status).toBe(200)
     })
   })
 
   describe('every surface reads the one that survives', () => {
     beforeEach(async () => {
       // Set once, through the one writer, exactly as a TM would from the day
-      // view's show panel.
-      const result = await updateDaySheet(fixture.showId, {
-        load_in: LOAD_IN_LOCAL,
-        curfew: CURFEW_LOCAL,
-      })
-      if (result.error) throw new Error(`could not set the day sheet: ${result.error}`)
+      // view. Two calls rather than one payload, because a day is rows now: a
+      // load-in and a curfew are two separate things a TM adds separately.
+      for (const [kind, clock] of [
+        ['load_in', LOAD_IN_LOCAL],
+        ['curfew', CURFEW_LOCAL],
+      ] as const) {
+        const result = await createDayItem({
+          tour_id: fixture.tourId,
+          tour_date_id: fixture.tourDateId,
+          show_id: fixture.showId,
+          kind,
+          start_clock: clock,
+        })
+        if (result.error) throw new Error(`could not set the ${kind}: ${result.error}`)
+      }
     })
 
-    it('gives the planner the day sheet load-in as the required site arrival', async () => {
+    it('gives the planner the load-in item as the required site arrival', async () => {
       // The feasibility ranking compares door_to_site_at against this, so a stale
       // value here does not just display wrongly, it ranks a flight as feasible
       // that gets the crew to the venue after load-in.
-      const sheet = await storedDaySheet()
-
-      expect(await requiredSiteArrivalFor(testDb, fixture.showId)).toBe(sheet.load_in)
+      expect(await requiredSiteArrivalFor(testDb, fixture.showId)).toBe(
+        await storedTime('load_in'),
+      )
     })
 
     it('gives the timeline the same load-in the planner got', async () => {
-      const sheet = await storedDaySheet()
-
       const records = await fetchDayRecords(testDb, {
         tourId: fixture.tourId,
         tourDateId: fixture.tourDateId,
@@ -142,11 +157,16 @@ describe('load-in and curfew have one home', () => {
         timezone: TIMEZONE,
       })
 
-      const show = records.shows.find((s) => s.id === fixture.showId)
-      if (!show) throw new Error('the show is not on its own day')
+      // A failed read must not read as a day with no times, which is exactly what
+      // an assertion on an empty array would do.
+      expect(records.itemsError).toBeNull()
 
-      expect(show.day_sheets?.load_in).toBe(sheet.load_in)
-      expect(show.day_sheets?.curfew).toBe(sheet.curfew)
+      const loadIn = records.items.find((i) => i.kind === 'load_in')
+      const curfew = records.items.find((i) => i.kind === 'curfew')
+      if (!loadIn || !curfew) throw new Error('the day is missing the items under test')
+
+      expect(loadIn.starts_at).toBe(await storedTime('load_in'))
+      expect(curfew.starts_at).toBe(await storedTime('curfew'))
     })
 
     it('tells the crew the time the TM typed, in the tour timezone', async () => {
@@ -154,10 +174,41 @@ describe('load-in and curfew have one home', () => {
       // 10:00. Anything other than 10:00 reaching a crew member's handset is the
       // failure Brief 36 exists to remove, whether the cause is a second column
       // or a render in the wrong timezone.
+      //
+      // The label is the kind list's, so this is 'Load-in' where the old fixed
+      // nine-line list said 'Load in'. Hardcoded rather than read off the list,
+      // because this is the string a crew member sees and a test that derives it
+      // would agree with the code whatever the code said.
       const itinerary = await renderItinerary(fixture.personId, fixture.tourId)
 
-      expect(itinerary).toContain(`Load in: ${LOAD_IN_LOCAL}`)
+      expect(itinerary).toContain(`Load-in: ${LOAD_IN_LOCAL}`)
       expect(itinerary).toContain(`Curfew: ${CURFEW_LOCAL}`)
+    })
+
+    it('tells the crew which day the show is, not just what time', async () => {
+      // Added after this regressed. The old template carried the date on the
+      // venue access line, because that was the one entry in a fixed nine-line
+      // list that used a date format, and removing the list removed the date
+      // with it. For one commit /itinerary answered with a venue, a list of
+      // times and no day at all, which is worse than useless to a crew member
+      // deciding whether to travel tonight or in the morning.
+      //
+      // Asserted on the day and month rather than the rendered weekday, so this
+      // does not encode a date calculation of its own and then check its own
+      // arithmetic.
+      const itinerary = await renderItinerary(fixture.personId, fixture.tourId)
+
+      expect(itinerary).toContain('14 Jun')
+    })
+
+    it('sends no line at all for a time the TM has not set', async () => {
+      // The other half of rows. The old template printed nine fixed labels and
+      // wrote TBC against every one that was empty, so a show with two times sent
+      // seven lines of nothing. An item that does not exist has no line.
+      const itinerary = await renderItinerary(fixture.personId, fixture.tourId)
+
+      expect(itinerary).not.toContain('Soundcheck')
+      expect(itinerary).not.toContain('TBC')
     })
 
     it('still finds the show on its own show day, so the crew are told about tonight', async () => {
@@ -180,12 +231,17 @@ describe('load-in and curfew have one home', () => {
       const show = context.shows.find((s) => s.id === fixture.showId)
       if (!show) throw new Error('the show is missing from the AI context')
 
-      const sheet = await storedDaySheet()
-      expect(show.day_sheet?.load_in).toBe(sheet.load_in)
+      const loadIn = show.items.find((i) => i.kind === 'load_in')
+      if (!loadIn) throw new Error('the AI context is missing the load-in')
+      expect(loadIn.starts_at).toBe(await storedTime('load_in'))
+
+      // Exactly one, so the model cannot be handed two answers to one question.
+      expect(show.items.filter((i) => i.kind === 'load_in')).toHaveLength(1)
 
       // Nothing on the show entry itself claims to be a load-in any more.
       expect(Object.keys(show)).not.toContain('load_in_at')
       expect(Object.keys(show)).not.toContain('curfew_at')
+      expect(Object.keys(show)).not.toContain('day_sheet')
     })
   })
 })

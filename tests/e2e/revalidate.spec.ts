@@ -32,15 +32,22 @@ test('an edited load-in shows on the timeline without a reload', async ({ page }
 
   await loadInCard.click()
 
-  // The panel's heading is the venue name; "Day sheet" is its description.
-  await expect(page.getByText('Day sheet')).toBeVisible()
+  // Brief 42: clicking a time opens that item alone, not the twenty-field day
+  // sheet. The panel's heading is the item's name, which for an untitled item is
+  // its kind label, and "On this day" is its description.
+  await expect(page.getByText('On this day')).toBeVisible()
 
   // By form field name rather than by label. The panel's time labels carry no
   // htmlFor and the input no id, so nothing associates them and getByLabel
   // cannot see them. The field name is the contract the server action reads, so
   // it is a more stable handle than either the label text or the DOM shape.
   // Worth fixing in the app for screen readers, but not in this brief.
-  const loadIn = page.locator('input[name="load_in"]')
+  //
+  // start_clock, not load_in: an item has one time and the kind says what the
+  // time is for, which is the whole shape change. It posts a bare HH:MM because
+  // the day an item belongs to is its tour_date_id, and the action builds the
+  // instant once it can see the rest of the day.
+  const loadIn = page.locator('input[name="start_clock"]')
 
   await loadIn.fill(newTime)
   await page.getByRole('button', { name: 'Save', exact: true }).click()

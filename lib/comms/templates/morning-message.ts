@@ -1,8 +1,13 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { fetchShowItems, firstItemOfKind } from '@/lib/schedule/day-items'
 
 // Zero-AI morning message. Renders directly from the spine.
 // Sent on show days to each person over WhatsApp.
-// Source of truth: day_sheet times, show venue, hotel check-out.
+// Source of truth: the show's day_items, show venue, hotel check-out.
+//
+// One value per kind, because this feeds a Meta template with fixed
+// placeholders. See lib/comms/blocks/show-times.ts: the collapse is the
+// channel's constraint, not a return to columns.
 
 export type MorningMessageData = {
   // First name only, split from full name at the caller.
@@ -33,16 +38,12 @@ export async function buildMorningMessageData(
   const [
     { data: person },
     { data: show },
-    { data: daySheet },
+    showItems,
     { data: roomAssignment },
   ] = await Promise.all([
     admin.from('people').select('contacts(name)').eq('id', person_id).single(),
     admin.from('shows').select('venue_name, date').eq('id', show_id).single(),
-    admin
-      .from('day_sheets')
-      .select('load_in, soundcheck, doors, headliner_on, curfew')
-      .eq('show_id', show_id)
-      .maybeSingle(),
+    fetchShowItems(admin, show_id),
     // Find the hotel stay the person is assigned to. check_out_time is a
     // Postgres `time` column (HH:MM:SS) representing wall clock local time.
     admin
@@ -54,6 +55,17 @@ export async function buildMorningMessageData(
   ])
 
   if (!person || !show) return null
+
+  // Null rather than a message with every time missing. The caller skips the
+  // send on null, which is the right answer: a morning message that says the
+  // show has no load-in, to everyone on the tour, because a query failed, is a
+  // thing the TM would have to correct by hand to fifteen people.
+  if (showItems.error) {
+    console.error('[morning-message] day items lookup failed:', showItems.error, { show_id })
+    return null
+  }
+
+  const at = (kind: string) => firstItemOfKind(showItems.items, kind)?.starts_at ?? null
 
   const hotel = roomAssignment?.hotel_stays as {
     name: string | null
@@ -75,11 +87,11 @@ export async function buildMorningMessageData(
     venue_name: show.venue_name,
     show_date: show.date,
     timezone,
-    load_in: daySheet?.load_in ?? null,
-    soundcheck: daySheet?.soundcheck ?? null,
-    doors: daySheet?.doors ?? null,
-    headliner_on: daySheet?.headliner_on ?? null,
-    curfew: daySheet?.curfew ?? null,
+    load_in: at('load_in'),
+    soundcheck: at('soundcheck'),
+    doors: at('doors'),
+    headliner_on: at('headliner_on'),
+    curfew: at('curfew'),
     hotel_name: hotel?.name ?? null,
     hotel_checkout: hotelCheckout,
   }

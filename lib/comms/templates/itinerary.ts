@@ -1,5 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { localDateInZone } from '@/lib/schedule/datetime'
+import { fetchShowItems } from '@/lib/schedule/day-items'
+import { dayItemLines } from '@/lib/comms/day-item-lines'
 
 // /itinerary slash command. Zero-AI template render.
 // Returns the full day sheet for the next (or current) show.
@@ -21,10 +23,22 @@ function formatTime(iso: string | null, tz: string): string {
   })
 }
 
-function formatDateTime(iso: string | null, tz: string): string {
-  if (!iso) return 'TBC'
-  const d = new Date(iso)
-  return `${d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', timeZone: tz })} ${formatTime(iso, tz)}`
+// The show's own date, for the header. `shows.date` is a plain date column, not
+// a timestamptz, so it is formatted as UTC deliberately: converting a date to a
+// timezone is what turns 15 June into 14 June for half the world.
+//
+// This used to be bolted onto the venue access line, which was the only entry in
+// the old fixed nine-line list that carried a date. Removing that list removed
+// the date with it, and for one commit /itinerary answered a crew member with a
+// venue and a list of times and no day at all. It belongs on the header: it is a
+// property of the show, not of one item on it.
+function formatShowDate(date: string): string {
+  return new Date(`${date}T00:00:00Z`).toLocaleDateString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  })
 }
 
 // How long after its own date a show stays the "active" show.
@@ -79,11 +93,10 @@ export async function renderItinerary(
 
   const { data: shows, error: showsError } = await admin
     .from('shows')
-    // day_sheets is a plain embed being read, not filtered, so !inner would be
-    // wrong here: it would drop a show whose day sheet row is somehow missing
-    // rather than rendering it with times TBC, and losing the show entirely is the
-    // worse of the two failures.
-    .select('id, venue_name, date, address, day_sheets(*)')
+    // No embed at all since Brief 42. The times are day_items rows fetched
+    // separately below, which also removes the to-one embed that had to be
+    // unwrapped from an array on the way out.
+    .select('id, venue_name, date, address')
     .eq('tour_id', tour_id)
     .gte('date', earliestActiveDate)
     .order('date', { ascending: true })
@@ -115,26 +128,38 @@ export async function renderItinerary(
 
   if (!show) return 'No upcoming shows on this tour.'
 
-  // One row per show, but PostgREST types a to-one embed as an array in some
-  // shapes, so both are handled the way lib/ai/context.ts already does.
-  const daySheet = Array.isArray(show.day_sheets)
-    ? (show.day_sheets[0] ?? null)
-    : (show.day_sheets ?? null)
+  // The show's running order. A separate read rather than an embed, because the
+  // times are their own rows now and there is no one-to-one relationship left to
+  // embed.
+  const { items, error: itemsError } = await fetchShowItems(admin, show.id)
+
+  // The same rule as the show lookup above, and the one that has actually
+  // reached a crew member. A failed items read must not render as a show with no
+  // times: "Load in: TBC" for a load-in that is set at 10:00 is a confident,
+  // plausible, wrong answer, and a crew member who believes it turns up late.
+  if (itemsError) {
+    console.error('[itinerary] day items lookup failed:', itemsError, { tour_id })
+    return 'Could not load the itinerary just now. Try again in a moment.'
+  }
 
   const lines: string[] = [
     `*${show.venue_name}*`,
+    // Second, before the address. A crew member scanning this on a phone needs
+    // to know which day before they need to know the postcode, and the times
+    // below mean nothing without it.
+    formatShowDate(show.date),
     show.address ?? '',
     ``,
-    `Venue access: ${formatDateTime(daySheet?.venue_access ?? null, timezone)}`,
-    `Load in: ${formatTime(daySheet?.load_in ?? null, timezone)}`,
-    `Line check: ${formatTime(daySheet?.line_check ?? null, timezone)}`,
-    `Soundcheck: ${formatTime(daySheet?.soundcheck ?? null, timezone)}`,
-    `Doors: ${formatTime(daySheet?.doors ?? null, timezone)}`,
-    `Support on: ${formatTime(daySheet?.support_on ?? null, timezone)}`,
-    `Headliner on: ${formatTime(daySheet?.headliner_on ?? null, timezone)}`,
-    `Curfew: ${formatTime(daySheet?.curfew ?? null, timezone)}`,
-    `Load out: ${formatTime(daySheet?.load_out ?? null, timezone)}`,
+    // One line per item the TM has actually set, in running order, rather than a
+    // fixed list of nine labels mostly reading TBC. See lib/comms/day-item-lines.ts.
+    ...dayItemLines(items, timezone, formatTime),
   ].filter(Boolean)
+
+  // A show with a date and no times at all still says so, rather than sending a
+  // venue name and a blank line.
+  if (items.every((item) => !item.starts_at)) {
+    lines.push('No times set yet.')
+  }
 
   return lines.join('\n')
 }

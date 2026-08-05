@@ -15,10 +15,10 @@ const VenuePanel = dynamic(() => import('@/components/schedule/panels/venue-pane
 const AdvancePanel = dynamic(() => import('@/components/schedule/panels/advance-panel').then((m) => m.AdvancePanel), { ssr: false })
 const AddDayPanel = dynamic(() => import('@/components/schedule/add-day-panel').then((m) => m.AddDayPanel), { ssr: false })
 // Brief 33: schedule day view detail and add panels.
-const ShowPanel = dynamic(() => import('@/components/schedule/panels/show-panel').then((m) => m.ShowPanel), { ssr: false })
+// Brief 42: the show panel and the event panel are one day-item panel now.
+const DayItemPanel = dynamic(() => import('@/components/schedule/panels/day-item-panel').then((m) => m.DayItemPanel), { ssr: false })
 const TransportPanel = dynamic(() => import('@/components/schedule/panels/transport-panel').then((m) => m.TransportPanel), { ssr: false })
 const HotelPanel = dynamic(() => import('@/components/schedule/panels/hotel-panel').then((m) => m.HotelPanel), { ssr: false })
-const EventPanel = dynamic(() => import('@/components/schedule/panels/event-panel').then((m) => m.EventPanel), { ssr: false })
 const AddFlow = dynamic(() => import('@/components/schedule/add/add-flow').then((m) => m.AddFlow), { ssr: false })
 
 // Renders the correct panel content based on the active descriptor.
@@ -101,15 +101,9 @@ export function ActivePanel() {
           onSuccess={panel.onSuccess}
         />
       )
-    case 'show':
+    case 'day-item':
       return (
-        <ShowPanel
-          showId={panel.showId}
-          tourId={panel.tourId}
-          venueName={panel.venueName}
-          timezone={panel.timezone}
-          daySheet={panel.daySheet}
-        />
+        <DayItemPanel item={panel.item} tourId={panel.tourId} timezone={panel.timezone} />
       )
     case 'transport':
       return (
@@ -118,10 +112,6 @@ export function ActivePanel() {
     case 'hotel':
       return (
         <HotelPanel stay={panel.stay} />
-      )
-    case 'event':
-      return (
-        <EventPanel event={panel.event} timezone={panel.timezone} />
       )
     case 'add-to-day':
       return (
