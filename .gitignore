@@ -145,6 +145,11 @@ vite.config.ts.timestamp-*
 # Trigger.dev local dev cache (build artifacts, not source)
 .trigger/
 
+# Session handoff notes. Written at the end of a build session and pasted into
+# the next one. They go stale within days, and Notion is where briefs and
+# status actually live, so they stay out of the repo.
+HANDOFF-*.md
+
 # Playwright. The saved storage state is a real session cookie for a seeded
 # test account, so it never belongs in the repo.
 playwright/.auth
