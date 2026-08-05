@@ -19,12 +19,15 @@ import { localDateInZone, localTimeInZone } from '@/lib/schedule/datetime'
 // either one fails at runtime, on the day view and in the crew Q&A context
 // respectively, and nothing before this test would have said so.
 //
-// The rename ships in two migrations, so this file covers the first half only.
-// While hotel_departure still exists as an unread copy, "there is nowhere else
-// to put a lobby call" is not yet true and asserting it here would be a test
-// that has to be wrong for a while. The 42703 assertions arrive with
-// 20260805140000_drop_hotel_departure.sql, in the commit that applies it. What
-// is provable now is that nothing in the app writes or reads the old name.
+// Two halves, as in one-load-in.test.ts:
+//
+//   1. There is nowhere else to put a lobby call.
+//   2. Every surface reads the one that survives, under its new name.
+//
+// The first half arrived a commit later than the second, because the rename
+// shipped as an add-and-copy followed by a drop. While hotel_departure still
+// existed as an unread copy, asserting it was gone would have been a test that
+// had to be wrong for a while.
 
 const DATE = '2030-06-14'
 const TIMEZONE = 'Europe/London'
@@ -51,10 +54,10 @@ describe('the lobby call has one home and one name', () => {
     return data
   }
 
-  describe('the column exists under its new name', () => {
-    it('answers to lobby_call', async () => {
+  describe('there is nowhere else to put one', () => {
+    async function selectDaySheetColumn(column: string) {
       const res = await fetch(
-        `${process.env.SUPABASE_TEST_URL}/rest/v1/day_sheets?select=lobby_call&limit=1`,
+        `${process.env.SUPABASE_TEST_URL}/rest/v1/day_sheets?select=${column}&limit=1`,
         {
           headers: {
             apikey: process.env.SUPABASE_TEST_SERVICE_ROLE_KEY ?? '',
@@ -62,24 +65,32 @@ describe('the lobby call has one home and one name', () => {
           },
         },
       )
-      expect(res.status).toBe(200)
+      return { status: res.status, body: await res.json() }
+    }
+
+    it('has dropped day_sheets.hotel_departure', async () => {
+      const { status, body } = await selectDaySheetColumn('hotel_departure')
+
+      // 42703 is Postgres for undefined_column. Asserted on the code rather
+      // than on "an error happened", so a 400 for an unrelated reason cannot
+      // let this pass while the column is still there.
+      expect(status).toBe(400)
+      expect(body.code).toBe('42703')
     })
 
-    it('writes the lobby call to the new column and leaves the old one alone', async () => {
-      // The migration copied hotel_departure into lobby_call and stopped there.
-      // From here the app writes only the new column, so the old one holds
-      // whatever it held before and drifts, which is exactly what makes it safe
-      // to drop later rather than now.
-      await updateDaySheet(fixture.showId, { lobby_call: LOBBY_CALL_LOCAL })
+    it('has dropped day_sheets.lobby_call_at', async () => {
+      const { status, body } = await selectDaySheetColumn('lobby_call_at')
 
-      const { data, error } = await testDb
-        .from('day_sheets')
-        .select('lobby_call')
-        .eq('show_id', fixture.showId)
-        .single()
-      if (error) throw new Error(`could not read the day sheet: ${error.message}`)
+      expect(status).toBe(400)
+      expect(body.code).toBe('42703')
+    })
 
-      expect(data.lobby_call).not.toBeNull()
+    it('answers to lobby_call instead', async () => {
+      // The inverse case. Both tests above would also pass if day_sheets had
+      // been dropped or renamed outright, which is a far worse migration and an
+      // identical error code.
+      const { status } = await selectDaySheetColumn('lobby_call')
+      expect(status).toBe(200)
     })
   })
 

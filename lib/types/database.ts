@@ -492,12 +492,10 @@ export type Database = {
           doors: string | null
           headliner_off: string | null
           headliner_on: string | null
-          hotel_departure: string | null
           line_check: string | null
           load_in: string | null
           load_out: string | null
           lobby_call: string | null
-          lobby_call_at: string | null
           show_id: string
           soundcheck: string | null
           support_off: string | null
@@ -521,12 +519,10 @@ export type Database = {
           doors?: string | null
           headliner_off?: string | null
           headliner_on?: string | null
-          hotel_departure?: string | null
           line_check?: string | null
           load_in?: string | null
           load_out?: string | null
           lobby_call?: string | null
-          lobby_call_at?: string | null
           show_id: string
           soundcheck?: string | null
           support_off?: string | null
@@ -550,12 +546,10 @@ export type Database = {
           doors?: string | null
           headliner_off?: string | null
           headliner_on?: string | null
-          hotel_departure?: string | null
           line_check?: string | null
           load_in?: string | null
           load_out?: string | null
           lobby_call?: string | null
-          lobby_call_at?: string | null
           show_id?: string
           soundcheck?: string | null
           support_off?: string | null
