@@ -3,6 +3,7 @@ import { testDb } from './setup'
 import { createFixture, destroyFixture, type Fixture } from './fixture'
 import { updateDaySheet, updateShow } from '@/lib/actions/shows'
 import { localDateInZone, localTimeInZone } from '@/lib/schedule/datetime'
+import { fetchDayRecords } from '@/lib/schedule/day-records'
 
 // A tour day is a working period, not a calendar day. updateDaySheet pinned
 // every time to the show's own date, so a curfew of 01:30 was stored twenty
@@ -180,6 +181,100 @@ describe('day-sheet times that cross midnight', () => {
     expect(localDateInZone(sheet.curfew, TZ)).toBe('2026-06-21')
     expect(localTimeInZone(sheet.curfew, TZ)).toBe('01:30')
     expect(localDateInZone(sheet.load_out, TZ)).toBe('2026-06-21')
+  })
+
+  it('shows a small-hours departure as the tail of the previous day', async () => {
+    // The case Matt described: adding travel to a show day. A red-eye at 01:30
+    // on the 15th is stored on the 15th, correctly, and the TM planning the
+    // 14th still needs to see it. It appears in both places on purpose, because
+    // it genuinely is the end of one day and the start of the next.
+    const { data: segment } = await testDb
+      .from('transport_segments')
+      .insert({
+        tour_id: fixture.tourId,
+        mode: 'flight',
+        origin: 'London',
+        destination: 'Berlin',
+        // 01:30 on 15 June in Europe/London, which is BST, so 00:30Z.
+        depart_at: '2026-06-15T00:30:00.000Z',
+        status: 'planned',
+      })
+      .select('id')
+      .single()
+
+    if (!segment) throw new Error('could not create the segment under test')
+
+    const showDay = await fetchDayRecords(testDb, {
+      tourId: fixture.tourId,
+      tourDateId: fixture.tourDateId,
+      date: '2026-06-14',
+      timezone: TZ,
+    })
+
+    expect(showDay.lateNight.segments.map((s) => s.id)).toContain(segment.id)
+    // And not in the day's own records, which would double it on one screen.
+    expect(showDay.segments.map((s) => s.id)).not.toContain(segment.id)
+    // The tail does not contribute to the day roster: those people are
+    // travelling on the 15th, whatever day the card is shown on.
+    expect(showDay.segmentIds).not.toContain(segment.id)
+  })
+
+  it('leaves a normal morning departure out of the previous day', async () => {
+    // The other side of the boundary. 08:00 is simply the next day's morning
+    // and has nothing to do with the night before.
+    const { data: segment } = await testDb
+      .from('transport_segments')
+      .insert({
+        tour_id: fixture.tourId,
+        mode: 'rail',
+        origin: 'London',
+        destination: 'Paris',
+        depart_at: '2026-06-15T07:00:00.000Z', // 08:00 BST
+        status: 'planned',
+      })
+      .select('id')
+      .single()
+
+    if (!segment) throw new Error('could not create the segment under test')
+
+    const showDay = await fetchDayRecords(testDb, {
+      tourId: fixture.tourId,
+      tourDateId: fixture.tourDateId,
+      date: '2026-06-14',
+      timezone: TZ,
+    })
+
+    expect(showDay.lateNight.segments).toHaveLength(0)
+  })
+
+  it('does not put a late departure on the day it actually departs into its own tail', async () => {
+    // A 01:30 departure on the 14th belongs to the 13th's tail, not the 14th's.
+    // Without this the tail would pick up the day's own small hours and render
+    // every red-eye twice on one screen.
+    const { data: segment } = await testDb
+      .from('transport_segments')
+      .insert({
+        tour_id: fixture.tourId,
+        mode: 'ground',
+        origin: 'Venue',
+        destination: 'Hotel',
+        depart_at: '2026-06-14T00:30:00.000Z', // 01:30 BST on the 14th
+        status: 'planned',
+      })
+      .select('id')
+      .single()
+
+    if (!segment) throw new Error('could not create the segment under test')
+
+    const showDay = await fetchDayRecords(testDb, {
+      tourId: fixture.tourId,
+      tourDateId: fixture.tourDateId,
+      date: '2026-06-14',
+      timezone: TZ,
+    })
+
+    expect(showDay.lateNight.segments).toHaveLength(0)
+    expect(showDay.segments.map((s) => s.id)).toContain(segment.id)
   })
 
   it('does not rewrite a time the save never submitted', async () => {
