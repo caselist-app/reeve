@@ -2,7 +2,7 @@ import { TimelineCard } from '@/components/schedule/timeline-card'
 import { DayHeader } from '@/components/schedule/day-header'
 import { formatFlightNumber } from '@/lib/utils/format-flight-number'
 import { placeName } from '@/lib/utils/place-name'
-import type { DayRecords } from '@/lib/schedule/day-records'
+import type { DayRecords, DaySegment, DayEvent } from '@/lib/schedule/day-records'
 
 interface DayTimelineProps {
   records: DayRecords
@@ -73,7 +73,7 @@ export async function DayTimeline({ records, tourId, tourDateId, date, timezone,
   // check-out, is decided in fetchDayRecords now. It used to be reassembled
   // here from three overlapping buckets, which is where an edited stay could
   // fall through every one of them and render on no day at all.
-  const { shows, segments, hotels, events } = records
+  const { shows, segments, hotels, events, lateNight } = records
 
   // Build a flat list of timeline items with a sort key.
   type TimelineItem = {
@@ -178,7 +178,11 @@ export async function DayTimeline({ records, tourId, tourDateId, date, timezone,
     return match ? match[1].toUpperCase() : null
   }
 
-  for (const seg of segments) {
+  // Extracted rather than inlined in the loop because the late-night tail below
+  // renders the same cards for records belonging to the next morning. Two copies
+  // of this would drift, and the flight-specific branches are where it would
+  // show first.
+  function segmentItem(seg: DaySegment): TimelineItem {
     const label = MODE_LABELS[seg.mode] ?? seg.mode
     // Flight title is just city names ("Brisbane to Hong Kong"), stripped of
     // "Airport"/IATA-code suffix - the full airport names are already
@@ -209,7 +213,7 @@ export async function DayTimeline({ records, tourId, tourDateId, date, timezone,
             live: !!seg.last_tracked_at,
           }
         : undefined
-    items.push({
+    return {
       key: `transport-${seg.id}`,
       sortKey: sortKey(seg.depart_at, date),
       node: (
@@ -225,8 +229,10 @@ export async function DayTimeline({ records, tourId, tourDateId, date, timezone,
           flightTimes={flightTimes}
         />
       ),
-    })
+    }
   }
+
+  for (const seg of segments) items.push(segmentItem(seg))
 
   // Hotel items.
   for (const hotel of hotels) {
@@ -258,8 +264,8 @@ export async function DayTimeline({ records, tourId, tourDateId, date, timezone,
   }
 
   // Day event items.
-  for (const ev of (events ?? [])) {
-    items.push({
+  function eventItem(ev: DayEvent): TimelineItem {
+    return {
       key: `event-${ev.id}`,
       sortKey: sortKey(ev.starts_at, date),
       node: (
@@ -273,13 +279,37 @@ export async function DayTimeline({ records, tourId, tourDateId, date, timezone,
           card={{ type: 'event', key: `event-${ev.id}`, event: ev, timezone }}
         />
       ),
-    })
+    }
   }
+
+  for (const ev of (events ?? [])) items.push(eventItem(ev))
 
   // Sort by time ascending.
   items.sort((a, b) => a.sortKey.localeCompare(b.sortKey))
 
-  if (items.length === 0) {
+  // The tail: records belonging to the small hours of the next morning. A tour
+  // day is a working period rather than a calendar day, so a 01:30 red-eye
+  // after a show is part of tonight from where the TM is standing, even though
+  // it is stored on tomorrow and still renders there too.
+  //
+  // Sorted and rendered separately rather than merged into `items`, so it can
+  // never reorder the day itself. Whatever this section gets right or wrong, the
+  // running order above it is unchanged.
+  const tailItems = [
+    ...lateNight.segments.map(segmentItem),
+    ...lateNight.events.map(eventItem),
+  ].sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+
+  const tail = tailItems.length > 0 && (
+    <div className="mt-2 border-t border-border pt-4">
+      <p className="px-6 pb-2 text-xs font-medium text-muted-foreground">
+        After midnight
+      </p>
+      {tailItems.map((item) => item.node)}
+    </div>
+  )
+
+  if (items.length === 0 && tailItems.length === 0) {
     return (
       <div className="flex flex-col h-full">
         {header}
@@ -297,6 +327,7 @@ export async function DayTimeline({ records, tourId, tourDateId, date, timezone,
       {header}
       <div className="flex-1 overflow-y-auto py-4">
         {items.map((item) => item.node)}
+        {tail}
       </div>
     </div>
   )
