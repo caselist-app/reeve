@@ -59,7 +59,7 @@ export async function createTourDate(
   // router.push nor router.refresh re-resolves it. This was correct today only
   // by accident, because one of its callers happens to call router.refresh(),
   // which re-renders main and leaves the sidebar exactly as stale as before.
-  // TEMPORARY, reverted in the next commit. Brief 41 step 6's red-first proof.
+  revalidatePath(`/tours/${tourId}/schedule`)
 
   return { error: null, tourDateId: row.id }
 }
