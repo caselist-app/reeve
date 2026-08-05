@@ -1,20 +1,27 @@
 import { cache } from 'react'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
+// TEMPORARY, reverted in the next commit. Brief 41 step 5's red-first proof.
+import { createAdminClient } from '@/lib/supabase/admin'
 
 // Shared shell data for the schedule route: the tour and its full date list.
 // Wrapped in React.cache so the layout (which renders the sidebar) and the page
 // (which resolves the selected day) share a single query within one request.
 export const getScheduleShell = cache(async (tourId: string) => {
-  const user = await requireUser()
-  const supabase = await createClient()
+  await requireUser()
+  // TEMPORARY, reverted in the next commit. Both halves of the ownership check
+  // removed: the admin client bypasses RLS, and the account_id filter is gone.
+  // That is what a real regression here looks like, and the cross-account spec
+  // should turn red on it. `createClient` stays imported so the file still
+  // compiles cleanly on revert.
+  const supabase = createAdminClient()
+  void createClient
 
   const [{ data: tour }, { data: tourDates }] = await Promise.all([
     supabase
       .from('tours')
       .select('id, name, timezone')
       .eq('id', tourId)
-      .eq('account_id', user.id)
       .single(),
     supabase
       .from('tour_dates')
