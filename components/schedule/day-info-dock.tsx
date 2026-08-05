@@ -13,7 +13,7 @@ interface DayInfoDockProps {
 // tap that opens the full day info sheet. Data is resolved in DayContent.
 export function DayInfoDock({ show, roster, dayNotes }: DayInfoDockProps) {
   const count = roster.length
-  const notes = (show?.notes ?? dayNotes ?? '').trim()
+  const notes = (dayNotes ?? '').trim()
 
   return (
     <div className="flex flex-col gap-2">

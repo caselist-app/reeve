@@ -93,7 +93,7 @@ export async function DayContent({ tourId, tourName, timezone, selectedDate, tou
           tourId={tourId}
           date={selectedDate}
           show={records.shows[0] ?? null}
-          dayNotes={records.dayNotes}
+          dayNotes={tourDate?.notes ?? null}
           roster={roster}
         />
       }
@@ -101,7 +101,7 @@ export async function DayContent({ tourId, tourName, timezone, selectedDate, tou
         <DayInfoDock
           show={records.shows[0] ?? null}
           roster={roster}
-          dayNotes={records.dayNotes}
+          dayNotes={tourDate?.notes ?? null}
         />
       }
     />

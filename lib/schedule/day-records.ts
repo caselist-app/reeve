@@ -12,7 +12,7 @@ type Client = Awaited<ReturnType<typeof createClient>>
 
 export type DayShow = Pick<
   Tables<'shows'>,
-  'id' | 'venue_name' | 'address' | 'capacity' | 'venue_type' | 'notes'
+  'id' | 'venue_name' | 'address' | 'capacity' | 'venue_type'
 > & {
   day_sheets: Pick<
     Tables<'day_sheets'>,
@@ -71,9 +71,8 @@ export interface DayRecords {
   shows: DayShow[]
   segments: DaySegment[]          // deduped union of tour_date-linked and date-matched
   hotels: DayHotelItem[]          // check-ins and check-outs falling on this day
-  events: DayEvent[]              // excludes the __day_notes__ sentinel
+  events: DayEvent[]              // excludes leftover __day_notes__ sentinel rows
   lateNight: LateNight            // next morning's small hours, shown as this day's tail
-  dayNotes: string | null         // the __day_notes__ sentinel's notes, if any
   // Ids of the segments and hotels on this day, used by the info panel to
   // resolve the day's roster without re-querying for them.
   segmentIds: string[]
@@ -86,7 +85,6 @@ const EMPTY: DayRecords = {
   hotels: [],
   events: [],
   lateNight: { segments: [], events: [] },
-  dayNotes: null,
   segmentIds: [],
   hotelStayIds: [],
 }
@@ -104,7 +102,7 @@ const EMPTY: DayRecords = {
 const LATE_NIGHT_ENDS_AT_HOUR = 6
 
 const SHOW_SELECT = `
-  id, venue_name, address, capacity, venue_type, notes,
+  id, venue_name, address, capacity, venue_type,
   day_sheets (
     lobby_call_at, venue_access, load_in, line_check, soundcheck, vip,
     doors, support_on, support_off, changeover, headliner_on, headliner_off,
@@ -139,18 +137,10 @@ export async function fetchDayRecords(
     // Pass `tour.timezone ?? 'UTC'`, the way the schedule route already does.
   }: { tourId: string; tourDateId: string | null; date: string; timezone: string | null },
 ): Promise<DayRecords> {
-  // Off-calendar dates have no tour_date row, so the timeline is not rendered.
-  // The info panel still needs the day-notes sentinel, so fetch only that.
-  if (!tourDateId) {
-    const { data } = await supabase
-      .from('day_events')
-      .select('notes')
-      .eq('tour_id', tourId)
-      .eq('date', date)
-      .eq('title', '__day_notes__')
-      .maybeSingle()
-    return { ...EMPTY, dayNotes: data?.notes ?? null }
-  }
+  // Off-calendar dates have no tour_date row, so there is nothing on the day
+  // and the timeline is not rendered. Notes are tour_dates.notes now, so a date
+  // with no row has none either, and typing one adds the day (updateDayNotes).
+  if (!tourDateId) return EMPTY
 
   // The UTC window covering this tour-local day. depart_at is a timestamptz, so
   // filtering it against `${date}T00:00:00Z` to the next midnight is only
@@ -181,7 +171,6 @@ export async function fetchDayRecords(
     { data: checkinHotels },
     { data: checkoutHotels },
     { data: eventRows },
-    { data: dayNotesRow },
     { data: lateSegmentRows },
     { data: lateEventRows },
   ] = await Promise.all([
@@ -228,6 +217,12 @@ export async function fetchDayRecords(
       .eq('check_out_date', date)
       .neq('check_in_date', date), // avoid duplicating same-day check-in/out
 
+    // The __day_notes__ exclusion here and on the tail query below outlives the
+    // sentinel deliberately, and only until its migration lands. Code ships
+    // before a destructive migration does, so between this deploying and the
+    // rows being deleted they are still there, and without the filter they
+    // would surface on the timeline as events literally titled __day_notes__.
+    // Both lines come out in the commit after the migration is applied.
     supabase
       .from('day_events')
       .select('id, title, starts_at, ends_at, location, notes')
@@ -235,14 +230,6 @@ export async function fetchDayRecords(
       .eq('date', date)
       .neq('title', '__day_notes__')
       .order('starts_at', { ascending: true }),
-
-    supabase
-      .from('day_events')
-      .select('notes')
-      .eq('tour_id', tourId)
-      .eq('date', date)
-      .eq('title', '__day_notes__')
-      .maybeSingle(),
 
     // Tail: departures in the next morning's small hours. Filtered on depart_at
     // alone rather than on the link, because that is the fact being asked about
@@ -299,7 +286,6 @@ export async function fetchDayRecords(
     address: s.address,
     capacity: s.capacity,
     venue_type: s.venue_type,
-    notes: s.notes,
     day_sheets: flattenDaySheet(s.day_sheets),
   }))
 
@@ -318,7 +304,6 @@ export async function fetchDayRecords(
     hotels,
     events: eventRows ?? [],
     lateNight,
-    dayNotes: dayNotesRow?.notes ?? null,
     segmentIds: Array.from(segMap.keys()),
     // Deduplicated: a stay checking in and out across this day would otherwise
     // contribute its occupants to the roster twice.

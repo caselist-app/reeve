@@ -92,39 +92,6 @@ export async function updateDayEvent(
   return { error: null, eventId }
 }
 
-// Upserts the __day_notes__ sentinel row for non-show days.
-// Used by the day info panel notes textarea.
-export async function upsertDayNotes(
-  tourId: string,
-  date: string,
-  notes: string,
-): Promise<DayEventActionState> {
-  await requireUser()
-
-  const supabase = await createClient()
-
-  // Find existing notes row for this tour+date.
-  const { data: existing } = await supabase
-    .from('day_events')
-    .select('id')
-    .eq('tour_id', tourId)
-    .eq('date', date)
-    .eq('title', '__day_notes__')
-    .maybeSingle()
-
-  if (existing) {
-    const { error } = await supabase
-      .from('day_events')
-      .update({ notes })
-      .eq('id', existing.id)
-    if (error) return { error: error.message }
-  } else {
-    const { error } = await supabase
-      .from('day_events')
-      .insert({ tour_id: tourId, date, title: '__day_notes__', notes, starts_at: null })
-    if (error) return { error: error.message }
-  }
-
-  revalidatePath(`/tours/${tourId}/schedule`)
-  return { error: null }
-}
+// The __day_notes__ sentinel row that used to live here is gone. Day notes are
+// tour_dates.notes, written by updateDayNotes in lib/actions/tour-dates.ts.
+// See Brief 36 Part 4.

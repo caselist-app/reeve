@@ -2,20 +2,20 @@
 
 import { useRef, useTransition } from 'react'
 import { cn } from '@/lib/utils'
-import { updateShowNotes } from '@/lib/actions/shows'
-import { upsertDayNotes } from '@/lib/actions/day-events'
+import { updateDayNotes } from '@/lib/actions/tour-dates'
 
 interface NotesTextareaProps {
-  // Show day: pass showId. Non-show day: pass tourId + date.
-  showId?: string
-  tourId?: string
-  date?: string
+  tourId: string
+  date: string
   initialValue: string
 }
 
-// Saves on blur. No save button. Debounced: waits 400ms after the last
-// keystroke before the blur-triggered save fires, to avoid mid-edit saves.
-export function NotesTextarea({ showId, tourId, date, initialValue }: NotesTextareaProps) {
+// Saves on blur. No save button.
+//
+// One writer, whether or not the day has a show on it. It used to branch on
+// showId and write two different tables, which is how a TM ended up with a note
+// the Dates sidebar could not see. See Brief 36 Part 4.
+export function NotesTextarea({ tourId, date, initialValue }: NotesTextareaProps) {
   const [, startTransition] = useTransition()
   const lastSaved = useRef(initialValue)
 
@@ -25,11 +25,7 @@ export function NotesTextarea({ showId, tourId, date, initialValue }: NotesTexta
     lastSaved.current = value
 
     startTransition(async () => {
-      if (showId) {
-        await updateShowNotes(showId, value)
-      } else if (tourId && date) {
-        await upsertDayNotes(tourId, date, value)
-      }
+      await updateDayNotes(tourId, date, value)
     })
   }
 

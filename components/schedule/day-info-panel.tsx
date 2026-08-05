@@ -67,18 +67,7 @@ export function DayInfoPanel({ tourId, date, show, dayNotes, roster }: DayInfoPa
         <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
           Notes
         </p>
-        {show ? (
-          <NotesTextarea
-            showId={show.id}
-            initialValue={show.notes ?? ''}
-          />
-        ) : (
-          <NotesTextarea
-            tourId={tourId}
-            date={date}
-            initialValue={dayNotes ?? ''}
-          />
-        )}
+        <NotesTextarea tourId={tourId} date={date} initialValue={dayNotes ?? ''} />
       </section>
     </div>
   )
