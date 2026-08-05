@@ -440,6 +440,63 @@ for (const file of jobReachable) {
   }
 }
 
+// ---- Rule 9: the dev login route keeps both its guards ----
+// app/api/dev/e2e-login/route.ts mints a session from an email. That is exactly
+// as dangerous as it sounds, and the only things standing between it and the
+// internet are two guards: no E2E_LOGIN_SECRET in the environment means no
+// route, and a request that does not present the secret gets nothing.
+//
+// The secret is set in the CI job and nowhere else, so in production the first
+// guard is what makes the endpoint non-existent. Removing it, or "fixing" it to
+// a NODE_ENV check because that is what the sibling notify-test route does,
+// puts a session-minting endpoint on the live site. A NODE_ENV check is also
+// wrong in the other direction: the e2e job serves a production build with
+// `next start`, so it would 404 the route in the only place it is meant to work.
+//
+// Checked as a pair rather than as separate tokens: the condition has to be
+// tied to the status code, or a file that merely mentions 404 somewhere passes.
+const E2E_LOGIN_ROUTE = join(ROOT, 'app', 'api', 'dev', 'e2e-login', 'route.ts')
+if (existsSync(E2E_LOGIN_ROUTE)) {
+  const src = readFileSync(E2E_LOGIN_ROUTE, 'utf8')
+  const file = rel(E2E_LOGIN_ROUTE)
+
+  const secretGuard = /if\s*\(\s*!\s*secret\s*\)[\s\S]{0,200}?status:\s*404/
+  const headerGuard = /headers\.get\(\s*['"]x-e2e-secret['"]\s*\)[\s\S]{0,600}?status:\s*403/
+
+  if (!/process\.env\.E2E_LOGIN_SECRET/.test(src) || !secretGuard.test(src)) {
+    report(
+      'e2e-login-guards',
+      file,
+      1,
+      'Does not return 404 when E2E_LOGIN_SECRET is absent. That guard is what ' +
+        'makes this route non-existent in production.',
+      'e2e-login-guards|secret-absent-404'
+    )
+  }
+
+  if (!headerGuard.test(src)) {
+    report(
+      'e2e-login-guards',
+      file,
+      1,
+      'Does not compare the x-e2e-secret header and return 403 on a mismatch.',
+      'e2e-login-guards|wrong-secret-403'
+    )
+  }
+
+  if (/process\.env\.NODE_ENV/.test(src)) {
+    report(
+      'e2e-login-guards',
+      file,
+      lineOf(src, src.indexOf('process.env.NODE_ENV')),
+      'Guards on NODE_ENV. The e2e job serves a production build with `next ' +
+        'start`, so this 404s the route in the only place it works. Guard on the ' +
+        "secret's presence instead.",
+      'e2e-login-guards|node-env'
+    )
+  }
+}
+
 // ---- Compare against the baseline ----
 const baseline = existsSync(BASELINE_PATH)
   ? JSON.parse(readFileSync(BASELINE_PATH, 'utf8'))
