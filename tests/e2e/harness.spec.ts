@@ -1,5 +1,4 @@
 import { expect, test } from '@playwright/test'
-import { readSeed } from './seed'
 
 // The harness proof. This spec exists to show that the CI job is really
 // building the app, really serving it, and really driving a browser at it.
@@ -42,17 +41,4 @@ test('the dev login route refuses a caller presenting the wrong secret', async (
   // server, so the first guard is answering and nothing below it has run. Add
   // it to the GitHub repo secrets: Settings, Secrets and variables, Actions.
   expect(response.status()).toBe(403)
-})
-
-// TEMPORARY, delete when smoke.spec.ts lands (REE-12). It proves the seed, the
-// dev login route and the saved storage state work together: this page is
-// behind the (app) layout's requireUser(), so a signed-out browser would be
-// redirected to /login and never see the name. smoke.spec.ts covers the same
-// ground across every route, at which point this is duplication.
-test('the signed-in tour manager sees the seeded tour', async ({ page }) => {
-  const seed = readSeed()
-
-  await page.goto(`/tours/${seed.a.tourId}`)
-
-  await expect(page.getByText(seed.a.tourName).first()).toBeVisible()
 })
