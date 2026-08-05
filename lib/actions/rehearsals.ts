@@ -78,11 +78,16 @@ export async function createRehearsal(
   if (rError) return { error: rError.message }
 
   // This upserts a tour_dates row, which is the Dates sidebar. That sidebar is
-  // a Next.js layout inside the @secondaryPanel slot, and a layout is not
-  // re-resolved by router.push or router.refresh, which is all the caller does.
-  // So a rehearsal created on a date the tour did not have yet added a day that
-  // did not appear in the sidebar until a hard reload. Only a server-side
-  // revalidate reaches it.
+  // a Next.js layout inside the @secondaryPanel slot, and a soft navigation
+  // does not re-resolve a layout. The caller pushes (add-day-panel.tsx sends
+  // the TM to the new day), so without this a rehearsal created on a date the
+  // tour did not have yet added a day that did not appear in the sidebar until
+  // a hard reload.
+  //
+  // router.refresh() would re-resolve it, but the caller does not call it and
+  // this action must not depend on which one the caller chose. Deleting this
+  // line turns the Dates spec in tests/e2e/revalidate.spec.ts red, which is
+  // where that claim was checked rather than assumed (Brief 41).
   revalidatePath(`/tours/${tourId}/schedule`)
 
   return { error: null, rehearsalId: rehearsal.id }

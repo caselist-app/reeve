@@ -1,11 +1,84 @@
 # Tests
 
-Two suites, split by whether they need a database.
+Three suites, split by how much of the real thing each one runs.
 
 ```bash
 pnpm test              # unit. Fast, no Docker, run these locally.
 pnpm test:integration  # integration. Needs a running Supabase. CI runs these.
+pnpm test:e2e          # end to end. Real browser, real build, real database. CI runs these.
 ```
+
+`pnpm check` runs the unit tests and nothing else, deliberately. It is the one
+gate Matt runs himself and it has to keep working on a machine with no Docker.
+
+| Suite | Runs | Sees |
+| --- | --- | --- |
+| unit | pure functions | one function's logic |
+| integration | real server actions against a real Postgres | writes, constraints, PostgREST semantics |
+| e2e | a real browser against a production build | whether the page a TM opens actually renders |
+
+The third exists because the second stops at the server action, and because
+`next build` prerenders six routes, none of them under `app/(app)`. Everything
+below that group reads `cookies()` and is therefore dynamic, so the build never
+executes it. Before this suite, a Server Component that threw on the schedule
+passed typecheck, lint, `check:conventions`, the unit tests and the build, and
+then served a 500 to the only person using the product.
+
+The three mocks in `tests/integration/setup.ts` are the other half of the
+reason. They replace `next/cache`, `@/lib/supabase/server` and
+`@/lib/auth/helpers`, which is correct for what that suite is for, and it means
+the auth gate, RLS and the revalidate class are invisible to every test in it.
+The e2e suite mocks nothing, and those three things are exactly what it watches.
+
+## The rules this suite lives by
+
+**A spec that flakes is deleted the same day it is noticed.** Not quarantined,
+not retried. `playwright.config.ts` sets `retries: 0` and that is not up for
+negotiation: a retry hides a flake, and a hidden flake is how a suite stops
+meaning anything. If a spec found something real, fix the thing. If it did not,
+delete it. Either way it does not stay red-sometimes.
+
+**The suite does not grow by guesswork.** After these six specs, a new one is
+added when a real bug reaches production, and it is added before the fix.
+
+**A new page route needs a line in `smoke.spec.ts`.** The route-count test at
+the bottom of that file fails on the commit that adds a route without one, which
+is while whoever added it still knows what it needs to render.
+
+**Every spec is named as a sentence about what a TM sees.** A red Playwright
+line is the only thing read before deciding whether to merge.
+
+## Reading a failure without running it locally
+
+Neither of these suites runs on Matt's machine, so a CI log is the whole picture.
+
+1. **Check the run's commit SHA first.** `ci.yml` sets `cancel-in-progress`, so
+   a cancelled run sits in the list next to an older green one and reads as
+   current. During Brief 41 a green run was read as belonging to a commit that
+   deliberately broke a page, and it cost about an hour of wrong theories. The
+   quickest sanity check is the test count in the e2e log: if it does not match
+   the number of specs on the branch, the run is not the one you think.
+2. **Read the failing line, then the `Expected`/`Received` block.** Route specs
+   are named for the route, so the line names the page.
+3. **Download the `playwright-report` artifact** for anything unclear. It
+   carries both the HTML report and `test-results`, which holds a trace and an
+   `error-context.md` page snapshot per failure. That snapshot is the only way
+   to see what the page actually contained.
+
+## Two failure modes that are not what they look like
+
+**A strict-mode violation is usually the responsive layout, not a bug.** Cards
+render their time twice (a desktop column and a mobile copy) and the day list
+renders twice (the Dates sidebar and the mobile date strip). Match on a semantic
+container, for example the `Dates` navigation landmark, rather than filtering by
+`:visible`, which makes the assertion depend on the viewport.
+
+**`redirect()` from a page under a `loading.tsx` is not an HTTP redirect.** The
+shell streams first, the response commits as a 200, and the navigation is
+delivered inside the stream for the browser to perform afterwards. Reading
+`page.url()` at the load event sees the old URL. Poll for it. A redirect from a
+layout (the `requireUser()` gate) runs before anything streams and genuinely is
+a 307.
 
 ## Why the split
 
@@ -36,6 +109,19 @@ exists outside a request:
 - `next/cache`, since `revalidatePath` throws outside a render
 - `@/lib/supabase/server`, since `createClient` reads `cookies()`
 - `@/lib/auth/helpers`, since `requireUser` redirects
+
+**Import the test client from `./test-db`, never through `./setup`.** The client
+and the mocked-user state live in `tests/integration/test-db.ts`, which imports
+nothing from vitest, so Playwright's global setup can seed through `fixture.ts`
+without pulling vitest into a plain Node process.
+
+`setup.ts` re-exported the client for about an hour on 2026-08-05 and it broke
+every mock silently. A setup file is transformed with the mock registry applied,
+so a test importing the client through it got a different instance from the one
+the mock factories close over, and `createClient()` quietly stopped returning
+the test database. Nothing failed to compile. `tests/integration/setup-mocks.test.ts`
+is the guard: four assertions that the four mocks are really in place. It needs
+no database and fails in milliseconds.
 
 Everything below that is real. The server action's own logic, PostgREST, SQL,
 constraints and migrations all run for real. When a test fails, the failure is
