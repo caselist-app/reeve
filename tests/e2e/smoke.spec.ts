@@ -66,19 +66,37 @@ function resolve(template: string): string {
     .replace('{date}', seed.a.date)
 }
 
-// Three assertions, because a broken page shows up in three different ways.
-// The status covers a thrown Server Component; the pageerror listener covers a
-// client component that throws after hydration; and the text covers a Server
-// Component that throws inside a Suspense boundary, which renders an error
-// state under a perfectly healthy 200.
-async function assertRenders(page: Page, path: string) {
+// Four assertions, because a broken page shows up in four different ways and
+// because three of them can be satisfied by a page that never rendered.
+//
+//   status        a thrown Server Component. Verified: in a production build
+//                 that is a 500, and there is no error text in the HTML, so
+//                 this assertion is the one doing the work.
+//   pageerror     a client component that throws after hydration.
+//   error text    a Server Component that throws inside a Suspense boundary,
+//                 which renders an error state under a perfectly healthy 200.
+//   final path    the session still applies. Without this, losing the storage
+//                 state turns every authenticated route into a redirect to
+//                 /login, which answers 200, and twenty broken pages report as
+//                 twenty working ones. `waitUntil: 'load'` rather than
+//                 domcontentloaded so a streamed failure has arrived before any
+//                 of this is read.
+async function assertRenders(page: Page, path: string, opts: { signedIn: boolean }) {
   const pageErrors: string[] = []
   page.on('pageerror', (error) => pageErrors.push(error.message))
 
-  const response = await page.goto(path, { waitUntil: 'domcontentloaded' })
+  const response = await page.goto(path, { waitUntil: 'load' })
 
   expect(response, `${path} returned no response`).not.toBeNull()
   expect(response!.status(), `${path} returned ${response!.status()}`).toBeLessThan(400)
+
+  if (opts.signedIn) {
+    const landedOn = new URL(page.url()).pathname
+    expect(landedOn, `${path} bounced to the login screen, so the session is not applying`).not.toBe(
+      '/login'
+    )
+  }
+
   await expect(page.getByText('Application error')).toHaveCount(0)
   expect(pageErrors, `${path} threw in the browser`).toEqual([])
 }
@@ -86,7 +104,7 @@ async function assertRenders(page: Page, path: string) {
 test.describe('every page renders for a signed-in tour manager', () => {
   for (const template of AUTHENTICATED_ROUTES) {
     test(template, async ({ page }) => {
-      await assertRenders(page, resolve(template))
+      await assertRenders(page, resolve(template), { signedIn: true })
     })
   }
 })
@@ -96,7 +114,7 @@ test.describe('the public pages render with no session', () => {
 
   for (const path of PUBLIC_ROUTES) {
     test(path, async ({ page }) => {
-      await assertRenders(page, path)
+      await assertRenders(page, path, { signedIn: false })
     })
   }
 
@@ -124,8 +142,12 @@ test('every page under app/(app) is in the list above', () => {
 
   // Guards the assertion below, the same way no-retired-routes.test.ts guards
   // its glob: a walk that silently found nothing would make the count check
-  // pass while checking not one file.
+  // pass while checking not one file. The two list lengths are here for the
+  // same reason: an empty list produces no tests at all, and a suite that runs
+  // nothing reports green.
   expect(pages.length).toBeGreaterThan(10)
+  expect(AUTHENTICATED_ROUTES.length).toBe(20)
+  expect(PUBLIC_ROUTES.length).toBe(5)
   expect(pages.length, `app/(app) pages:\n${pages.join('\n')}`).toBe(APP_GROUP_ROUTE_COUNT)
 })
 
