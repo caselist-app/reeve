@@ -256,60 +256,6 @@ export type Database = {
           },
         ]
       }
-      broadcast_log: {
-        Row: {
-          change_type: string
-          created_at: string
-          delivered_at: string | null
-          id: string
-          message: string
-          person_id: string
-          read_at: string | null
-          sent_at: string | null
-          tour_id: string
-          wamid: string | null
-        }
-        Insert: {
-          change_type: string
-          created_at?: string
-          delivered_at?: string | null
-          id?: string
-          message: string
-          person_id: string
-          read_at?: string | null
-          sent_at?: string | null
-          tour_id: string
-          wamid?: string | null
-        }
-        Update: {
-          change_type?: string
-          created_at?: string
-          delivered_at?: string | null
-          id?: string
-          message?: string
-          person_id?: string
-          read_at?: string | null
-          sent_at?: string | null
-          tour_id?: string
-          wamid?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "broadcast_log_person_id_fkey"
-            columns: ["person_id"]
-            isOneToOne: false
-            referencedRelation: "people"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "broadcast_log_tour_id_fkey"
-            columns: ["tour_id"]
-            isOneToOne: false
-            referencedRelation: "tours"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       contacts: {
         Row: {
           account_id: string
