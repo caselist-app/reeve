@@ -10,7 +10,8 @@ import { setAdvanceStatus } from '@/lib/shows/advance'
 import { resolveHubJob } from '@/trigger/jobs/resolve-hub'
 import { revertDayTypeIfOrphaned } from '@/lib/schedule/day-type-revert'
 import { resolveTourDateId } from '@/lib/schedule/day-link'
-import { localTimeInZone } from '@/lib/schedule/datetime'
+import { localTimeInZone, localDateInZone } from '@/lib/schedule/datetime'
+import { resolveDayOffsets, addDays, daysBetween } from '@/lib/schedule/day-sheet-times'
 import type { DateMove } from '@/lib/schedule/date-move'
 import type { z } from 'zod'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -86,6 +87,7 @@ function localTimeToUtcIso(date: string, time: string, tz: string): string {
 async function shiftDaySheetToDate(
   supabase: SupabaseClient<Database>,
   showId: string,
+  oldDate: string,
   newDate: string,
   timezone: string | null,
 ): Promise<boolean> {
@@ -105,10 +107,22 @@ async function shiftDaySheetToDate(
 
     // No tour timezone set: the times were written as UTC by updateDaySheet, so
     // they have to be read back the same way or the shift moves them.
-    const time = localTimeInZone(stored, timezone ?? 'UTC')
+    const zone = timezone ?? 'UTC'
+    const time = localTimeInZone(stored, zone)
+
+    // Carry the day offset the stored time already has, rather than flattening
+    // every time onto the new show date. A 01:30 curfew is stored on the
+    // morning after the show, so moving the show from the 14th to the 20th has
+    // to put it on the 21st at 01:30, not the 20th. Re-deriving from
+    // wall-clock alone silently undid the roll-over, and it took two actions in
+    // sequence before anything looked wrong: the same shape as every Brief 36
+    // bug, edit something and then look somewhere else.
+    const offset = daysBetween(oldDate, localDateInZone(stored, zone))
+    const date = addDays(newDate, offset)
+
     patch[field] = timezone
-      ? localTimeToUtcIso(newDate, time, timezone)
-      : `${newDate}T${time}:00.000Z`
+      ? localTimeToUtcIso(date, time, timezone)
+      : `${date}T${time}:00.000Z`
   }
 
   if (Object.keys(patch).length === 0) return false
@@ -260,6 +274,7 @@ export async function updateShow(
     carriedTimes = await shiftDaySheetToDate(
       supabase,
       showId,
+      existing.date,
       parsed.data.date,
       tourRow?.timezone ?? null,
     )
@@ -367,6 +382,33 @@ export async function updateDaySheet(
 
   const timezone = tourRow?.timezone ?? null
 
+  // The stored row, read as HH:MM in the tour's timezone, so the roll-over rule
+  // sees the whole day sheet rather than just this payload. A partial caller
+  // (confirmExtraction sends load_in and curfew alone) would otherwise have no
+  // daytime time to anchor against and would fall back on every save.
+  const { data: storedSheet } = await supabase
+    .from('day_sheets')
+    .select('*')
+    .eq('show_id', showId)
+    .maybeSingle()
+
+  const merged: Record<string, string | null> = {}
+  for (const field of DAY_SHEET_TIME_FIELDS) {
+    const submitted = parsed.data[field as keyof typeof parsed.data] as string | null | undefined
+    if (submitted !== undefined) {
+      merged[field] = submitted
+      continue
+    }
+    const stored = storedSheet?.[field as keyof typeof storedSheet] as string | null | undefined
+    merged[field] = stored ? localTimeInZone(stored, timezone ?? 'UTC') : null
+  }
+
+  // Which of these fall on the morning after the show. See
+  // lib/schedule/day-sheet-times.ts: a curfew of 01:30 is a real 01:30 the next
+  // day, and it still renders under this show because the timeline reaches
+  // day-sheet times through the show rather than through their own date.
+  const offsets = resolveDayOffsets(merged)
+
   const converted: Record<string, string | null> = {}
 
   // Only write fields the caller actually submitted. `null` means the TM
@@ -375,17 +417,26 @@ export async function updateDaySheet(
   // show-panel.tsx, which submits the 14 time fields and no catering, null
   // every catering column on the row each time a TM edited load-in from the
   // day view. Any partial caller added later is safe by construction.
+  //
+  // The roll-over is computed over the merged view but applied only to the
+  // submitted fields, so this stays a partial write. A save that does not
+  // mention curfew does not rewrite curfew, even if adding a late doors time
+  // has just changed which day the curfew belongs on. That is the correct
+  // trade: show-panel resubmits the whole sheet on every save, so the normal
+  // path self-corrects, and silently rewriting a column the caller never sent
+  // is the exact bug Brief 37 closed.
   for (const field of DAY_SHEET_TIME_FIELDS) {
     const val = parsed.data[field as keyof typeof parsed.data] as string | null | undefined
     if (val === undefined) {
       continue
     } else if (!val) {
       converted[field] = null
-    } else if (timezone) {
-      converted[field] = localTimeToUtcIso(show.date, val, timezone)
     } else {
-      // No tour timezone set: treat as UTC to avoid silent data loss.
-      converted[field] = `${show.date}T${val}:00.000Z`
+      const date = addDays(show.date, offsets[field] ?? 0)
+      converted[field] = timezone
+        ? localTimeToUtcIso(date, val, timezone)
+        // No tour timezone set: treat as UTC to avoid silent data loss.
+        : `${date}T${val}:00.000Z`
     }
   }
 

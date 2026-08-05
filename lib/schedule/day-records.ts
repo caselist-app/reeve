@@ -1,6 +1,7 @@
 import type { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/lib/types/database'
 import { localDayWindowUtc } from '@/lib/schedule/datetime'
+import { addDays } from '@/lib/schedule/day-sheet-times'
 
 // Single source of truth for a schedule day's records. The day view used to
 // fetch this set two to three times per navigation (the page for panel data,
@@ -50,11 +51,28 @@ export type DayEvent = Pick<
 // rejected by every bucket and render on no day at all.
 export type DayHotelItem = DayHotel & { isCheckout: boolean }
 
+// Records belonging to the small hours of the following calendar morning, which
+// a TM reads as the end of this day rather than the start of the next one. A
+// 01:30 red-eye after a show is the case: it is stored on the 15th, correctly,
+// and the TM planning the 14th needs to see it.
+//
+// Deliberately a separate field rather than merged into `segments` and `events`.
+// These records genuinely belong to the next calendar day, they are still
+// fetched and rendered by that day, and nothing about where they are stored
+// changes. This is a second view of them, not a reassignment. Merging them would
+// make "which day is this on" ambiguous again, which is the thing the day link
+// exists to settle.
+export interface LateNight {
+  segments: DaySegment[]
+  events: DayEvent[]
+}
+
 export interface DayRecords {
   shows: DayShow[]
   segments: DaySegment[]          // deduped union of tour_date-linked and date-matched
   hotels: DayHotelItem[]          // check-ins and check-outs falling on this day
   events: DayEvent[]              // excludes the __day_notes__ sentinel
+  lateNight: LateNight            // next morning's small hours, shown as this day's tail
   dayNotes: string | null         // the __day_notes__ sentinel's notes, if any
   // Ids of the segments and hotels on this day, used by the info panel to
   // resolve the day's roster without re-querying for them.
@@ -67,10 +85,23 @@ const EMPTY: DayRecords = {
   segments: [],
   hotels: [],
   events: [],
+  lateNight: { segments: [], events: [] },
   dayNotes: null,
   segmentIds: [],
   hotelStayIds: [],
 }
+
+// Where the tail stops. This is a cutoff hour, and the two places this brief
+// deliberately refused to put one (the day-sheet write rule, and the definition
+// of a day) are the reason to say why it is acceptable here.
+//
+// Nothing is stored against it and nothing is grouped by it. A record on either
+// side of this line lives on exactly the same day it did before, is fetched by
+// that day, and renders there. All this decides is whether it ALSO appears at
+// the bottom of the previous day. Being wrong shows something in one extra
+// place, or fails to, which is a presentation miss the TM can see and correct.
+// Being wrong about a stored instant is silent and compounds.
+const LATE_NIGHT_ENDS_AT_HOUR = 6
 
 const SHOW_SELECT = `
   id, venue_name, address, capacity, venue_type, notes,
@@ -128,6 +159,21 @@ export async function fetchDayRecords(
   // what every other date-deriving path in the app does.
   const dayWindow = localDayWindowUtc(date, timezone ?? 'UTC')
 
+  // The small hours of the next morning. Starts where this day's window ends,
+  // which is next-day midnight in the tour's timezone, so the two are adjacent
+  // and cannot overlap: nothing can be both on this day and in its tail.
+  const nextDate = addDays(date, 1)
+  const nextDayWindow = localDayWindowUtc(nextDate, timezone ?? 'UTC')
+  // Six hours of elapsed time from local midnight, not "06:00 local". On a
+  // spring-forward night the clocks skip an hour, so this reads as 07:00 local
+  // on that one night a year. Left as elapsed time deliberately: converting a
+  // wall-clock 06:00 costs another timezone round trip to move a presentational
+  // boundary by an hour, on a night when the boundary is genuinely ambiguous
+  // anyway.
+  const lateNightEnd = new Date(
+    new Date(nextDayWindow.start).getTime() + LATE_NIGHT_ENDS_AT_HOUR * 3_600_000,
+  ).toISOString()
+
   const [
     { data: showRows },
     { data: linkedSegments },
@@ -136,6 +182,8 @@ export async function fetchDayRecords(
     { data: checkoutHotels },
     { data: eventRows },
     { data: dayNotesRow },
+    { data: lateSegmentRows },
+    { data: lateEventRows },
   ] = await Promise.all([
     supabase.from('shows').select(SHOW_SELECT).eq('tour_id', tourId).eq('tour_date_id', tourDateId),
 
@@ -195,6 +243,30 @@ export async function fetchDayRecords(
       .eq('date', date)
       .eq('title', '__day_notes__')
       .maybeSingle(),
+
+    // Tail: departures in the next morning's small hours. Filtered on depart_at
+    // alone rather than on the link, because that is the fact being asked about
+    // (when does this actually leave) and because it catches planner-created
+    // segments, which have no link at all.
+    supabase
+      .from('transport_segments')
+      .select(SEGMENT_SELECT)
+      .eq('tour_id', tourId)
+      .gte('depart_at', nextDayWindow.start)
+      .lt('depart_at', lateNightEnd),
+
+    // Scoped to the next calendar date as well as the time window. An event's
+    // day is its own `date` column, which is already explicit and separate from
+    // starts_at, so both have to agree before it counts as this day's tail.
+    supabase
+      .from('day_events')
+      .select('id, title, starts_at, ends_at, location, notes')
+      .eq('tour_id', tourId)
+      .eq('date', nextDate)
+      .neq('title', '__day_notes__')
+      .gte('starts_at', nextDayWindow.start)
+      .lt('starts_at', lateNightEnd)
+      .order('starts_at', { ascending: true }),
   ])
 
   // The date guard the linked query used to be missing entirely. A segment
@@ -231,11 +303,21 @@ export async function fetchDayRecords(
     day_sheets: flattenDaySheet(s.day_sheets),
   }))
 
+  // The tail is not folded into segmentIds or hotelStayIds. Those drive the day
+  // roster, which answers "who is on this day", and these people are on the next
+  // one. Showing a TM that a red-eye exists is useful; counting its passengers
+  // as today's party is not.
+  const lateNight: LateNight = {
+    segments: lateSegmentRows ?? [],
+    events: lateEventRows ?? [],
+  }
+
   return {
     shows,
     segments: Array.from(segMap.values()),
     hotels,
     events: eventRows ?? [],
+    lateNight,
     dayNotes: dayNotesRow?.notes ?? null,
     segmentIds: Array.from(segMap.keys()),
     // Deduplicated: a stay checking in and out across this day would otherwise
