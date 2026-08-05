@@ -1,4 +1,4 @@
-import { testDb, setTestUserId } from './setup'
+import { testDb, setTestUserId } from './test-db'
 
 // One tour, one show day, one show, one empty day sheet. Built by direct insert
 // rather than through create_show_with_dependents, because that RPC gates on
@@ -10,7 +10,12 @@ import { testDb, setTestUserId } from './setup'
 
 export interface Fixture {
   userId: string
+  // The account's login email. The e2e suite signs in as this account through
+  // the dev login route, which takes an email and nothing else.
+  email: string
+  artistId: string
   tourId: string
+  tourName: string
   tourDateId: string
   showId: string
   contactId: string
@@ -18,12 +23,17 @@ export interface Fixture {
   date: string
 }
 
-export async function createFixture(opts: { date?: string; timezone?: string } = {}): Promise<Fixture> {
+export async function createFixture(
+  opts: { date?: string; timezone?: string; tourName?: string; artistName?: string } = {}
+): Promise<Fixture> {
   const date = opts.date ?? '2026-06-14'
+  const tourName = opts.tourName ?? 'Test Tour'
   const stamp = Date.now()
 
+  const email = `test-${stamp}-${Math.random().toString(36).slice(2)}@example.test`
+
   const { data: user, error: userError } = await testDb.auth.admin.createUser({
-    email: `test-${stamp}-${Math.random().toString(36).slice(2)}@example.test`,
+    email,
     password: 'test-password-not-a-real-secret',
     email_confirm: true,
   })
@@ -33,12 +43,12 @@ export async function createFixture(opts: { date?: string; timezone?: string } =
 
   const { error: accountError } = await testDb
     .from('accounts')
-    .insert({ id: userId, name: 'Test TM', email: `test-${stamp}@example.test` })
+    .insert({ id: userId, name: 'Test TM', email })
   if (accountError) throw new Error(`fixture: could not create account: ${accountError.message}`)
 
   const { data: artist, error: artistError } = await testDb
     .from('artists')
-    .insert({ account_id: userId, name: 'Test Artist' })
+    .insert({ account_id: userId, name: opts.artistName ?? 'Test Artist' })
     .select('id')
     .single()
   if (artistError || !artist) throw new Error(`fixture: could not create artist: ${artistError?.message}`)
@@ -48,7 +58,7 @@ export async function createFixture(opts: { date?: string; timezone?: string } =
     .insert({
       account_id: userId,
       artist_id: artist.id,
-      name: 'Test Tour',
+      name: tourName,
       timezone: opts.timezone ?? 'Europe/London',
     })
     .select('id')
@@ -104,7 +114,10 @@ export async function createFixture(opts: { date?: string; timezone?: string } =
 
   return {
     userId,
+    email,
+    artistId: artist.id,
     tourId: tour.id,
+    tourName,
     tourDateId: tourDate.id,
     showId: show.id,
     contactId: contact.id,
@@ -118,6 +131,120 @@ export async function createFixture(opts: { date?: string; timezone?: string } =
 // teardown.
 export async function destroyFixture(fixture: Fixture) {
   await testDb.auth.admin.deleteUser(fixture.userId)
+}
+
+// Tour names the e2e specs assert on. Deliberately unalike, and deliberately
+// not "Test Tour": the cross-account spec proves account A cannot see account
+// B's tour name, and two similar names would let a substring match pass by
+// accident.
+export const E2E_TOUR_A_NAME = 'Northern Lights Tour'
+export const E2E_TOUR_B_NAME = 'Harbour Sessions Tour'
+
+// A load-in on account A's show day, so the revalidate spec has a time to edit
+// and the day timeline has a card to click. Set here rather than in
+// createFixture, because the integration tests assert on an empty day sheet and
+// a default time would quietly change what they are testing.
+//
+// The tour is Europe/London and the seeded date is in June, so 15:00Z renders
+// as 16:00 on the timeline. Both are exported so the spec asserts the value it
+// seeded rather than a number written twice.
+export const E2E_SEEDED_LOAD_IN_UTC = 'T15:00:00Z'
+export const E2E_SEEDED_LOAD_IN_LOCAL = '16:00'
+
+export interface E2eSeed {
+  // The account the browser signs in as. Everything the smoke specs open hangs
+  // off this one.
+  a: Fixture & {
+    hotelStayId: string
+    rehearsalId: string
+    rehearsalDate: string
+  }
+  // A second ACCOUNT, not a second tour. createSecondTour puts both tours on
+  // one account, which is right for cross-tour id checks and proves nothing
+  // about RLS, because RLS passes when one TM owns both. Account B is the only
+  // way to test the thing RLS actually does.
+  b: Fixture
+}
+
+// The data the whole e2e suite runs against. Built once in globalSetup rather
+// than per spec: these tests read pages far more than they write rows, and a
+// per-spec account would mean signing in again for every file.
+//
+// The hotel stay and the rehearsal exist for one reason each: they are the only
+// way to reach /tours/[id]/shows/[showId]/hotels/[stayId] and
+// /tours/[id]/rehearsals/[rehearsalId], and a smoke spec that skips a route
+// because it could not build an id is a smoke spec with a hole in it.
+export async function createE2eSeed(): Promise<E2eSeed> {
+  const a = await createFixture({ tourName: E2E_TOUR_A_NAME, artistName: 'Seeded Artist' })
+  const b = await createFixture({ tourName: E2E_TOUR_B_NAME, artistName: 'Other Artist' })
+
+  const { error: loadInError } = await testDb
+    .from('day_sheets')
+    .update({ load_in: `${a.date}${E2E_SEEDED_LOAD_IN_UTC}` })
+    .eq('show_id', a.showId)
+  if (loadInError) throw new Error(`seed: could not set the load-in: ${loadInError.message}`)
+
+  // Same day as the show, so the stay sits on the day view the schedule specs
+  // open. tour_date_id and check_in_date are a composite foreign key onto
+  // tour_dates (id, date): writing one without the other is a 23503, not a
+  // silent bug, which is the whole point of that constraint.
+  const { data: stay, error: stayError } = await testDb
+    .from('hotel_stays')
+    .insert({
+      tour_id: a.tourId,
+      tour_date_id: a.tourDateId,
+      check_in_date: a.date,
+      check_out_date: nextDay(a.date),
+      name: 'Seeded Hotel',
+      city: 'London',
+    })
+    .select('id')
+    .single()
+  if (stayError || !stay) throw new Error(`seed: could not create hotel stay: ${stayError?.message}`)
+
+  // Its own day, because a tour_date carries one day_type and the show day is
+  // already a show.
+  const rehearsalDate = nextDay(a.date)
+  const { data: rehearsalDay, error: rehearsalDayError } = await testDb
+    .from('tour_dates')
+    .insert({ tour_id: a.tourId, date: rehearsalDate, day_type: 'rehearsal' })
+    .select('id')
+    .single()
+  if (rehearsalDayError || !rehearsalDay) {
+    throw new Error(`seed: could not create rehearsal day: ${rehearsalDayError?.message}`)
+  }
+
+  const { data: rehearsal, error: rehearsalError } = await testDb
+    .from('rehearsals')
+    .insert({
+      tour_id: a.tourId,
+      tour_date_id: rehearsalDay.id,
+      location_name: 'Seeded Rehearsal Rooms',
+    })
+    .select('id')
+    .single()
+  if (rehearsalError || !rehearsal) {
+    throw new Error(`seed: could not create rehearsal: ${rehearsalError?.message}`)
+  }
+
+  return {
+    a: { ...a, hotelStayId: stay.id, rehearsalId: rehearsal.id, rehearsalDate },
+    b,
+  }
+}
+
+// Two deletes, and the cascade does the rest, same as destroyFixture.
+export async function destroyE2eSeed(seed: { a: { userId: string }; b: { userId: string } }) {
+  await testDb.auth.admin.deleteUser(seed.a.userId)
+  await testDb.auth.admin.deleteUser(seed.b.userId)
+}
+
+// Date arithmetic on a plain date string, no timezone involved: these are
+// `date` columns, not timestamptz, so there is no day to get wrong.
+function nextDay(date: string): string {
+  const d = new Date(`${date}T00:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + 1)
+  return d.toISOString().slice(0, 10)
 }
 
 // A second tour on the SAME account. This is the shape the cross-tour bugs

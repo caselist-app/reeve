@@ -98,7 +98,13 @@ export function DateSidebar({ tourId, dates, defaultDate }: DateSidebarProps) {
   const selectedDate = useSearchParams().get('date') ?? defaultDate
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
+    // A navigation landmark, not a plain div: this is the tour's day list and
+    // the primary way a TM moves around the schedule. The label also gives the
+    // e2e suite a semantic handle, which matters because the same day links are
+    // rendered again by date-strip.tsx for mobile, and a test that cannot tell
+    // the two apart ends up asserting on viewport behaviour instead of on the
+    // Dates list.
+    <nav aria-label="Dates" className="h-full flex flex-col overflow-hidden">
       {/* Spine header: quiet label plus a secondary control to add a day. */}
       <div className="flex shrink-0 items-center justify-between px-4 pt-4 pb-2">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -157,6 +163,6 @@ export function DateSidebar({ tourId, dates, defaultDate }: DateSidebarProps) {
           })}
         </div>
       )}
-    </div>
+    </nav>
   )
 }

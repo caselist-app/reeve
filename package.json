@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.mts",
+    "test:e2e": "playwright test",
     "types:gen": "supabase gen types typescript --linked > lib/types/database.ts"
   },
   "dependencies": {
@@ -57,6 +58,7 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.5",
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4.1.8",
     "@types/node": "^22.15.21",
     "@types/react": "^19.1.5",

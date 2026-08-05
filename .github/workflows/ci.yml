@@ -137,6 +137,131 @@ jobs:
       - name: Integration tests
         run: pnpm test:integration
 
+  # End-to-end tests. The layer above the integration suite: a real browser
+  # loading real pages out of a real production build against a real database.
+  #
+  # It exists because nothing else in this workflow loads a page a TM opens.
+  # next build prerenders six routes and not one of them is under app/(app),
+  # since the (app) layout reads cookies() and everything below it is dynamic.
+  # So a Server Component that throws on the schedule, the roster or a planner
+  # passes every step of the build job and then serves a 500 to the only person
+  # using the product.
+  #
+  # Same Docker-only constraint as the integration job, so this is CI-only too.
+  # See tests/README.md.
+  e2e:
+    name: End-to-end tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      # Node 24, matching the other jobs and Vercel. Same hard floor as the
+      # integration job: supabase-js needs a global WebSocket, which arrives in
+      # Node 22.
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Start Supabase
+        run: supabase start
+
+      # Read the generated keys rather than hardcoding them, same as the
+      # integration job. SUPABASE_TEST_* are what tests/integration/fixture.ts
+      # reads when the e2e seed runs; the other three are what the app itself
+      # reads, at build time and at run time.
+      - name: Export local Supabase credentials
+        run: |
+          supabase status -o json > /tmp/supabase-status.json
+          API_URL="$(jq -r '.API_URL' /tmp/supabase-status.json)"
+          ANON_KEY="$(jq -r '.ANON_KEY' /tmp/supabase-status.json)"
+          SERVICE_ROLE_KEY="$(jq -r '.SERVICE_ROLE_KEY' /tmp/supabase-status.json)"
+          {
+            echo "SUPABASE_TEST_URL=$API_URL"
+            echo "SUPABASE_TEST_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+          } >> "$GITHUB_ENV"
+
+      # Deliberately not the placeholder values the build job uses.
+      # NEXT_PUBLIC_* is inlined at build time, so a placeholder produces an app
+      # that renders perfectly and cannot reach the database, and every spec
+      # then fails for the wrong reason.
+      - name: Build against the local Supabase
+        run: pnpm build
+        env:
+          NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+
+      # Keyed on the Playwright version, because the browser build is pinned to
+      # it: a version bump has to miss the cache or the run gets a browser the
+      # library refuses to drive.
+      - name: Read the Playwright version
+        run: |
+          echo "PLAYWRIGHT_VERSION=$(node -p "require('./package.json').devDependencies['@playwright/test'].replace(/^[^0-9]*/, '')")" >> "$GITHUB_ENV"
+
+      - name: Restore the browser cache
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}
+
+      # --only-shell installs chromium-headless-shell rather than full Chromium:
+      # a much smaller download, and what a headless run uses anyway.
+      #
+      # Deliberately no --with-deps and no install-deps. That is an apt install
+      # needing sudo, it cannot be cached because the packages land outside
+      # ~/.cache/ms-playwright, and it was taking longer than everything else in
+      # this job put together. The ubuntu-latest image already ships the
+      # libraries headless Chromium needs. If that stops being true, the browser
+      # fails to launch with a message naming the missing library, which is a
+      # loud failure rather than a slow one, and the fix is to add it back.
+      - name: Install Chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --only-shell chromium
+
+      - name: End-to-end tests
+        run: pnpm test:e2e
+        env:
+          NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
+          # Absent secret means the dev login route returns 404 and no spec can
+          # sign in. Add it in Settings, Secrets and variables, Actions.
+          E2E_LOGIN_SECRET: ${{ secrets.E2E_LOGIN_SECRET }}
+
+      # Only on failure: the log line names the spec, and this is for the
+      # detail behind it (trace, screenshot) without needing Docker locally.
+      # Both paths, deliberately. playwright-report is the readable summary;
+      # test-results holds the trace and the error-context snapshot for each
+      # failure, which is the only way to see what the page actually contained
+      # without a local Docker. Debugging a failure from the log alone cost a
+      # long detour on this brief.
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results
+          retention-days: 7
+
   # Deploys the jobs in trigger/jobs to Trigger.dev, on merge to main only.
   #
   # This job exists because the two runtimes deploying separately caused a silent
@@ -153,12 +278,12 @@ jobs:
   # is the reason nobody has to remember it: both runtimes now ship from the same
   # merge, so the code cannot skew between them in the first place.
   #
-  # needs: [build, integration] deliberately. A deploy that races the tests would
-  # put unverified job code in front of real crew.
+  # needs: [build, integration, e2e] deliberately. A deploy that races the tests
+  # would put unverified job code in front of real crew.
   deploy-trigger:
     name: Deploy Trigger.dev jobs
     runs-on: ubuntu-latest
-    needs: [build, integration]
+    needs: [build, integration, e2e]
     # Merges only. A pull request must never deploy: it would put a branch's job
     # code into the same Trigger.dev environment that production runs from.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'

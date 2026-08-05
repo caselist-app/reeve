@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { testDb } from './setup'
+import { testDb } from './test-db'
 import { createFixture, destroyFixture, type Fixture } from './fixture'
 
 // Brief 38 Part 1. Every other test in this suite goes through a server action,

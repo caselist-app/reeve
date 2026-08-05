@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { testDb } from './setup'
+import { testDb } from './test-db'
 import { createFixture, destroyFixture, createSecondTour, type Fixture } from './fixture'
 import { getShowAdvance } from '@/lib/actions/shows'
 
