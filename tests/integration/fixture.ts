@@ -140,6 +140,17 @@ export async function destroyFixture(fixture: Fixture) {
 export const E2E_TOUR_A_NAME = 'Northern Lights Tour'
 export const E2E_TOUR_B_NAME = 'Harbour Sessions Tour'
 
+// A load-in on account A's show day, so the revalidate spec has a time to edit
+// and the day timeline has a card to click. Set here rather than in
+// createFixture, because the integration tests assert on an empty day sheet and
+// a default time would quietly change what they are testing.
+//
+// The tour is Europe/London and the seeded date is in June, so 15:00Z renders
+// as 16:00 on the timeline. Both are exported so the spec asserts the value it
+// seeded rather than a number written twice.
+export const E2E_SEEDED_LOAD_IN_UTC = 'T15:00:00Z'
+export const E2E_SEEDED_LOAD_IN_LOCAL = '16:00'
+
 export interface E2eSeed {
   // The account the browser signs in as. Everything the smoke specs open hangs
   // off this one.
@@ -166,6 +177,12 @@ export interface E2eSeed {
 export async function createE2eSeed(): Promise<E2eSeed> {
   const a = await createFixture({ tourName: E2E_TOUR_A_NAME, artistName: 'Seeded Artist' })
   const b = await createFixture({ tourName: E2E_TOUR_B_NAME, artistName: 'Other Artist' })
+
+  const { error: loadInError } = await testDb
+    .from('day_sheets')
+    .update({ load_in: `${a.date}${E2E_SEEDED_LOAD_IN_UTC}` })
+    .eq('show_id', a.showId)
+  if (loadInError) throw new Error(`seed: could not set the load-in: ${loadInError.message}`)
 
   // Same day as the show, so the stay sits on the day view the schedule specs
   // open. tour_date_id and check_in_date are a composite foreign key onto
