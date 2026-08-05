@@ -83,7 +83,7 @@ export async function createRehearsal(
   // So a rehearsal created on a date the tour did not have yet added a day that
   // did not appear in the sidebar until a hard reload. Only a server-side
   // revalidate reaches it.
-  // TEMPORARY, reverted in the next commit. Brief 41 step 6's red-first proof.
+  revalidatePath(`/tours/${tourId}/schedule`)
 
   return { error: null, rehearsalId: rehearsal.id }
 }
