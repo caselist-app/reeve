@@ -102,6 +102,18 @@ Commit all three together (migration file, any code using the new schema, regene
 
 So: ship the code to both runtimes, confirm both are live, then apply the migration. CI now deploys Trigger.dev on merge to `main`, which is what makes "both" happen automatically, and `pnpm check:conventions` fails a destructive migration that carries no `-- deploy-order:` line stating this was considered. The full reasoning, and the production failure that produced the rule, is under Environment variables below. It is repeated here because that is where it was written the first time and it was 170 lines from the decision it governs, which is exactly why it was missed.
 
+**A rename is not a drop, and the fourth part does not save it. Renaming a column is two migrations.** `alter table ... rename column` has no safe moment to run at all. Apply it before the deploy and the running code reads the old name, which has gone. Apply it after and the running code reads the new name, which does not exist yet. Either way the gap is a deploy rather than a second, and "ship the code first" cannot help because there is no ordering in which both the old and the new code are correct. Note also that `check:conventions` greps for drops, so a lone `rename column` does not even trigger the `-- deploy-order:` requirement.
+
+The shape that works is add-and-copy, then contract, across two commits:
+
+1. Migration one adds the new column and copies the old one into it. Nothing is removed, so it is safe to apply at any point, before or after the code ships. In the same commit, move every reader and writer to the new name.
+2. Merge, and let both runtimes deploy.
+3. Migration two drops the old column, in a later commit. By then it has no reader anywhere and has been a stale copy since step one.
+
+`supabase/migrations/20260805130000_add_lobby_call.sql` and `20260805160000_drop_hotel_departure.sql` are the reference pair (`hotel_departure` to `lobby_call`, Brief 36). The same applies to renaming a table.
+
+**Two things about that rename are worth carrying beyond the database.** A test written for the end state cannot be committed with step one: asserting the old column is gone would be a test that has to fail for as long as the expand phase lasts, so those assertions belong in the contract commit. And `pnpm types:gen` reads the linked project, so `tsc` cannot pass on the new name until the migration has actually been applied. That is not a reason to hand-edit `lib/types/database.ts`; it is the reason the additive migration has to be safe to apply early.
+
 ## Database conventions
 
 - Tables: `snake_case`, plural (`tours`, `people`, `shows`, `transport_segments`).
