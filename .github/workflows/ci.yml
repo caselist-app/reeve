@@ -247,12 +247,19 @@ jobs:
 
       # Only on failure: the log line names the spec, and this is for the
       # detail behind it (trace, screenshot) without needing Docker locally.
+      # Both paths, deliberately. playwright-report is the readable summary;
+      # test-results holds the trace and the error-context snapshot for each
+      # failure, which is the only way to see what the page actually contained
+      # without a local Docker. Debugging a failure from the log alone cost a
+      # long detour on this brief.
       - name: Upload the Playwright report
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
-          path: playwright-report
+          path: |
+            playwright-report
+            test-results
           retention-days: 7
 
   # Deploys the jobs in trigger/jobs to Trigger.dev, on merge to main only.

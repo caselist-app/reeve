@@ -109,16 +109,20 @@ test('a renamed tour updates in the sidebar and does not snap back', async ({ pa
   await expect(page.getByLabel('Tour name')).toHaveValue(seed.a.tourName)
 })
 
-// The sidebar renders each day as a link to ?date=. Matched on the href rather
-// than the visible text, because the visible text is a day number and a month
-// abbreviation and those repeat across a tour.
+// Scoped to the Dates navigation landmark, which is the @secondaryPanel slot
+// and the thing this spec is about. The same day links are rendered again by
+// date-strip.tsx for mobile, so an unscoped locator finds two elements for one
+// day and turns a passing spec into a "duplicate day" failure.
 //
-// :visible matters. The day list renders twice, in the desktop sidebar and in
-// the mobile date strip, so an unfiltered locator finds two links for one day
-// and the count assertion reads as a duplicate-day bug. On the desktop viewport
-// these specs run at, exactly one of the two is displayed.
+// Filtering by :visible instead was worse: it made the assertion depend on the
+// viewport and on which of the two containers CSS happened to be showing, and
+// it flipped from finding two links to finding none between runs. Counting
+// inside the landmark does not care whether it is on screen.
+//
+// Matched by href rather than by text, because the visible text of a day row is
+// a number and a month abbreviation, and those repeat across a tour.
 function sidebarLinkFor(page: import('@playwright/test').Page, date: string) {
-  return page.locator(`a[href*="date=${date}"]:visible`)
+  return page.getByRole('navigation', { name: 'Dates' }).locator(`a[href*="date=${date}"]`)
 }
 
 function addDays(date: string, days: number): string {
