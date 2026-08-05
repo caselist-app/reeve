@@ -2,26 +2,35 @@
 
 import Link from 'next/link'
 import { useRef } from 'react'
-import { X, Users, Plane, Building2, FileText, MessageCircle, Settings } from 'lucide-react'
+import { X, Users, Plane, Building2, Inbox, FileText, MessageCircle, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useDismiss } from '@/hooks/use-dismiss'
 
 interface TourSettingsPanelProps {
   tourId: string
+  /** Emails Claude has read and proposed rows for, waiting on the TM to confirm
+   *  or discard. Shown as a count next to Extractions. */
+  extractionsAwaitingReview?: number
   isOpen: boolean
   onClose: () => void
 }
 
 const SETTINGS_NAV = [
-  { href: (id: string) => `/tours/${id}/people`,    label: 'People',        icon: Users },
-  { href: (id: string) => `/tours/${id}/transport`, label: 'Transport',     icon: Plane },
-  { href: (id: string) => `/tours/${id}/hotels`,    label: 'Hotels',        icon: Building2 },
-  { href: (id: string) => `/tours/${id}/settings`,  label: 'Documents',     icon: FileText },
-  { href: (id: string) => `/tours/${id}/settings`,  label: 'WhatsApp',      icon: MessageCircle },
-  { href: (id: string) => `/tours/${id}/settings`,  label: 'Tour settings', icon: Settings },
+  { key: 'people',      href: (id: string) => `/tours/${id}/people`,      label: 'People',        icon: Users },
+  { key: 'transport',   href: (id: string) => `/tours/${id}/transport`,   label: 'Transport',     icon: Plane },
+  { key: 'hotels',      href: (id: string) => `/tours/${id}/hotels`,      label: 'Hotels',        icon: Building2 },
+  { key: 'extractions', href: (id: string) => `/tours/${id}/extractions`, label: 'Extractions',   icon: Inbox },
+  { key: 'documents',   href: (id: string) => `/tours/${id}/settings`,    label: 'Documents',     icon: FileText },
+  { key: 'whatsapp',    href: (id: string) => `/tours/${id}/settings`,    label: 'WhatsApp',      icon: MessageCircle },
+  { key: 'settings',    href: (id: string) => `/tours/${id}/settings`,    label: 'Tour settings', icon: Settings },
 ] as const
 
-export function TourSettingsPanel({ tourId, isOpen, onClose }: TourSettingsPanelProps) {
+export function TourSettingsPanel({
+  tourId,
+  extractionsAwaitingReview = 0,
+  isOpen,
+  onClose,
+}: TourSettingsPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null)
 
   useDismiss({ isOpen, onClose, ref: panelRef })
@@ -48,21 +57,33 @@ export function TourSettingsPanel({ tourId, isOpen, onClose }: TourSettingsPanel
       </div>
 
       <nav className="px-3 space-y-0.5">
-        {SETTINGS_NAV.map(({ href, label, icon: Icon }) => (
-          <Link
-            key={label}
-            href={href(tourId)}
-            onClick={onClose}
-            className={cn(
-              'flex items-center gap-2.5 rounded-lg px-2 h-7 text-xs font-medium transition-colors',
-              'hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
-            )}
-            style={{ color: 'var(--sidebar-muted-foreground)' }}
-          >
-            <Icon className="h-3.5 w-3.5 shrink-0" />
-            {label}
-          </Link>
-        ))}
+        {SETTINGS_NAV.map(({ key, href, label, icon: Icon }) => {
+          const count = key === 'extractions' ? extractionsAwaitingReview : 0
+          return (
+            <Link
+              key={key}
+              href={href(tourId)}
+              onClick={onClose}
+              className={cn(
+                'flex items-center gap-2.5 rounded-lg px-2 h-7 text-xs font-medium transition-colors',
+                'hover:bg-sidebar-accent/50 hover:text-sidebar-foreground',
+              )}
+              style={{ color: 'var(--sidebar-muted-foreground)' }}
+            >
+              <Icon className="h-3.5 w-3.5 shrink-0" />
+              {label}
+              {count > 0 && (
+                <span
+                  className="ml-auto rounded border px-1 py-0.5 text-[10px] leading-none tabular-nums"
+                  style={{ borderColor: 'var(--sidebar-border)', color: 'var(--sidebar-muted-foreground)' }}
+                  aria-label={`${count} waiting to review`}
+                >
+                  {count}
+                </span>
+              )}
+            </Link>
+          )
+        })}
       </nav>
     </div>
   )

@@ -76,11 +76,6 @@ export type PanelDescriptor =
       onSuccess: (contactId?: string) => void
     }
   | {
-      type: 'add-show'
-      tourId: string
-      onSuccess: (showId: string) => void
-    }
-  | {
       type: 'send-rider'
       tourId: string
       showId: string

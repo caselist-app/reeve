@@ -21,9 +21,18 @@ interface ResizableSidebarProps {
   initialWidth: number
   initialCollapsed: boolean
   lastTourId?: string | null
+  /** Emails waiting to be reviewed, keyed by tour id. Fed to the settings
+   *  panel's Extractions badge. */
+  extractionsAwaitingReview?: Record<string, number>
 }
 
-export function ResizableSidebar({ tours, initialWidth, initialCollapsed, lastTourId = null }: ResizableSidebarProps) {
+export function ResizableSidebar({
+  tours,
+  initialWidth,
+  initialCollapsed,
+  lastTourId = null,
+  extractionsAwaitingReview,
+}: ResizableSidebarProps) {
   const { collapsed, setCollapsed, toggleCollapsed } = useSidebarCollapsed(initialCollapsed)
   const [settingsOpen, setSettingsOpen] = useState(false)
 
@@ -81,6 +90,7 @@ export function ResizableSidebar({ tours, initialWidth, initialCollapsed, lastTo
         setCollapsed={setCollapsed}
         settingsOpen={settingsOpen}
         onSettingsOpenChange={setSettingsOpen}
+        extractionsAwaitingReview={extractionsAwaitingReview}
       />
 
       {/* Drag handle on the right edge. Mouse-only; hidden on touch and while collapsed. */}

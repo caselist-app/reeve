@@ -6,6 +6,7 @@ import { PageLayout } from '@/components/layout/page-layout'
 import { PageHeader } from '@/components/layout/page-header'
 import { TransportView } from '@/components/transport/transport-view'
 import type { SegmentWithContext } from '@/components/transport/segment-row'
+import { showIdFromPlannerPayload } from '@/lib/logistics/show-link'
 
 export default async function TransportPage({
   params,
@@ -41,7 +42,7 @@ export default async function TransportPage({
     return {
       ...seg,
       assigned_count: assignments?.length ?? 0,
-      show_id: null,
+      show_id: showIdFromPlannerPayload(seg.details_json),
     }
   })
 

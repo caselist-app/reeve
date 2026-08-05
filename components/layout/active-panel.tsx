@@ -10,7 +10,6 @@ const BulkAdd = dynamic(() => import('@/components/people/bulk-add').then((m) =>
 const AddPersonPanel = dynamic(() => import('@/components/people/add-person-panel').then((m) => m.AddPersonPanel), { ssr: false })
 const ContactSheet = dynamic(() => import('@/components/roster/contact-sheet').then((m) => m.ContactSheet), { ssr: false })
 const ContactPanel = dynamic(() => import('@/components/roster/contact-panel').then((m) => m.ContactPanel), { ssr: false })
-const AddShowPanel = dynamic(() => import('@/components/shows/add-show-panel').then((m) => m.AddShowPanel), { ssr: false })
 const SendRiderSheet = dynamic(() => import('@/components/shows/send-rider-sheet').then((m) => m.SendRiderSheet), { ssr: false })
 const AddDayPanel = dynamic(() => import('@/components/schedule/add-day-panel').then((m) => m.AddDayPanel), { ssr: false })
 // Brief 33: schedule day view detail and add panels.
@@ -48,13 +47,6 @@ export function ActivePanel() {
         <ContactSheet
           contact={panel.contact}
           tourContext={panel.tourContext}
-          onSuccess={panel.onSuccess}
-        />
-      )
-    case 'add-show':
-      return (
-        <AddShowPanel
-          tourId={panel.tourId}
           onSuccess={panel.onSuccess}
         />
       )

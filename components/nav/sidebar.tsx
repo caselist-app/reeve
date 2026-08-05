@@ -42,6 +42,10 @@ interface SidebarProps {
    *  collapses and has no such conflict) needs no changes. */
   settingsOpen?: boolean
   onSettingsOpenChange?: (open: boolean) => void
+  /** Emails waiting to be reviewed, keyed by tour id, fetched server-side in
+   *  app/(app)/layout.tsx. Keyed rather than scalar because the active tour is
+   *  derived from the pathname here, on the client. */
+  extractionsAwaitingReview?: Record<string, number>
 }
 
 const TOUR_NAV = [
@@ -61,6 +65,7 @@ export function Sidebar({
   setCollapsed = () => {},
   settingsOpen: settingsOpenProp,
   onSettingsOpenChange,
+  extractionsAwaitingReview,
 }: SidebarProps) {
   const pathname = usePathname()
   const { openPalette } = useCommandPalette()
@@ -252,6 +257,7 @@ export function Sidebar({
       {activeTourId && (
         <TourSettingsPanel
           tourId={activeTourId}
+          extractionsAwaitingReview={extractionsAwaitingReview?.[activeTourId] ?? 0}
           isOpen={settingsOpen}
           onClose={() => setSettingsOpen(false)}
         />

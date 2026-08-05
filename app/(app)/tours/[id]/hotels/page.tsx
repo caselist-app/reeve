@@ -5,7 +5,7 @@ import { PageLayout } from '@/components/layout/page-layout'
 import { PageHeader } from '@/components/layout/page-header'
 import { HotelsView } from '@/components/hotels/hotels-view'
 import type { StayWithContext } from '@/components/hotels/stay-row'
-import type { Json } from '@/lib/types/database'
+import { showIdFromPlannerPayload } from '@/lib/logistics/show-link'
 
 export default async function HotelsPage({
   params,
@@ -44,20 +44,12 @@ export default async function HotelsPage({
     show_date: s.date,
   }))
 
-  // Extract show_id from room_types_json, where it is stored alongside the raw
-  // provider payload when a stay is recorded via the hotel planner.
-  function extractShowId(json: Json): string | null {
-    if (!json || typeof json !== 'object' || Array.isArray(json)) return null
-    const j = json as Record<string, unknown>
-    return typeof j.show_id === 'string' ? j.show_id : null
-  }
-
   const stays: StayWithContext[] = (rawStays ?? []).map((stay) => {
     const assignments = stay.room_assignments as { id: string }[] | null
     return {
       ...stay,
       room_count: assignments?.length ?? 0,
-      show_id: extractShowId(stay.room_types_json),
+      show_id: showIdFromPlannerPayload(stay.room_types_json),
     }
   })
 

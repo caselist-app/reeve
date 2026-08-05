@@ -104,16 +104,10 @@ export type TourContext = {
       room_type: string | null
     }>
   }>
-  attention_items: Array<{
-    kind: string
-    severity: number
-    title: string
-    detail: string | null
-  }>
 }
 
 export async function assembleTourContext(tour_id: string): Promise<TourContext> {
-  // Serve from cache when possible. The context is expensive: 6 parallel
+  // Serve from cache when possible. The context is expensive: 5 parallel
   // Supabase queries. 10 minutes is short enough to stay fresh for crew Q&A
   // while keeping AI costs well under the $5/tour/month target.
   try {
@@ -126,7 +120,7 @@ export async function assembleTourContext(tour_id: string): Promise<TourContext>
 
   const admin = createAdminClient()
 
-  const [tourRes, showsRes, peopleRes, transportRes, hotelsRes, attentionRes] =
+  const [tourRes, showsRes, peopleRes, transportRes, hotelsRes] =
     await Promise.all([
       admin.from('tours').select('id, name, artists(name), territory, base_currency').eq('id', tour_id).single(),
       admin
@@ -160,12 +154,6 @@ export async function assembleTourContext(tour_id: string): Promise<TourContext>
         `)
         .eq('tour_id', tour_id)
         .order('check_in_date', { ascending: true }),
-      admin
-        .from('attention_items')
-        .select('kind, severity, title, detail')
-        .eq('tour_id', tour_id)
-        .is('resolved_at', null)
-        .order('severity', { ascending: false }),
     ])
 
   if (!tourRes.data) throw new Error(`Tour not found: ${tour_id}`)
@@ -241,7 +229,6 @@ export async function assembleTourContext(tour_id: string): Promise<TourContext>
       confirmation_number: h.confirmation_number,
       assignments: Array.isArray(h.room_assignments) ? h.room_assignments : [],
     })),
-    attention_items: attentionRes.data ?? [],
   }
 
   // Write to cache. Non-fatal if Redis is unavailable.

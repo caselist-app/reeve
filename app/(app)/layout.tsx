@@ -25,13 +25,22 @@ export default async function AppLayout({
   const user = await requireUser()
   const supabase = await createClient()
 
-  // Fetch all active tours for the sidebar tour selector.
-  const { data: toursRaw } = await supabase
-    .from('tours')
-    .select('id, name, status, artist_id, artists(name)')
-    .eq('account_id', user.id)
-    .neq('status', 'archived')
-    .order('created_at', { ascending: false })
+  // Tours for the selector, and the count of emails waiting to be reviewed on
+  // each one, for the Extractions badge in the tour settings panel. Independent
+  // queries, so they run together rather than in two waves. forwarded_emails is
+  // scoped by owns_tour(tour_id) in RLS, so it needs no tour filter of its own.
+  const [{ data: toursRaw }, { data: awaitingReview }] = await Promise.all([
+    supabase
+      .from('tours')
+      .select('id, name, status, artist_id, artists(name)')
+      .eq('account_id', user.id)
+      .neq('status', 'archived')
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('forwarded_emails')
+      .select('tour_id')
+      .eq('extraction_status', 'extracted'),
+  ])
 
   const tours = (toursRaw ?? []).map((t) => ({
     id: t.id,
@@ -39,6 +48,11 @@ export default async function AppLayout({
     artist_id: t.artist_id,
     artist_name: t.artists?.name ?? t.name,
   }))
+
+  const extractionsAwaitingReview: Record<string, number> = {}
+  for (const row of awaitingReview ?? []) {
+    extractionsAwaitingReview[row.tour_id] = (extractionsAwaitingReview[row.tour_id] ?? 0) + 1
+  }
 
   // Read persisted sidebar width from cookie so the server renders it correctly
   // on first paint without a layout shift.
@@ -67,11 +81,16 @@ export default async function AppLayout({
           initialWidth={sidebarWidth}
           initialCollapsed={isCollapsed}
           lastTourId={lastTourId}
+          extractionsAwaitingReview={extractionsAwaitingReview}
         />
       </div>
 
       {/* Mobile: sidebar rendered inside a drawer opened by the hamburger. */}
-      <MobileNavDrawer tours={tours ?? []} lastTourId={lastTourId} />
+      <MobileNavDrawer
+        tours={tours ?? []}
+        lastTourId={lastTourId}
+        extractionsAwaitingReview={extractionsAwaitingReview}
+      />
 
       {/* AppContent owns the main card, the secondary panel, and the side panel. */}
       <AppContent secondaryPanel={secondaryPanel}>{children}</AppContent>

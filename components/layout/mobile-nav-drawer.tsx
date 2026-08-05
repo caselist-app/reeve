@@ -16,12 +16,15 @@ interface Tour {
 interface MobileNavDrawerProps {
   tours: Tour[]
   lastTourId?: string | null
+  /** Emails waiting to be reviewed, keyed by tour id. Fed to the settings
+   *  panel's Extractions badge. */
+  extractionsAwaitingReview?: Record<string, number>
 }
 
 // Renders the Sidebar inside a left-side Sheet on mobile. Controlled by
 // useMobileNav so the hamburger in MobileTopBar can open it. Closes
 // automatically whenever the pathname changes (i.e. the user navigated).
-export function MobileNavDrawer({ tours, lastTourId }: MobileNavDrawerProps) {
+export function MobileNavDrawer({ tours, lastTourId, extractionsAwaitingReview }: MobileNavDrawerProps) {
   const { isOpen, close } = useMobileNav()
   const pathname = usePathname()
 
@@ -37,7 +40,11 @@ export function MobileNavDrawer({ tours, lastTourId }: MobileNavDrawerProps) {
           className="fixed inset-y-0 left-0 z-50 w-72 md:hidden bg-sidebar data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left duration-200"
         >
           <SheetPrimitive.Title className="sr-only">Navigation</SheetPrimitive.Title>
-          <Sidebar tours={tours} lastTourId={lastTourId} />
+          <Sidebar
+            tours={tours}
+            lastTourId={lastTourId}
+            extractionsAwaitingReview={extractionsAwaitingReview}
+          />
         </SheetPrimitive.Content>
       </SheetPrimitive.Portal>
     </SheetPrimitive.Root>
