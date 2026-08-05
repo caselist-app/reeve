@@ -49,7 +49,7 @@ export function StayRow({ stay, tourId }: StayRowProps) {
 
   const detailsHref = stay.show_id
     ? `/tours/${tourId}/shows/${stay.show_id}/hotels/${stay.id}`
-    : `/tours/${tourId}/shows`
+    : `/tours/${tourId}/schedule`
 
   return (
     <tr className="border-b border-border/50 last:border-0">

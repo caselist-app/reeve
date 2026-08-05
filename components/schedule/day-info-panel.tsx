@@ -1,4 +1,5 @@
 import { NotesTextarea } from '@/components/schedule/notes-textarea'
+import { VenueBlock } from '@/components/schedule/venue-block'
 import type { DayShow } from '@/lib/schedule/day-records'
 import type { RosterPerson } from '@/lib/schedule/day-roster'
 
@@ -17,19 +18,14 @@ export function DayInfoPanel({ tourId, date, show, dayNotes, roster }: DayInfoPa
 
   return (
     <div className="flex flex-col h-full px-4 py-4 gap-5 overflow-y-auto">
-      {/* Venue */}
+      {/* Venue. Clickable since Brief 36 step 6: this is the way into a show's
+          venue detail now that the show page is gone. */}
       {show ? (
         <section>
           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
             Venue
           </p>
-          <p className="text-sm font-semibold">{show.venue_name}</p>
-          {show.address && (
-            <p className="text-xs text-muted-foreground mt-0.5">{show.address}</p>
-          )}
-          {show.capacity != null && (
-            <p className="text-xs text-muted-foreground mt-0.5">Cap. {show.capacity.toLocaleString()}</p>
-          )}
+          <VenueBlock tourId={tourId} show={show} />
         </section>
       ) : (
         <section>

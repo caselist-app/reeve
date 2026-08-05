@@ -41,7 +41,7 @@ export default async function RehearsalDetailPage({
     .eq('tour_id', id)
     .single()
 
-  if (!rehearsal) redirect(`/tours/${id}/shows`)
+  if (!rehearsal) redirect(`/tours/${id}/schedule`)
 
   const tourDate = Array.isArray(rehearsal.tour_dates)
     ? rehearsal.tour_dates[0]
@@ -53,7 +53,7 @@ export default async function RehearsalDetailPage({
     <PageLayout maxWidth="max-w-2xl">
       <div className="mb-6">
         <Link
-          href={`/tours/${id}/shows`}
+          href={tourDate?.date ? `/tours/${id}/schedule?date=${tourDate.date}` : `/tours/${id}/schedule`}
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ChevronLeft className="h-4 w-4" />

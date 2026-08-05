@@ -75,9 +75,11 @@ export function SegmentRow({ segment, tourId, timezone }: SegmentRowProps) {
 
   const dateLabel = depart.date || ''
 
+  // The planner is show-scoped, so a segment with no show falls back to the
+  // schedule rather than to a route that only redirected there anyway.
   const plannerHref = segment.show_id
     ? `/tours/${tourId}/shows/${segment.show_id}/planner`
-    : `/tours/${tourId}/shows`
+    : `/tours/${tourId}/schedule`
 
   return (
     <tr

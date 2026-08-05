@@ -11,6 +11,8 @@ const AddPersonPanel = dynamic(() => import('@/components/people/add-person-pane
 const ContactSheet = dynamic(() => import('@/components/roster/contact-sheet').then((m) => m.ContactSheet), { ssr: false })
 const ContactPanel = dynamic(() => import('@/components/roster/contact-panel').then((m) => m.ContactPanel), { ssr: false })
 const SendRiderSheet = dynamic(() => import('@/components/shows/send-rider-sheet').then((m) => m.SendRiderSheet), { ssr: false })
+const VenuePanel = dynamic(() => import('@/components/schedule/panels/venue-panel').then((m) => m.VenuePanel), { ssr: false })
+const AdvancePanel = dynamic(() => import('@/components/schedule/panels/advance-panel').then((m) => m.AdvancePanel), { ssr: false })
 const AddDayPanel = dynamic(() => import('@/components/schedule/add-day-panel').then((m) => m.AddDayPanel), { ssr: false })
 // Brief 33: schedule day view detail and add panels.
 const ShowPanel = dynamic(() => import('@/components/schedule/panels/show-panel').then((m) => m.ShowPanel), { ssr: false })
@@ -48,6 +50,22 @@ export function ActivePanel() {
           contact={panel.contact}
           tourContext={panel.tourContext}
           onSuccess={panel.onSuccess}
+        />
+      )
+    case 'venue':
+      return (
+        <VenuePanel
+          tourId={panel.tourId}
+          showId={panel.showId}
+          venueName={panel.venueName}
+        />
+      )
+    case 'advance':
+      return (
+        <AdvancePanel
+          tourId={panel.tourId}
+          showId={panel.showId}
+          venueName={panel.venueName}
         />
       )
     case 'send-rider':

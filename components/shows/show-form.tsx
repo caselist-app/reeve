@@ -133,8 +133,11 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
       }
 
       if (!showId) {
-        // New show: navigate to its page.
-        if (result.showId) router.push(`/tours/${tourId}/shows/${result.showId}`)
+        // New show and no onSuccess handler. There is no show page to land on
+        // any more (Brief 36 step 6), so go to the day it was created on, which
+        // is where the show now lives. Every live caller passes onSuccess, so
+        // this is the fallback rather than the normal path.
+        router.push(`/tours/${tourId}/schedule?date=${date}`)
         return
       }
 

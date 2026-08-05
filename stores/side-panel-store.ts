@@ -16,6 +16,10 @@ type ShowDaySheet = Pick<
   | 'lobby_call' | 'venue_access' | 'load_in' | 'line_check' | 'soundcheck' | 'vip'
   | 'doors' | 'support_on' | 'support_off' | 'changeover'
   | 'headliner_on' | 'headliner_off' | 'curfew' | 'load_out'
+  | 'catering_type'
+  | 'catering_breakfast_start' | 'catering_breakfast_end'
+  | 'catering_lunch_start' | 'catering_lunch_end'
+  | 'catering_dinner_start' | 'catering_dinner_end'
 >
 
 // Mirrors Segment from components/schedule/panels/transport-panel.tsx
@@ -74,6 +78,21 @@ export type PanelDescriptor =
       contact: Tables<'contacts'> | null
       tourContext?: ContactTourContext
       onSuccess: (contactId?: string) => void
+    }
+  | {
+      // Venue detail for a show, loaded by the panel from showId. Carries only
+      // what the header needs, deliberately: see VenuePanel.
+      type: 'venue'
+      tourId: string
+      showId: string
+      venueName: string
+    }
+  | {
+      // The advance for a show. Same reasoning as 'venue': the panel fetches.
+      type: 'advance'
+      tourId: string
+      showId: string
+      venueName: string
     }
   | {
       type: 'send-rider'
