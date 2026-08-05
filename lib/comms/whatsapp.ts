@@ -19,7 +19,7 @@ export type SendInteractiveParams = {
 
 export type SendWhatsAppResult = {
   // Meta WhatsApp message ID, used to match delivery/read receipt webhooks
-  // back to broadcast_log rows. Always present: Meta is the only channel.
+  // back to notification_log rows. Always present: Meta is the only channel.
   wamid: string
 }
 

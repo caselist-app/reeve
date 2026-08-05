@@ -1,0 +1,22 @@
+-- Brief 36 Part 3: drop broadcast_log.
+--
+-- Superseded by notification_log in 20260611230000_notifications_service.sql,
+-- whose own comment says broadcast_log "is superseded by this table and removed
+-- in a later migration". That later migration never happened, so the table has
+-- sat there since with zero reads and zero writes in application code, keeping
+-- RLS enabled, two policies, three indexes and grants to both authenticated and
+-- service_role. A live table nobody writes is a thing the next person has to
+-- rule out before they can trust a query, and its grants are attack surface for
+-- no benefit.
+--
+-- deploy-order: this drops a table, so it carries the marker. It is the mildest
+-- destructive migration in this brief: the check was run in both directions and
+-- nothing in the repo references the table, on Vercel or in trigger/jobs/, so
+-- there is no code that can start failing when it goes.
+--
+-- That said, a grep proves what the repo says and never what is running, and
+-- that distinction is the reason /itinerary went down on 2026-08-04. The two
+-- remaining mentions are comments, both corrected in this commit rather than
+-- left pointing at a table that no longer exists.
+
+drop table if exists broadcast_log;

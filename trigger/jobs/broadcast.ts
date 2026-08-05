@@ -4,7 +4,7 @@ import { notify } from '@/lib/comms/notify'
 export type BroadcastPayload = {
   tour_id: string
   change_id: string           // unique ID for this change event - the dedup dimension
-  change_type: string         // retained for caller context; no longer written to broadcast_log
+  change_type: string         // retained for caller context; not persisted anywhere
   message: string             // the change message to send
   affected_person_ids: string[]
 }
