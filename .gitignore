@@ -145,6 +145,12 @@ vite.config.ts.timestamp-*
 # Trigger.dev local dev cache (build artifacts, not source)
 .trigger/
 
+# Playwright. The saved storage state is a real session cookie for a seeded
+# test account, so it never belongs in the repo.
+playwright/.auth
+test-results
+playwright-report
+
 # Cursor editor temp files
 _tmp_*
 mobile-dayview-redesign-spec.md
