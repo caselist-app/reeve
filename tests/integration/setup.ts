@@ -1,6 +1,5 @@
 import { vi } from 'vitest'
-import { createClient as createSupabaseClient } from '@supabase/supabase-js'
-import type { Database } from '@/lib/types/database'
+import { testDb, setTestUserId, currentTestUserId } from './test-db'
 
 // Integration tests call the real server actions, so the real write logic runs
 // against a real Postgres. Only the Next.js runtime plumbing is replaced,
@@ -15,29 +14,11 @@ import type { Database } from '@/lib/types/database'
 // exists to catch (partial writes nulling columns, PostgREST embed semantics)
 // only exist at that layer. A mocked Supabase client would pass on all of them.
 
-const url = process.env.SUPABASE_TEST_URL
-const serviceKey = process.env.SUPABASE_TEST_SERVICE_ROLE_KEY
-
-if (!url || !serviceKey) {
-  throw new Error(
-    [
-      'Integration tests need a running Supabase.',
-      '',
-      'These run in CI only, because they need Docker. If you are seeing this',
-      'locally, you want `pnpm test` (unit tests) instead.',
-      '',
-      'To run them anyway: supabase start, then set SUPABASE_TEST_URL and',
-      'SUPABASE_TEST_SERVICE_ROLE_KEY from its output.',
-    ].join('\n')
-  )
-}
-
-// Service role: these tests are about write semantics, not authorization.
-// The cross-tour tests deliberately use their own RLS-scoped client instead,
-// because that is the thing they are checking.
-export const testDb = createSupabaseClient<Database>(url, serviceKey, {
-  auth: { autoRefreshToken: false, persistSession: false },
-})
+// The client and the mocked-user state live in ./test-db, which imports
+// nothing from vitest, so the Playwright global setup can seed through
+// fixture.ts without pulling this file's mocks into a plain Node process.
+// Re-exported here because every integration test imports them from './setup'.
+export { testDb, setTestUserId }
 
 vi.mock('next/cache', () => ({
   revalidatePath: vi.fn(),
@@ -77,11 +58,3 @@ vi.mock('@/lib/auth/helpers', async (importOriginal) => {
   }
 })
 
-// Set by each test's fixture so the mocked requireUser reports the right owner.
-let testUserId = '00000000-0000-0000-0000-000000000000'
-export function setTestUserId(id: string) {
-  testUserId = id
-}
-function currentTestUserId() {
-  return testUserId
-}

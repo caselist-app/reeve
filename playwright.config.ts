@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test'
+import { STORAGE_STATE_PATH } from './tests/e2e/seed'
 
 // End-to-end tests: real browser, real production build, real database.
 //
@@ -43,12 +44,27 @@ export default defineConfig({
 
   outputDir: 'test-results',
 
+  // Seeds two accounts before anything runs, and deletes both auth users after,
+  // which cascades the rest away.
+  globalSetup: './tests/e2e/global-setup.ts',
+  globalTeardown: './tests/e2e/global-teardown.ts',
+
   use: {
     baseURL,
     trace: 'retain-on-failure',
   },
 
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    // Signs in once and saves the session. Everything else depends on it, so a
+    // failure here fails the run rather than producing twenty pages that all
+    // "redirect to /login".
+    { name: 'setup', testMatch: /auth\.setup\.ts/ },
+    {
+      name: 'chromium',
+      dependencies: ['setup'],
+      use: { ...devices['Desktop Chrome'], storageState: STORAGE_STATE_PATH },
+    },
+  ],
 
   // Serves a real production build, the same command Vercel runs. Not `pnpm
   // dev`: a dev build has different error handling and would hide the exact
