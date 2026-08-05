@@ -71,7 +71,7 @@ export interface DayRecords {
   shows: DayShow[]
   segments: DaySegment[]          // deduped union of tour_date-linked and date-matched
   hotels: DayHotelItem[]          // check-ins and check-outs falling on this day
-  events: DayEvent[]              // excludes leftover __day_notes__ sentinel rows
+  events: DayEvent[]              // freeform events on this day
   lateNight: LateNight            // next morning's small hours, shown as this day's tail
   // Ids of the segments and hotels on this day, used by the info panel to
   // resolve the day's roster without re-querying for them.
@@ -217,18 +217,11 @@ export async function fetchDayRecords(
       .eq('check_out_date', date)
       .neq('check_in_date', date), // avoid duplicating same-day check-in/out
 
-    // The __day_notes__ exclusion here and on the tail query below outlives the
-    // sentinel deliberately, and only until its migration lands. Code ships
-    // before a destructive migration does, so between this deploying and the
-    // rows being deleted they are still there, and without the filter they
-    // would surface on the timeline as events literally titled __day_notes__.
-    // Both lines come out in the commit after the migration is applied.
     supabase
       .from('day_events')
       .select('id, title, starts_at, ends_at, location, notes')
       .eq('tour_id', tourId)
       .eq('date', date)
-      .neq('title', '__day_notes__')
       .order('starts_at', { ascending: true }),
 
     // Tail: departures in the next morning's small hours. Filtered on depart_at
@@ -250,7 +243,6 @@ export async function fetchDayRecords(
       .select('id, title, starts_at, ends_at, location, notes')
       .eq('tour_id', tourId)
       .eq('date', nextDate)
-      .neq('title', '__day_notes__')
       .gte('starts_at', nextDayWindow.start)
       .lt('starts_at', lateNightEnd)
       .order('starts_at', { ascending: true }),
