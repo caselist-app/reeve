@@ -36,7 +36,9 @@ export function TourSelector({ tours, activeTourId, collapsed = false }: TourSel
     if (section && ['schedule', 'people', 'settings'].includes(section)) {
       router.push(`/tours/${tourId}/${section}`)
     } else {
-      router.push(`/tours/${tourId}/shows`)
+      // Not on a section that exists on the other tour, so land on the schedule,
+      // which is the tour's primary surface.
+      router.push(`/tours/${tourId}/schedule`)
     }
   }
 

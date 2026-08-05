@@ -49,9 +49,11 @@ export default async function TourHomePage({
     .single()
 
   if (last) {
-    redirect(`/tours/${id}/schedule/${last.date}`)
+    redirect(`/tours/${id}/schedule?date=${last.date}`)
   }
 
-  // No dates yet, so go to the schedule list.
-  redirect(`/tours/${id}/shows`)
+  // No dates yet. The schedule picks its own day when none is given, so this
+  // hands the question to the one place that answers it (defaultScheduleDate)
+  // rather than resolving it a second time here.
+  redirect(`/tours/${id}/schedule`)
 }

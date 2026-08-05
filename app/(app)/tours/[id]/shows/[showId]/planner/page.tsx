@@ -57,7 +57,7 @@ export default async function PlannerPage({
   ])
 
   if (!tour) redirect('/')
-  if (!show) redirect(`/tours/${id}/shows`)
+  if (!show) redirect(`/tours/${id}/schedule`)
 
   // Prior show, needs show.date, so fetched after the redirect guard.
   const { data: priorShowRaw } = await supabase
@@ -123,7 +123,7 @@ export default async function PlannerPage({
   return (
     <div className="mx-auto max-w-3xl px-4 py-10">
       <Link
-        href={`/tours/${id}/shows/${showId}`}
+        href={`/tours/${id}/schedule?date=${show.date}`}
         className="mb-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
         <ChevronLeft className="h-4 w-4" />

@@ -1,12 +1,15 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { ChevronRight } from 'lucide-react'
 import { useSidePanel } from '@/stores/side-panel-store'
 import { PanelShell } from '@/components/layout/panel-shell'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -29,6 +32,10 @@ type DaySheet = Pick<
   | 'lobby_call' | 'venue_access' | 'load_in' | 'line_check' | 'soundcheck' | 'vip'
   | 'doors' | 'support_on' | 'support_off' | 'changeover'
   | 'headliner_on' | 'headliner_off' | 'curfew' | 'load_out'
+  | 'catering_type'
+  | 'catering_breakfast_start' | 'catering_breakfast_end'
+  | 'catering_lunch_start' | 'catering_lunch_end'
+  | 'catering_dinner_start' | 'catering_dinner_end'
 >
 
 interface ShowPanelProps {
@@ -118,15 +125,36 @@ const SECTIONS = [
   },
 ]
 
+// Rendered only when catering_type is 'provided'. Separate from SECTIONS
+// because these are the one part of the day sheet the TM can make disappear,
+// and SECTIONS is assumed to be fully drawn on every render (see the readForm
+// note in the submit handler).
+const MEAL_WINDOWS = [
+  { label: 'Breakfast', startKey: 'catering_breakfast_start' as const, endKey: 'catering_breakfast_end' as const },
+  { label: 'Lunch',     startKey: 'catering_lunch_start' as const,     endKey: 'catering_lunch_end' as const },
+  { label: 'Dinner',    startKey: 'catering_dinner_start' as const,    endKey: 'catering_dinner_end' as const },
+]
+
+const MEAL_FIELDS = MEAL_WINDOWS.flatMap(({ startKey, endKey }) => [startKey, endKey])
+
+type CateringType = 'none' | 'buyout' | 'provided'
+
 export function ShowPanel({ showId, tourId, venueName, timezone, daySheet }: ShowPanelProps) {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
   const router = useRouter()
-  const { close } = useSidePanel()
+  const { close, open } = useSidePanel()
 
   // Set after a successful save if a notification-worthy time changed.
   const [notify, setNotify] = useState<NotifyState | null>(null)
+
+  // Drives whether the meal windows render. A Radix Select contributes nothing
+  // to FormData, so this is state and gets merged into the payload by hand,
+  // the same way show-form.tsx handles venue_type.
+  const [cateringType, setCateringType] = useState<CateringType>(
+    (daySheet?.catering_type as CateringType) ?? 'none',
+  )
 
   // The times as last saved, in the same HH:MM frame the inputs use, so the
   // change check compares like with like.
@@ -169,12 +197,24 @@ export function ShowPanel({ showId, tourId, venueName, timezone, daySheet }: Sho
       // Day sheet fields are a dynamic list (SECTIONS), not a fixed shape, so
       // the field-name-to-kind map is built from it rather than written out
       // by hand. Every field reads as plain 'string' (null when blank).
-      const shape = Object.fromEntries(
-        SECTIONS.flatMap((section) => section.fields.map(({ key }) => [key, 'string' as const]))
+      //
+      // The meal windows are in the shape unconditionally even though they are
+      // only rendered when catering is 'provided'. That is the point of
+      // readForm: a field this render did not draw comes back undefined and
+      // updateDaySheet leaves the column alone.
+      const shape: Record<string, 'string'> = Object.fromEntries(
+        [
+          ...SECTIONS.flatMap((section) => section.fields.map(({ key }) => key)),
+          ...MEAL_FIELDS,
+        ].map((key) => [key, 'string' as const]),
       )
       const data = readForm(fd, shape)
       submittedTimes = data
-      return updateDaySheet(showId, data as Parameters<typeof updateDaySheet>[1])
+      return updateDaySheet(showId, {
+        ...data,
+        // From state, not FormData: a Radix Select posts nothing.
+        catering_type: cateringType,
+      } as Parameters<typeof updateDaySheet>[1])
     },
     onSuccess: () => {
       const times = submittedTimes
@@ -226,6 +266,63 @@ export function ShowPanel({ showId, tourId, venueName, timezone, daySheet }: Sho
           </div>
         ))}
 
+        {/* Catering. Lived only on the show page until Brief 36 step 6, which
+            is how a schedule edit came to wipe it: this panel sent fourteen
+            time fields and no catering, and the validator carried a .default()
+            that invented 'none' for the fields nobody submitted. The default is
+            gone (Brief 37) and the fields are here, so the panel that says
+            "day sheet" now is one. */}
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+            Catering
+          </p>
+          <div className="space-y-2">
+            <Select value={cateringType} onValueChange={(v) => setCateringType(v as CateringType)}>
+              <SelectTrigger className="h-7 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None</SelectItem>
+                <SelectItem value="buyout">Buyout</SelectItem>
+                <SelectItem value="provided">Provided</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {/* Hidden unless catering is provided, and deliberately NOT cleared
+                when it is hidden. The show page's form nulled all six columns
+                on any save where catering was not 'provided', so a TM who
+                flipped to buyout and back lost the windows they had entered.
+                Not rendering them means readForm reports undefined and the
+                action skips them, so they survive the round trip. */}
+            {cateringType === 'provided' && (
+              <div className="space-y-2 pt-1">
+                {MEAL_WINDOWS.map(({ label, startKey, endKey }) => (
+                  <div key={label} className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs">{label} from</Label>
+                      <Input
+                        name={startKey}
+                        type="time"
+                        defaultValue={toTimeLocal(daySheet?.[startKey] ?? null, timezone)}
+                        className="h-7 text-xs"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs">{label} to</Label>
+                      <Input
+                        name={endKey}
+                        type="time"
+                        defaultValue={toTimeLocal(daySheet?.[endKey] ?? null, timezone)}
+                        className="h-7 text-xs"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
         {(error || deleteError) && <p className="text-xs text-destructive">{error || deleteError}</p>}
         <Button type="submit" size="sm" disabled={pending} className="w-full">
           {pending ? 'Saving...' : 'Save'}
@@ -244,6 +341,39 @@ export function ShowPanel({ showId, tourId, venueName, timezone, daySheet }: Sho
           />
         )}
       </form>
+
+      {/* The rest of the show. These three were tabs on the show page until
+          Brief 36 step 6 deleted it, and this panel is where a TM already is
+          when they want them. Advance opens a panel; travel and hotels are
+          workspaces, wide enough that they stay full routes. */}
+      <div className="mt-5 space-y-1 border-t border-border pt-4">
+        <button
+          type="button"
+          onClick={() => open({ type: 'advance', tourId, showId, venueName })}
+          className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-xs font-medium transition-colors hover:bg-muted/50"
+        >
+          Advance
+          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+        </button>
+
+        <Link
+          href={`/tours/${tourId}/shows/${showId}/planner`}
+          onClick={close}
+          className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-xs font-medium transition-colors hover:bg-muted/50"
+        >
+          Plan travel
+          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+        </Link>
+
+        <Link
+          href={`/tours/${tourId}/shows/${showId}/hotels`}
+          onClick={close}
+          className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-xs font-medium transition-colors hover:bg-muted/50"
+        >
+          Find hotels
+          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+        </Link>
+      </div>
 
       <div className="mt-5 border-t border-border pt-4">
         <Button

@@ -21,7 +21,7 @@ type ResultItem = {
 function buildNavItems(tourId: string): ResultItem[] {
   return [
     { id: 'nav-home',     label: 'Home',     icon: <LayoutDashboard className="h-4 w-4" />, href: `/tours/${tourId}` },
-    { id: 'nav-shows',    label: 'Shows',    icon: <Calendar className="h-4 w-4" />,        href: `/tours/${tourId}/shows` },
+    { id: 'nav-schedule', label: 'Schedule', icon: <Calendar className="h-4 w-4" />,        href: `/tours/${tourId}/schedule` },
     { id: 'nav-people',   label: 'People',   icon: <Users className="h-4 w-4" />,           href: `/tours/${tourId}/people` },
     { id: 'nav-settings', label: 'Settings', icon: <Settings className="h-4 w-4" />,        href: `/tours/${tourId}/settings` },
   ]
@@ -43,7 +43,9 @@ function buildResults(tourId: string, data: PaletteData, query: string): ResultI
         weekday: 'short', day: 'numeric', month: 'short',
       }),
       icon: <Calendar className="h-4 w-4" />,
-      href: `/tours/${tourId}/shows/${s.id}`,
+      // The show's day, not a show page. Searching for a venue and landing on
+      // the day it happens is what a TM wanted anyway.
+      href: `/tours/${tourId}/schedule?date=${s.date}`,
     }))
 
   const people = data.people

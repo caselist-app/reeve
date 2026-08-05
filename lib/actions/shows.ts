@@ -6,7 +6,15 @@ import { createClient } from '@/lib/supabase/server'
 import { showSchema } from '@/lib/validators/show'
 import { bustTourContextCache } from '@/lib/ai/context'
 import { daySheetFormSchema } from '@/lib/validators/day-sheet'
-import { setAdvanceStatus } from '@/lib/shows/advance'
+import {
+  setAdvanceStatus,
+  DEPARTMENT_DOC_TYPE,
+  DEPARTMENT_LABELS,
+  type DocumentedDepartment,
+  type DepartmentShareData,
+  type ContactablePerson,
+  type ShareRow,
+} from '@/lib/shows/advance'
 import { resolveHubJob } from '@/trigger/jobs/resolve-hub'
 import { revertDayTypeIfOrphaned } from '@/lib/schedule/day-type-revert'
 import { resolveTourDateId } from '@/lib/schedule/day-link'
@@ -15,7 +23,7 @@ import { resolveDayOffsets, addDays, daysBetween } from '@/lib/schedule/day-shee
 import type { DateMove } from '@/lib/schedule/date-move'
 import type { z } from 'zod'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database, TablesUpdate } from '@/lib/types/database'
+import type { Database, Tables, TablesUpdate } from '@/lib/types/database'
 import type { Department, AdvanceStatus } from '@/lib/shows/advance'
 
 // `moved` is set only when the show's date actually changed, which is what makes
@@ -181,7 +189,6 @@ export async function createShow(
   await resolveHubJob.trigger({ show_id: showId })
 
   void bustTourContextCache(tourId)
-  revalidatePath(`/tours/${tourId}/shows`)
 
   return { error: null, showId }
 }
@@ -291,7 +298,6 @@ export async function updateShow(
   }
 
   void bustTourContextCache(existing.tour_id)
-  revalidatePath(`/tours/${existing.tour_id}/shows`)
   // The show, its day-sheet times and the day it sits on all render on the
   // schedule, and the Dates sidebar is a layout that no client navigation can
   // re-resolve, so a date change has to be revalidated server-side or the old
@@ -477,6 +483,155 @@ export async function updateDaySheet(
 
 // updateShowNotes is gone. Notes belong to the day, not the show, and are
 // written by updateDayNotes in lib/actions/tour-dates.ts. See Brief 36 Part 4.
+
+export type ShowVenueDetail = {
+  show: Tables<'shows'>
+  /** Null while the venue's transport hub is still being resolved. */
+  hubResolvedAt: string | null
+}
+
+// Everything the venue panel needs to edit a show.
+//
+// Fetched when the panel opens rather than carried on the side-panel
+// descriptor, because the alternative is adding a dozen venue columns and
+// hub_resolved_at to SHOW_SELECT, which every day view runs whether or not a TM
+// ever opens this panel. Same shape as getContact for the contact panel; that
+// is the established pattern for a panel needing more than its id.
+export async function getShowVenueDetail(
+  showId: string,
+): Promise<{ data: ShowVenueDetail | null; error: string | null }> {
+  await requireUser()
+
+  // RLS on shows scopes by owns_tour, so a show on someone else's tour reads
+  // as not found rather than needing an ownership query of its own.
+  const supabase = await createClient()
+
+  const { data: show, error } = await supabase
+    .from('shows')
+    .select('*')
+    .eq('id', showId)
+    .maybeSingle()
+
+  if (error) return { data: null, error: error.message }
+  if (!show) return { data: null, error: 'Show not found.' }
+
+  return { data: { show, hubResolvedAt: show.hub_resolved_at }, error: null }
+}
+
+export type ShowAdvanceDetail = {
+  advance: Tables<'show_advance'> | null
+  departments: DepartmentShareData[]
+  people: ContactablePerson[]
+}
+
+// Everything the advance panel needs: the per-department statuses, the riders
+// for each department with what has been sent and read, and who can be sent to.
+//
+// Four queries, so it runs when the panel opens rather than on every day view.
+// Same reasoning and same shape as getShowVenueDetail above.
+export async function getShowAdvance(
+  tourId: string,
+  showId: string,
+): Promise<{ data: ShowAdvanceDetail | null; error: string | null }> {
+  await requireUser()
+
+  const supabase = await createClient()
+
+  // RLS scopes rows by tour but does not check that two ids in one payload
+  // belong to the same tour. A show the caller owns on another tour would pass
+  // every read below and quietly mix two tours' documents.
+  const { data: show } = await supabase
+    .from('shows')
+    .select('id')
+    .eq('id', showId)
+    .eq('tour_id', tourId)
+    .maybeSingle()
+
+  if (!show) return { data: null, error: 'Show not found on this tour.' }
+
+  const [
+    { data: advance },
+    { data: documents, error: documentsError },
+    { data: shares, error: sharesError },
+    { data: people, error: peopleError },
+  ] = await Promise.all([
+    supabase.from('show_advance').select('*').eq('show_id', showId).maybeSingle(),
+
+    // Every current document for the tour, not just the four rider types. The
+    // per-department mapping below already filters by doc_type, so an .in()
+    // here would be a second copy of "which documents belong to a department"
+    // that only ever narrowed the fetch. A tour's current documents are a
+    // handful of rows.
+    supabase
+      .from('documents')
+      .select('id, title, doc_type')
+      .eq('tour_id', tourId)
+      .eq('is_current', true),
+
+    supabase
+      .from('document_shares')
+      .select('id, document_id, sent_at, opened_at, acknowledged_at, documents(title, doc_type), people(contacts(name))')
+      .eq('show_id', showId)
+      .order('created_at', { ascending: true }),
+
+    // contacts!inner, and the filter on the embedded column, not on people.
+    // This used to read `.not('contact_email', 'is', null)` against people,
+    // which has no such column, so PostgREST rejected it and the recipient
+    // list came back empty on every render. Nothing surfaced the error, so
+    // "Send to venue" has never had anyone to send to.
+    supabase
+      .from('people')
+      .select('id, contacts!inner(name, contact_email)')
+      .eq('tour_id', tourId)
+      .not('contacts.contact_email', 'is', null),
+  ])
+
+  // A failed read must not render as an empty result. An empty document list
+  // reads as "this tour has no riders" and an empty recipient list reads as
+  // "nobody to send to", and both are confident, plausible and wrong.
+  const failure = documentsError ?? sharesError ?? peopleError
+  if (failure) {
+    console.error('[getShowAdvance] read failed:', failure.message)
+    return { data: null, error: 'Could not load the advance for this show.' }
+  }
+
+  const shareRows: ShareRow[] = (shares ?? []).map((s) => {
+    const doc = s.documents as { title: string; doc_type: string } | null
+    const person = (s.people as { contacts: { name: string } | null } | null)?.contacts ?? null
+    return {
+      id: s.id,
+      document_id: s.document_id,
+      document_title: doc?.title ?? '',
+      doc_type: doc?.doc_type ?? '',
+      recipient_name: person?.name ?? 'Unknown',
+      sent_at: s.sent_at,
+      opened_at: s.opened_at,
+      acknowledged_at: s.acknowledged_at,
+    }
+  })
+
+  const departments: DepartmentShareData[] = Object.entries(DEPARTMENT_DOC_TYPE).map(
+    ([department, docType]) => ({
+      department: department as DocumentedDepartment,
+      label: DEPARTMENT_LABELS[department as DocumentedDepartment],
+      docType,
+      documents: (documents ?? []).filter((d) => d.doc_type === docType),
+      shares: shareRows.filter((s) => s.doc_type === docType),
+    }),
+  )
+
+  const contactablePeople = (people ?? [])
+    .map((p) => {
+      const c = p.contacts as { name: string; contact_email: string | null } | null
+      return { id: p.id, name: c?.name ?? '', contact_email: c?.contact_email ?? null }
+    })
+    .filter((p): p is ContactablePerson => !!p.contact_email)
+
+  return {
+    data: { advance: advance ?? null, departments, people: contactablePeople },
+    error: null,
+  }
+}
 
 export async function updateAdvanceStatus(
   showId: string,

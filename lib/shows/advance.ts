@@ -5,6 +5,69 @@ import { createAdminClient } from '@/lib/supabase/admin'
 export type Department = 'audio' | 'lighting' | 'staging' | 'hospitality' | 'travel'
 export type AdvanceStatus = 'not_started' | 'in_progress' | 'done'
 
+// The four departments that advance through a document, and the doc_type each
+// one sends. `travel` is the fifth department on show_advance and has no rider,
+// so a TM moves it by hand and it never appears in the document list.
+//
+// One map, both directions. This existed twice: here as doc_type to department
+// (for the acknowledge path) and on the show page as department to doc_type
+// (for the send path), so the two could disagree about which rider belonged to
+// which department and nothing would have said so.
+export const DEPARTMENT_DOC_TYPE = {
+  audio: 'tech_rider',
+  lighting: 'lighting_rider',
+  staging: 'staging_rider',
+  hospitality: 'hospitality_rider',
+} as const
+
+export type DocumentedDepartment = keyof typeof DEPARTMENT_DOC_TYPE
+
+export const DEPARTMENT_LABELS: Record<Department, string> = {
+  audio: 'Audio',
+  lighting: 'Lighting',
+  staging: 'Staging',
+  hospitality: 'Hospitality',
+  travel: 'Travel',
+}
+
+// Plain data shapes shared by the advance panel, the rider send panel and the
+// server action that feeds them. They live here rather than in a component
+// because a server action cannot import from a 'use client' file without
+// dragging the component graph with it, and stores/side-panel-store.ts had
+// already resorted to hand-copying them with a comment saying so.
+export type SendableDocument = {
+  id: string
+  title: string
+  doc_type: string
+}
+
+export type ContactablePerson = {
+  id: string
+  name: string
+  contact_email: string
+}
+
+/** One document_shares row, shaped for the UI. */
+export type ShareRow = {
+  id: string
+  document_id: string
+  document_title: string
+  doc_type: string
+  recipient_name: string
+  sent_at: string | null
+  opened_at: string | null
+  acknowledged_at: string | null
+}
+
+/** One department's worth of the advance: its riders and everything sent. */
+export type DepartmentShareData = {
+  department: DocumentedDepartment
+  label: string
+  docType: string
+  documents: SendableDocument[]
+  shares: ShareRow[]
+}
+
 // Maps the department name to the show_advance column it controls.
 // Both the UI action and the document-share acknowledge path use this
 // function so the mapping never drifts between callers.
@@ -67,15 +130,13 @@ export async function updateAdvanceStatusFromShare(shareToken: string): Promise<
   await setAdvanceStatus(share.show_id, department, 'done', admin)
 }
 
-// Maps a document doc_type to the advance department it controls.
-// Unknown doc types are silently ignored: the share is acknowledged but
-// no advance status changes (correct for generic docs with no department mapping).
+// Maps a document doc_type to the advance department it controls, by inverting
+// DEPARTMENT_DOC_TYPE rather than restating it.
+//
+// Unknown doc types are silently ignored: the share is acknowledged but no
+// advance status changes, which is correct for a generic document with no
+// department behind it.
 function docTypeToDepartment(docType: string): Department | null {
-  const map: Partial<Record<string, Department>> = {
-    tech_rider:        'audio',
-    hospitality_rider: 'hospitality',
-    lighting_rider:    'lighting',
-    staging_rider:     'staging',
-  }
-  return map[docType] ?? null
+  const entry = Object.entries(DEPARTMENT_DOC_TYPE).find(([, type]) => type === docType)
+  return entry ? (entry[0] as Department) : null
 }

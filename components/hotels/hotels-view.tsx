@@ -72,10 +72,10 @@ export function HotelsView({ tourId, stays, shows }: HotelsViewProps) {
         <p className="text-sm font-medium">No hotels on this tour yet.</p>
         <p className="text-sm text-muted-foreground">Add hotels via the planner on each show.</p>
         <Link
-          href={`/tours/${tourId}/shows`}
+          href={`/tours/${tourId}/schedule`}
           className="mt-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
-          Go to Shows &rarr;
+          Go to Schedule &rarr;
         </Link>
       </div>
     )

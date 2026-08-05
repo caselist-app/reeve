@@ -19,6 +19,12 @@ export type DayShow = Pick<
     | 'lobby_call' | 'venue_access' | 'load_in' | 'line_check' | 'soundcheck' | 'vip'
     | 'doors' | 'support_on' | 'support_off' | 'changeover' | 'headliner_on' | 'headliner_off'
     | 'curfew' | 'load_out'
+    // Catering rides along because the show panel is the whole day sheet now,
+    // not just its times. It renders nothing on the timeline.
+    | 'catering_type'
+    | 'catering_breakfast_start' | 'catering_breakfast_end'
+    | 'catering_lunch_start' | 'catering_lunch_end'
+    | 'catering_dinner_start' | 'catering_dinner_end'
   > | null
 }
 
@@ -106,7 +112,11 @@ const SHOW_SELECT = `
   day_sheets (
     lobby_call, venue_access, load_in, line_check, soundcheck, vip,
     doors, support_on, support_off, changeover, headliner_on, headliner_off,
-    curfew, load_out
+    curfew, load_out,
+    catering_type,
+    catering_breakfast_start, catering_breakfast_end,
+    catering_lunch_start, catering_lunch_end,
+    catering_dinner_start, catering_dinner_end
   )
 `
 

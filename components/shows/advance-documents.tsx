@@ -4,28 +4,9 @@ import { useState, useCallback } from 'react'
 import { Mail, RotateCcw, CheckCircle, Clock, Eye } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSidePanel } from '@/stores/side-panel-store'
-import type { SendableDocument, ContactablePerson } from './send-rider-sheet'
-
-// A single document_shares row, shaped for the UI.
-export type ShareRow = {
-  id: string
-  document_id: string
-  document_title: string
-  doc_type: string
-  recipient_name: string
-  sent_at: string | null
-  opened_at: string | null
-  acknowledged_at: string | null
-}
-
-// One department's worth of data: the doc type, the current documents, and all shares.
-export type DepartmentShareData = {
-  department: 'audio' | 'lighting' | 'staging' | 'hospitality'
-  label: string
-  docType: string
-  documents: SendableDocument[]
-  shares: ShareRow[]
-}
+// Shapes live in lib/shows/advance.ts so the server action that builds them can
+// import them without reaching into a 'use client' file.
+import type { ContactablePerson, DepartmentShareData, ShareRow } from '@/lib/shows/advance'
 
 interface AdvanceDocumentsProps {
   tourId: string
