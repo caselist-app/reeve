@@ -1,4 +1,6 @@
 import { dayItemKind, DAY_ITEM_KIND_NAMES } from '@/lib/schedule/day-item-kinds'
+import { addDays } from '@/lib/schedule/day-sheet-times'
+import { wallClockToUtc } from '@/lib/schedule/datetime'
 
 // Which calendar day each day item's time actually falls on, for rows rather
 // than columns.
@@ -136,4 +138,84 @@ export function resolveItemDayOffsets(items: DayItemClock[]): Record<string, num
   }
 
   return offsets
+}
+
+/**
+ * The instants one item's wall-clock times actually store as.
+ *
+ * This is the write half of the rule above, and it is separate from the action
+ * so it can be unit tested. The action's own job is fetching the day and
+ * writing the row; deciding which calendar day 01:30 lands on is this.
+ *
+ * `items` is the WHOLE day merged with the change being saved, not just the item
+ * being written. The roll-over is a property of the day: a curfew only reads as
+ * past midnight relative to the latest daytime time on the same day, so an item
+ * resolved on its own would anchor on the fallback every time.
+ *
+ * The offset is computed across the merged day but applied only to `itemId`, so
+ * this stays a partial write. Adding a late doors time can change which day a
+ * curfew belongs on, and this deliberately does not then rewrite the curfew: a
+ * save that never mentioned it must not silently move it. Same trade
+ * updateDaySheet made, and for the same reason.
+ */
+export interface ResolvedItemInstants {
+  startsAt: string | null
+  endsAt: string | null
+  // A sentence for the TM, or null. Returned rather than thrown because the
+  // caller is a server action whose contract is { error }, and because both
+  // cases here are things a TM can type rather than things that have gone wrong.
+  error: string | null
+}
+
+export function resolveItemInstants(
+  items: DayItemClock[],
+  itemId: string,
+  // The tour_dates.date this day is, YYYY-MM-DD. The item has no date column of
+  // its own, deliberately, so the day link is the only thing that says which day
+  // offset zero means.
+  dayDate: string,
+  timezone: string,
+): ResolvedItemInstants {
+  const target = items.find((item) => item.id === itemId)
+  if (!target) {
+    return { startsAt: null, endsAt: null, error: 'That item is not on this day.' }
+  }
+
+  if (!target.clock) {
+    // day_items_end_needs_start rejects this at the database, but a constraint
+    // violation reaches a TM as a Postgres error string. An item with no time
+    // yet is a real thing; an end with no start is a missing value.
+    if (target.endClock) {
+      return { startsAt: null, endsAt: null, error: 'An end time needs a start time.' }
+    }
+    return { startsAt: null, endsAt: null, error: null }
+  }
+
+  const offsets = resolveItemDayOffsets(items)
+  const startOffset = offsets[itemId] ?? 0
+  const startsAt = wallClockToUtc(`${addDays(dayDate, startOffset)}T${target.clock}`, timezone)
+
+  if (!target.endClock) return { startsAt, endsAt: null, error: null }
+
+  const startMinutes = toMinutes(target.clock)
+  const endMinutes = toMinutes(target.endClock)
+
+  // Equal is rejected rather than rolled forward. Rolling it would store a
+  // twenty-four hour window from a TM who typed the same time twice, and a
+  // window that long is indistinguishable on screen from a mistake, which is
+  // what it is.
+  if (endMinutes === startMinutes) {
+    return { startsAt: null, endsAt: null, error: 'The end has to be after the start.' }
+  }
+
+  // A window whose end reads earlier than its start has crossed midnight, and
+  // that is true of any kind: a load-out from 23:30 to 00:30 is half an hour,
+  // not a rejection. This is a within-item rule and is separate from the day
+  // walk above, which is about where a single instant sits. Both have to run, or
+  // a catering window on a crossing day gets the day offset right and the end
+  // wrong.
+  const endOffset = startOffset + (endMinutes < startMinutes ? 1 : 0)
+  const endsAt = wallClockToUtc(`${addDays(dayDate, endOffset)}T${target.endClock}`, timezone)
+
+  return { startsAt, endsAt, error: null }
 }

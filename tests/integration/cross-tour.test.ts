@@ -4,6 +4,7 @@ import { createFixture, createSecondTour, destroyFixture, type Fixture } from '.
 import { recordTransportOption, createTransportSegment } from '@/lib/actions/transport'
 import { recordHotelOption, createHotelStay } from '@/lib/actions/hotels'
 import { createDayEvent, updateDayEvent } from '@/lib/actions/day-events'
+import { createDayItem, updateDayItem } from '@/lib/actions/day-items'
 import { sendBroadcast, previewBroadcast } from '@/lib/actions/broadcast'
 
 // CLAUDE.md: "RLS scopes rows by tour, it does not check that two ids in the
@@ -186,6 +187,71 @@ describe('cross-tour id checks', () => {
 
       const result = await updateDayEvent(created.eventId!, { show_id: other.showId })
       expect(result.error).toBeTruthy()
+    })
+  })
+
+  describe('day items', () => {
+    // Three ids in one payload (tour, day, show), so there are three ways to
+    // cross a tour boundary and all three pass RLS on their own.
+    it('accepts when every id is on the tour', async () => {
+      const result = await createDayItem({
+        tour_id: fixture.tourId,
+        tour_date_id: fixture.tourDateId,
+        show_id: fixture.showId,
+        kind: 'load_in',
+        start_clock: '10:00',
+      })
+      expect(result.error).toBeNull()
+      expect(result.itemId).toBeTruthy()
+    })
+
+    it('rejects a day from another tour', async () => {
+      // The one that would put tour A's load-in on tour B's calendar. The item
+      // would be readable by neither day view and correct on neither tour.
+      const result = await createDayItem({
+        tour_id: fixture.tourId,
+        tour_date_id: other.tourDateId,
+        kind: 'load_in',
+        start_clock: '10:00',
+      })
+      expect(result.error).toBeTruthy()
+      expect(result.itemId).toBeUndefined()
+    })
+
+    it('rejects a show from another tour on create', async () => {
+      const result = await createDayItem({
+        tour_id: fixture.tourId,
+        tour_date_id: fixture.tourDateId,
+        show_id: other.showId,
+        kind: 'load_in',
+        start_clock: '10:00',
+      })
+      expect(result.error).toBeTruthy()
+    })
+
+    it('rejects a show from another tour on update', async () => {
+      const created = await createDayItem({
+        tour_id: fixture.tourId,
+        tour_date_id: fixture.tourDateId,
+        kind: 'load_in',
+        start_clock: '10:00',
+      })
+      if (!created.itemId) throw new Error('createDayItem did not return an item id')
+
+      const result = await updateDayItem(created.itemId, { show_id: other.showId })
+      expect(result.error).toBeTruthy()
+    })
+
+    it('writes nothing when it rejects', async () => {
+      await createDayItem({
+        tour_id: fixture.tourId,
+        tour_date_id: other.tourDateId,
+        kind: 'load_in',
+        start_clock: '10:00',
+      })
+
+      const { data } = await testDb.from('day_items').select('id').eq('tour_id', fixture.tourId)
+      expect(data ?? []).toHaveLength(0)
     })
   })
 

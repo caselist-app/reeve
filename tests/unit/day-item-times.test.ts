@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { resolveItemDayOffsets, type DayItemClock } from '@/lib/schedule/day-item-times'
+import {
+  resolveItemDayOffsets,
+  resolveItemInstants,
+  type DayItemClock,
+} from '@/lib/schedule/day-item-times'
 import { resolveDayOffsets } from '@/lib/schedule/day-sheet-times'
 
 // Brief 42 step 2. resolveItemDayOffsets replaces resolveDayOffsets for rows.
@@ -290,5 +294,162 @@ describe('resolveItemDayOffsets handles what rows can express and columns could 
 
   it('returns nothing at all for an empty day', () => {
     expect(resolveItemDayOffsets([])).toEqual({})
+  })
+})
+
+// Brief 42, REE-18. The write half: which instant a typed HH:MM actually stores
+// as, once the day's roll-over has been applied.
+//
+// Every fixture here is Europe/London in June (BST, UTC+1) or Pacific/Auckland
+// (NZST, UTC+12), never UTC. A conversion that ignores the timezone passes every
+// UTC test by luck, and a tour on UTC is the one case this product does not have.
+describe('resolveItemInstants builds the stored instant', () => {
+  const DAY = '2026-06-14'
+  const LONDON = 'Europe/London'
+  const AUCKLAND = 'Pacific/Auckland'
+
+  it('stores a daytime time on the day itself, in the tour timezone', () => {
+    const loadIn = item('load_in', '14:00')
+    const { startsAt, endsAt, error } = resolveItemInstants([loadIn], loadIn.id, DAY, LONDON)
+
+    // 14:00 BST is 13:00Z. Asserted as the instant rather than the wall clock,
+    // because the wall clock is what went in and would pass on a no-op.
+    expect(error).toBeNull()
+    expect(startsAt).toBe('2026-06-14T13:00:00.000Z')
+    expect(endsAt).toBeNull()
+  })
+
+  it('stores the same wall clock as a different instant on an Auckland tour', () => {
+    const loadIn = item('load_in', '14:00')
+    const { startsAt } = resolveItemInstants([loadIn], loadIn.id, DAY, AUCKLAND)
+
+    // NZST is UTC+12, so the same 14:00 is 02:00Z. The pair with the test above
+    // is what proves the timezone is read rather than defaulted.
+    expect(startsAt).toBe('2026-06-14T02:00:00.000Z')
+  })
+
+  it('puts a small-hours curfew on the morning after the show', () => {
+    // The case the whole brief is built around. tour_date_id still points at the
+    // 14th; the instant is on the 15th.
+    const curfew = item('curfew', '01:30')
+    const day = [item('load_in', '14:00'), item('doors', '19:00'), curfew]
+
+    const { startsAt } = resolveItemInstants(day, curfew.id, DAY, LONDON)
+
+    expect(startsAt).toBe('2026-06-15T00:30:00.000Z')
+  })
+
+  it('carries both ends of a catering window on one row', () => {
+    const dinner = item('catering_dinner', '18:00', '19:30')
+    const { startsAt, endsAt, error } = resolveItemInstants(
+      [item('load_in', '14:00'), dinner],
+      dinner.id,
+      DAY,
+      LONDON,
+    )
+
+    expect(error).toBeNull()
+    expect(startsAt).toBe('2026-06-14T17:00:00.000Z')
+    expect(endsAt).toBe('2026-06-14T18:30:00.000Z')
+  })
+
+  it('rolls the end of a window that runs past midnight, and only the end', () => {
+    // A load-out from 23:30 to 00:30 is half an hour, not a rejection. The start
+    // has not crossed midnight and the end has, so they land on different days.
+    // This is the case a naive end-after-start check rejects outright.
+    const loadOut = item('load_out', '23:30', '00:30')
+    const { startsAt, endsAt } = resolveItemInstants(
+      [item('load_in', '10:00'), loadOut],
+      loadOut.id,
+      DAY,
+      LONDON,
+    )
+
+    expect(startsAt).toBe('2026-06-14T22:30:00.000Z')
+    expect(endsAt).toBe('2026-06-14T23:30:00.000Z')
+
+    // Stated as its own assertion because it is the database constraint
+    // day_items_end_after_start, and a window that violates it is rejected at
+    // the insert with a Postgres error rather than a sentence.
+    expect(new Date(endsAt as string).getTime()).toBeGreaterThan(
+      new Date(startsAt as string).getTime(),
+    )
+  })
+
+  it('rolls both ends when the item itself has crossed midnight', () => {
+    // The two rules compose: the day walk moves the start to the 15th, and the
+    // end is later on the clock so it stays on the same rolled day. Getting this
+    // wrong puts a curfew's end back on the 14th, before its own start.
+    const curfew = item('curfew', '01:30', '02:00')
+    const { startsAt, endsAt } = resolveItemInstants(
+      [item('doors', '19:00'), curfew],
+      curfew.id,
+      DAY,
+      LONDON,
+    )
+
+    expect(startsAt).toBe('2026-06-15T00:30:00.000Z')
+    expect(endsAt).toBe('2026-06-15T01:00:00.000Z')
+  })
+
+  it('stores an item with no time yet as no time, without complaining', () => {
+    const pressCall = item('other', null)
+    const { startsAt, endsAt, error } = resolveItemInstants([pressCall], pressCall.id, DAY, LONDON)
+
+    expect(error).toBeNull()
+    expect(startsAt).toBeNull()
+    expect(endsAt).toBeNull()
+  })
+
+  it('refuses an end with no start, in words rather than a constraint name', () => {
+    const dinner = item('catering_dinner', null, '19:30')
+    const { startsAt, error } = resolveItemInstants([dinner], dinner.id, DAY, LONDON)
+
+    expect(error).toBe('An end time needs a start time.')
+    // Nothing is returned to write, so a caller that ignored the error cannot
+    // store half of it.
+    expect(startsAt).toBeNull()
+  })
+
+  it('refuses an end equal to its start rather than storing a whole day', () => {
+    // Rolling this forward the way a genuinely crossing window rolls would turn
+    // one mistyped time into a twenty-four hour block.
+    const soundcheck = item('soundcheck', '15:00', '15:00')
+    const { startsAt, endsAt, error } = resolveItemInstants(
+      [soundcheck],
+      soundcheck.id,
+      DAY,
+      LONDON,
+    )
+
+    expect(error).toBe('The end has to be after the start.')
+    expect(startsAt).toBeNull()
+    expect(endsAt).toBeNull()
+  })
+
+  it('refuses to resolve an item that is not on the day it was handed', () => {
+    // Guards the caller rather than the TM: resolving against a day the item is
+    // not on would anchor it against someone else's running order.
+    const stray = item('load_in', '10:00')
+    const { error } = resolveItemInstants([item('doors', '19:00')], stray.id, DAY, LONDON)
+
+    expect(error).toBe('That item is not on this day.')
+  })
+
+  it('anchors against the rest of the day, not against the item alone', () => {
+    // The reason the action reads the whole day before writing one item. On its
+    // own a 23:00 curfew has nothing to anchor against and falls back to 18:00;
+    // with a soundcheck at 15:00 it still does not roll. The pair that matters is
+    // this one and the small-hours case above: same kind, same function, opposite
+    // answers, decided entirely by the other items on the day.
+    const curfew = item('curfew', '23:00')
+    const { startsAt } = resolveItemInstants(
+      [item('soundcheck', '15:00'), curfew],
+      curfew.id,
+      DAY,
+      LONDON,
+    )
+
+    expect(startsAt).toBe('2026-06-14T22:00:00.000Z')
   })
 })
