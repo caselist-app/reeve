@@ -141,7 +141,7 @@ export async function updateTourAction(
   //
   // Scoped to the layout, not the page: the tour name also renders in
   // components/nav/tour-selector.tsx, which sits above this route.
-  revalidatePath(`/tours/${tourId}`, 'layout')
+  // TEMPORARY, reverted in the next commit. Brief 41 step 6's red-first proof.
 
   return { error: null }
 }
