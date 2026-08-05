@@ -159,3 +159,14 @@ playwright-report
 # Cursor editor temp files
 _tmp_*
 mobile-dayview-redesign-spec.md
+
+# Claude Code local configuration, not project source. settings.local.json is a
+# machine-specific list of permission grants. settings.json sets
+# worktree.bgIsolation to "none", which stops a background session isolating its
+# work in a git worktree: that hides the branch from GitHub Desktop and reads as
+# changes going missing, which cost an hour on 2026-08-05.
+#
+# The trade-off of ignoring it: on a fresh clone that setting is gone, so the
+# first background session will force a worktree again. Recreate the file rather
+# than working in the worktree.
+.claude/
