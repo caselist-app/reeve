@@ -28,9 +28,6 @@ interface Show {
   tour_id: string
   venue_name: string
   date: string
-  // Brief 36 step 3: load-in lives on the day sheet. Typed as the embed the page
-  // selects, including the array shape PostgREST can return for a to-one embed.
-  day_sheets: { load_in: string | null } | { load_in: string | null }[] | null
   hub_resolved_at: string | null
   transport_hub_iata: string | null
   transport_hub_rail: string | null
@@ -45,6 +42,14 @@ interface PriorShow {
 
 interface PlannerWorkspaceProps {
   show: Show
+  // Brief 42: load-in is a day_items row, and a show can hold two, so picking
+  // which one is the deadline is a decision. It is made once in
+  // requiredSiteArrivalFor and passed in, rather than made again here from a
+  // query this component would have to write. Both the display below and
+  // planTravel's feasibility ranking read that one function, so the number on
+  // screen and the number being ranked against cannot come apart. That drift is
+  // exactly what the two load-in columns caused.
+  requiredSiteArrival: string | null
   people: Person[]
   tourId: string
   timezone: string | null
@@ -53,6 +58,7 @@ interface PlannerWorkspaceProps {
 
 export function PlannerWorkspace({
   show,
+  requiredSiteArrival,
   people,
   tourId,
   timezone,
@@ -73,16 +79,9 @@ export function PlannerWorkspace({
   )
   const toHub = show.transport_hub_iata ?? show.transport_hub_rail
 
-  // Site arrival deadline is load-in. Ground and transit time is used for
-  // feasibility ranking, not for shifting this display time.
-  //
-  // This is the display half of the value planTravel ranks against. Both now read
-  // day_sheets.load_in: this one used to read shows.load_in_at, which the day view
-  // never wrote, so the workspace showed a deadline the TM had never set while the
-  // timeline showed the one they had.
-  const requiredSiteArrival =
-    (Array.isArray(show.day_sheets) ? show.day_sheets[0] : show.day_sheets)?.load_in ?? null
-
+  // Site arrival deadline is load-in, resolved by the page and passed in. Ground
+  // and transit time is used for feasibility ranking, not for shifting this
+  // display time.
   const selectedPerson = people.find((p) => p.id === selectedPersonId)
 
   // Reset everything whenever the person changes.

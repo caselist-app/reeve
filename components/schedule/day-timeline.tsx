@@ -2,7 +2,8 @@ import { TimelineCard } from '@/components/schedule/timeline-card'
 import { DayHeader } from '@/components/schedule/day-header'
 import { formatFlightNumber } from '@/lib/utils/format-flight-number'
 import { placeName } from '@/lib/utils/place-name'
-import type { DayRecords, DaySegment, DayEvent } from '@/lib/schedule/day-records'
+import { dayItemKind, dayItemLabel } from '@/lib/schedule/day-item-kinds'
+import type { DayRecords, DaySegment } from '@/lib/schedule/day-records'
 
 interface DayTimelineProps {
   records: DayRecords
@@ -33,24 +34,26 @@ function sortKey(iso: string | null, dateFallback: string): string {
   return iso ?? `${dateFallback}T00:00:00Z`
 }
 
-// ---- Show spine -------------------------------------------------------------
+// ---- Day items --------------------------------------------------------------
 
-const DAY_SHEET_FIELDS = [
-  { key: 'lobby_call',      label: 'Lobby call'      },
-  { key: 'venue_access',    label: 'Venue access'    },
-  { key: 'load_in',         label: 'Load-in'         },
-  { key: 'line_check',      label: 'Line check'      },
-  { key: 'soundcheck',      label: 'Soundcheck'      },
-  { key: 'vip',             label: 'VIP'             },
-  { key: 'doors',           label: 'Doors'           },
-  { key: 'support_on',      label: 'Support on'      },
-  { key: 'support_off',     label: 'Support off'     },
-  { key: 'changeover',      label: 'Changeover'      },
-  { key: 'headliner_on',    label: 'Headliner on'    },
-  { key: 'headliner_off',   label: 'Headliner off'   },
-  { key: 'curfew',          label: 'Curfew'          },
-  { key: 'load_out',        label: 'Load-out'        },
-] as const
+// DAY_SHEET_FIELDS used to live here: fourteen field names and fourteen labels,
+// one of twelve places that had to agree about what can be on a day. It is gone.
+// The kind list is the only list now, and this file reads labels off it.
+//
+// The accent is the one thing that stays here, because the timeline's colour
+// language belongs to the timeline: purple is the show, teal is travel, blue is
+// a hotel. The kind list stores the semantic value ('show', 'catering', 'other')
+// and this maps it, so a kind cannot smuggle a Tailwind class into lib/.
+//
+// Catering is emerald because the other four are taken and it is genuinely a
+// fifth kind of thing. It is also the one accent that renders something new:
+// catering times existed only inside the show panel before, and now that they
+// are items they appear in the running order like everything else.
+const ITEM_ACCENTS: Record<string, string> = {
+  show: 'border-purple-500',
+  catering: 'border-emerald-500',
+  other: 'border-amber-500',
+}
 
 // ---- Component --------------------------------------------------------------
 
@@ -72,7 +75,12 @@ export async function DayTimeline({ records, tourId, tourDateId, date, timezone,
   // check-out, is decided in fetchDayRecords now. It used to be reassembled
   // here from three overlapping buckets, which is where an edited stay could
   // fall through every one of them and render on no day at all.
-  const { shows, segments, hotels, events, lateNight } = records
+  const { shows, items: dayItems, itemsError, segments, hotels, lateNight } = records
+
+  // The venue name is the fallback title for a show's own items, so a load-in
+  // reads "Load-in / O2 Academy Brixton" exactly as it did when it was a column.
+  // A day holds at most one show, so the first is the one.
+  const venueName = shows[0]?.venue_name ?? null
 
   // Build a flat list of timeline items with a sort key.
   type TimelineItem = {
@@ -83,79 +91,51 @@ export async function DayTimeline({ records, tourId, tourDateId, date, timezone,
 
   const items: TimelineItem[] = []
 
-  // Show spine items.
-  for (const show of (shows ?? [])) {
-    const ds = Array.isArray(show.day_sheets) ? show.day_sheets[0] : show.day_sheets
+  // Day items: everything that used to be a day-sheet column or a day event.
+  //
+  // The placeholder card a show with no times used to get is gone. Its stated
+  // reason (Brief 36 step 4) was that "nothing else on the day view linked to
+  // it", and that stopped being true in the same brief's step 6, which put the
+  // venue block in day info. A show with an empty running order is now reached
+  // there, which is also where its advance, catering and delete live.
+  for (const item of dayItems) {
+    const kind = dayItemKind(item.kind)
+    // An unknown kind means the database and the kind list have come apart. The
+    // label falls back to the raw kind, which is deliberately ugly on screen,
+    // and the accent falls back to the neutral one. Rendering it as a custom
+    // item would hide the drift.
+    const accent = kind ? ITEM_ACCENTS[kind.accent] : ITEM_ACCENTS.other
 
-    // Brief 36 step 4. This guard used to be `if (!ds)`, which never fired:
-    // create_show_with_dependents always inserts a day_sheets row, so ds was
-    // always truthy and the placeholder below was dead code. A show with no times
-    // populated therefore rendered nothing at all on the timeline, and since
-    // nothing else on the day view linked to it, a TM who added a show and forgot
-    // load-in had no way to reach it.
-    //
-    // The right question is whether the row holds anything, not whether it exists.
-    // Now that step 3 has taken load-in and curfew off the add-show form, every
-    // new show starts in exactly this state, so this is the common path rather
-    // than an edge case.
-    const hasAnyTime = !!ds && DAY_SHEET_FIELDS.some(({ key }) => !!ds[key as keyof typeof ds])
+    // The end is shown whenever one exists, on any kind. surfaceEndInComms is
+    // about WhatsApp, where a range reads badly for everything except a meal;
+    // on screen a stated end is information the TM typed and wants back.
+    const endText = item.ends_at ? `to ${formatTime(item.ends_at, timezone)}` : null
+    const subtitle = [endText, item.location].filter(Boolean).join(' · ')
 
-    if (!hasAnyTime) {
-      // Show with no day sheet times yet: single placeholder card.
-      items.push({
-        key: `show-${show.id}`,
-        sortKey: `${date}T00:00:00Z`,
-        node: (
-          <TimelineCard
-            key={`show-${show.id}`}
-            time="--:--"
-            label="Show"
-            title={show.venue_name}
-            accent="border-purple-500"
-            card={{
-              type: 'show',
-              tourId,
-              key: `show-${show.id}`,
-              showId: show.id,
-              venueName: show.venue_name,
-              timezone,
-              // The row, not null. It exists and is empty, and passing it means
-              // the panel opens on the real day sheet the TM is about to fill in
-              // rather than on nothing.
-              daySheet: ds,
-            }}
-          />
-        ),
-      })
-      continue
-    }
-
-    for (const { key, label } of DAY_SHEET_FIELDS) {
-      const val = ds[key as keyof typeof ds] as string | null
-      if (!val) continue
-      items.push({
-        key: `show-${show.id}-${key}`,
-        sortKey: val,
-        node: (
-          <TimelineCard
-            key={`show-${show.id}-${key}`}
-            time={formatTime(val, timezone)}
-            label={label}
-            title={show.venue_name}
-            accent="border-purple-500"
-            card={{
-              type: 'show',
-              tourId,
-              key: `show-${show.id}`,
-              showId: show.id,
-              venueName: show.venue_name,
-              timezone,
-              daySheet: ds,
-            }}
-          />
-        ),
-      })
-    }
+    items.push({
+      key: `day-item-${item.id}`,
+      sortKey: sortKey(item.starts_at, date),
+      node: (
+        <TimelineCard
+          key={`day-item-${item.id}`}
+          time={formatTime(item.starts_at, timezone)}
+          label={dayItemLabel(item.kind)}
+          // A title is an optional qualifier on any kind, so a soundcheck titled
+          // Tesseract reads as itself and an untitled load-in still reads as the
+          // venue, exactly as it did as a column.
+          title={item.title ?? venueName ?? dayItemLabel(item.kind)}
+          subtitle={subtitle || undefined}
+          accent={accent}
+          card={{
+            type: 'day-item',
+            key: `day-item-${item.id}`,
+            tourId,
+            item,
+            timezone,
+          }}
+        />
+      ),
+    })
   }
 
   // Transport items.
@@ -262,42 +242,25 @@ export async function DayTimeline({ records, tourId, tourDateId, date, timezone,
     })
   }
 
-  // Day event items.
-  function eventItem(ev: DayEvent): TimelineItem {
-    return {
-      key: `event-${ev.id}`,
-      sortKey: sortKey(ev.starts_at, date),
-      node: (
-        <TimelineCard
-          key={`event-${ev.id}`}
-          time={formatTime(ev.starts_at, timezone)}
-          label="Event"
-          title={ev.title}
-          subtitle={ev.location ?? undefined}
-          accent="border-amber-500"
-          card={{ type: 'event', key: `event-${ev.id}`, event: ev, timezone }}
-        />
-      ),
-    }
-  }
-
-  for (const ev of (events ?? [])) items.push(eventItem(ev))
-
   // Sort by time ascending.
   items.sort((a, b) => a.sortKey.localeCompare(b.sortKey))
 
-  // The tail: records belonging to the small hours of the next morning. A tour
+  // The tail: transport belonging to the small hours of the next morning. A tour
   // day is a working period rather than a calendar day, so a 01:30 red-eye
   // after a show is part of tonight from where the TM is standing, even though
   // it is stored on tomorrow and still renders there too.
   //
+  // Day items are not in here any more, and that is the brief's structural win
+  // rather than an omission. A curfew a TM sets on the 14th already has
+  // tour_date_id pointing at the 14th, so it arrives in `items` above and sorts
+  // into the running order in its right place. See lib/schedule/day-records.ts.
+  //
   // Sorted and rendered separately rather than merged into `items`, so it can
   // never reorder the day itself. Whatever this section gets right or wrong, the
   // running order above it is unchanged.
-  const tailItems = [
-    ...lateNight.segments.map(segmentItem),
-    ...lateNight.events.map(eventItem),
-  ].sort((a, b) => a.sortKey.localeCompare(b.sortKey))
+  const tailItems = lateNight.segments
+    .map(segmentItem)
+    .sort((a, b) => a.sortKey.localeCompare(b.sortKey))
 
   const tail = tailItems.length > 0 && (
     <div className="mt-2 border-t border-border pt-4">
@@ -313,8 +276,14 @@ export async function DayTimeline({ records, tourId, tourDateId, date, timezone,
       <div className="flex flex-col h-full">
         {header}
         <div className="flex-1 flex items-center justify-center px-6">
+          {/* A failed read is not an empty day. "Nothing added to this day yet"
+              is a confident, plausible, wrong answer, and a TM who believes it
+              and starts retyping a running order has been told a lie by the
+              product. This is the same rule the crew-facing templates follow. */}
           <p className="text-sm text-muted-foreground text-center">
-            Nothing added to this day yet.
+            {itemsError
+              ? 'Could not load this day. Refresh to try again.'
+              : 'Nothing added to this day yet.'}
           </p>
         </div>
       </div>
@@ -325,6 +294,16 @@ export async function DayTimeline({ records, tourId, tourDateId, date, timezone,
     <div className="flex flex-col h-full">
       {header}
       <div className="flex-1 overflow-y-auto py-4">
+        {/* The half of the failed-read rule that is easy to miss. A day with a
+            flight on it still renders when the items query fails, so the empty
+            state above never fires and the TM sees a running order with every
+            time missing and nothing saying so. That reads as a day with no
+            load-in, which is a thing they would act on. */}
+        {itemsError && (
+          <p className="mx-6 mb-3 rounded-lg border border-border px-3 py-2 text-xs text-destructive">
+            Could not load this day&apos;s times. What is below is incomplete.
+          </p>
+        )}
         {items.map((item) => item.node)}
         {tail}
       </div>

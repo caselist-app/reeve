@@ -2,31 +2,25 @@ import type { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/lib/types/database'
 import { localDayWindowUtc } from '@/lib/schedule/datetime'
 import { addDays } from '@/lib/schedule/day-sheet-times'
+import { fetchDayItems, type DayItem } from '@/lib/schedule/day-items'
 
 // Single source of truth for a schedule day's records. The day view used to
 // fetch this set two to three times per navigation (the page for panel data,
 // the timeline for display, the info panel for the show). It is now fetched
 // once here and passed down as props.
+//
+// Brief 42, REE-17. A day's times are rows in day_items now, not twenty columns
+// on a day_sheets row plus a separate day_events fetch. Two queries became one,
+// and the show stopped being the thing a time hangs off.
 
 type Client = Awaited<ReturnType<typeof createClient>>
 
+// catering_type is on shows since REE-19: it is the one column on day_sheets
+// that was not a time and had no row to become.
 export type DayShow = Pick<
   Tables<'shows'>,
-  'id' | 'venue_name' | 'address' | 'capacity' | 'venue_type'
-> & {
-  day_sheets: Pick<
-    Tables<'day_sheets'>,
-    | 'lobby_call' | 'venue_access' | 'load_in' | 'line_check' | 'soundcheck' | 'vip'
-    | 'doors' | 'support_on' | 'support_off' | 'changeover' | 'headliner_on' | 'headliner_off'
-    | 'curfew' | 'load_out'
-    // Catering rides along because the show panel is the whole day sheet now,
-    // not just its times. It renders nothing on the timeline.
-    | 'catering_type'
-    | 'catering_breakfast_start' | 'catering_breakfast_end'
-    | 'catering_lunch_start' | 'catering_lunch_end'
-    | 'catering_dinner_start' | 'catering_dinner_end'
-  > | null
-}
+  'id' | 'venue_name' | 'address' | 'capacity' | 'venue_type' | 'catering_type'
+>
 
 export type DaySegment = Pick<
   Tables<'transport_segments'>,
@@ -45,11 +39,6 @@ export type DayHotel = Pick<
   | 'wifi_network' | 'wifi_password'
 >
 
-export type DayEvent = Pick<
-  Tables<'day_events'>,
-  'id' | 'title' | 'starts_at' | 'ends_at' | 'location' | 'notes'
->
-
 // A stay renders once per event it produces on a day: a check-in card on its
 // check-in day, a check-out card on its check-out day. Merged here rather than
 // in the timeline, so "which hotels are on this day" has one answer in one
@@ -57,27 +46,45 @@ export type DayEvent = Pick<
 // rejected by every bucket and render on no day at all.
 export type DayHotelItem = DayHotel & { isCheckout: boolean }
 
-// Records belonging to the small hours of the following calendar morning, which
-// a TM reads as the end of this day rather than the start of the next one. A
-// 01:30 red-eye after a show is the case: it is stored on the 15th, correctly,
+// Transport belonging to the small hours of the following calendar morning,
+// which a TM reads as the end of this day rather than the start of the next one.
+// A 01:30 red-eye after a show is the case: it is stored on the 15th, correctly,
 // and the TM planning the 14th needs to see it.
 //
-// Deliberately a separate field rather than merged into `segments` and `events`.
-// These records genuinely belong to the next calendar day, they are still
-// fetched and rendered by that day, and nothing about where they are stored
-// changes. This is a second view of them, not a reassignment. Merging them would
-// make "which day is this on" ambiguous again, which is the thing the day link
-// exists to settle.
+// Deliberately a separate field rather than merged into `segments`. These
+// records genuinely belong to the next calendar day, they are still fetched and
+// rendered by that day, and nothing about where they are stored changes. This is
+// a second view of them, not a reassignment. Merging them would make "which day
+// is this on" ambiguous again, which is the thing the day link exists to settle.
+//
+// DAY ITEMS ARE NOT IN THE TAIL, AND THAT IS THE BRIEF'S STRUCTURAL WIN.
+//
+// day_events had no tour_date_id: it was placed by `date` alone, so a 01:30
+// after-show party stored on the 15th rendered on the 15th, and the tail existed
+// to put it back under the 14th where the TM had been working. day_items has the
+// day link and the instant as separate facts, so a curfew a TM sets on the 14th
+// has tour_date_id pointing at the 14th and starts_at falling on the 15th. It
+// arrives on the right day already. There is nothing to compensate for.
+//
+// The consequence, stated so it is a decision rather than a side effect: an item
+// whose tour_date_id genuinely IS the 15th no longer appears at the bottom of
+// the 14th. That is the TM's own choice of day being respected rather than
+// second-guessed, and it is the only way "which day is this on" keeps one
+// answer. Transport keeps its tail because transport_segments still has no
+// equivalent: it is placed by depart_at, so the question is still open there.
 export interface LateNight {
   segments: DaySegment[]
-  events: DayEvent[]
 }
 
 export interface DayRecords {
   shows: DayShow[]
+  items: DayItem[]                // every time on this day, ordered as shown
+  // A failed read is not an empty day. "Nothing added to this day yet" is a
+  // confident, plausible, wrong answer, and it is what a crew member got when a
+  // query failed. The timeline says it could not load instead.
+  itemsError: string | null
   segments: DaySegment[]          // deduped union of tour_date-linked and date-matched
   hotels: DayHotelItem[]          // check-ins and check-outs falling on this day
-  events: DayEvent[]              // freeform events on this day
   lateNight: LateNight            // next morning's small hours, shown as this day's tail
   // Ids of the segments and hotels on this day, used by the info panel to
   // resolve the day's roster without re-querying for them.
@@ -87,10 +94,11 @@ export interface DayRecords {
 
 const EMPTY: DayRecords = {
   shows: [],
+  items: [],
+  itemsError: null,
   segments: [],
   hotels: [],
-  events: [],
-  lateNight: { segments: [], events: [] },
+  lateNight: { segments: [] },
   segmentIds: [],
   hotelStayIds: [],
 }
@@ -107,31 +115,16 @@ const EMPTY: DayRecords = {
 // Being wrong about a stored instant is silent and compounds.
 const LATE_NIGHT_ENDS_AT_HOUR = 6
 
-const SHOW_SELECT = `
-  id, venue_name, address, capacity, venue_type,
-  day_sheets (
-    lobby_call, venue_access, load_in, line_check, soundcheck, vip,
-    doors, support_on, support_off, changeover, headliner_on, headliner_off,
-    curfew, load_out,
-    catering_type,
-    catering_breakfast_start, catering_breakfast_end,
-    catering_lunch_start, catering_lunch_end,
-    catering_dinner_start, catering_dinner_end
-  )
-`
+// A plain column list now, with no embed. This string used to be one of the two
+// untyped sources of truth for a day-sheet field: nothing but a running query
+// would tell you it was wrong. There is nothing left in it to get wrong.
+const SHOW_SELECT = 'id, venue_name, address, capacity, venue_type, catering_type'
 
 const SEGMENT_SELECT =
   'id, mode, origin, destination, depart_at, arrive_at, carrier_operator, vehicle_or_flight_no, booking_reference, status, origin_iata, destination_iata, flight_status, actual_depart_at, actual_arrive_at, gate, terminal, last_tracked_at'
 
 const HOTEL_SELECT =
   'id, name, address, check_in_date, check_in_time, check_out_date, check_out_time, wifi_network, wifi_password'
-
-// day_sheets comes back as an array (or object) from the embedded select.
-// Normalise it to a single record or null so every consumer reads it the same way.
-function flattenDaySheet(raw: unknown): DayShow['day_sheets'] {
-  if (Array.isArray(raw)) return (raw[0] as DayShow['day_sheets']) ?? null
-  return (raw as DayShow['day_sheets']) ?? null
-}
 
 export async function fetchDayRecords(
   supabase: Client,
@@ -176,15 +169,20 @@ export async function fetchDayRecords(
 
   const [
     { data: showRows },
+    dayItems,
     { data: linkedSegments },
     { data: datedSegments },
     { data: checkinHotels },
     { data: checkoutHotels },
-    { data: eventRows },
     { data: lateSegmentRows },
-    { data: lateEventRows },
   ] = await Promise.all([
     supabase.from('shows').select(SHOW_SELECT).eq('tour_id', tourId).eq('tour_date_id', tourDateId),
+
+    // The day's times, in one read of one table. This replaces the day_sheets
+    // embed above and the separate day_events fetch that used to sit below, and
+    // it is the point of the brief: a load-in, a second soundcheck and a press
+    // call are the same kind of thing now.
+    fetchDayItems(supabase, { tourId, tourDateId }),
 
     // Linked segments are date-guarded too, but in JS below rather than here.
     // One day's segments are a handful of rows, and expressing "null or inside
@@ -227,13 +225,6 @@ export async function fetchDayRecords(
       .eq('check_out_date', date)
       .neq('check_in_date', date), // avoid duplicating same-day check-in/out
 
-    supabase
-      .from('day_events')
-      .select('id, title, starts_at, ends_at, location, notes')
-      .eq('tour_id', tourId)
-      .eq('date', date)
-      .order('starts_at', { ascending: true }),
-
     // Tail: departures in the next morning's small hours. Filtered on depart_at
     // alone rather than on the link, because that is the fact being asked about
     // (when does this actually leave) and because it catches planner-created
@@ -244,18 +235,6 @@ export async function fetchDayRecords(
       .eq('tour_id', tourId)
       .gte('depart_at', nextDayWindow.start)
       .lt('depart_at', lateNightEnd),
-
-    // Scoped to the next calendar date as well as the time window. An event's
-    // day is its own `date` column, which is already explicit and separate from
-    // starts_at, so both have to agree before it counts as this day's tail.
-    supabase
-      .from('day_events')
-      .select('id, title, starts_at, ends_at, location, notes')
-      .eq('tour_id', tourId)
-      .eq('date', nextDate)
-      .gte('starts_at', nextDayWindow.start)
-      .lt('starts_at', lateNightEnd)
-      .order('starts_at', { ascending: true }),
   ])
 
   // The date guard the linked query used to be missing entirely. A segment
@@ -282,29 +261,20 @@ export async function fetchDayRecords(
     ...(checkoutHotels ?? []).map((h) => ({ ...h, isCheckout: true })),
   ]
 
-  const shows: DayShow[] = (showRows ?? []).map((s) => ({
-    id: s.id,
-    venue_name: s.venue_name,
-    address: s.address,
-    capacity: s.capacity,
-    venue_type: s.venue_type,
-    day_sheets: flattenDaySheet(s.day_sheets),
-  }))
-
   // The tail is not folded into segmentIds or hotelStayIds. Those drive the day
   // roster, which answers "who is on this day", and these people are on the next
   // one. Showing a TM that a red-eye exists is useful; counting its passengers
   // as today's party is not.
   const lateNight: LateNight = {
     segments: lateSegmentRows ?? [],
-    events: lateEventRows ?? [],
   }
 
   return {
-    shows,
+    shows: showRows ?? [],
+    items: dayItems.items,
+    itemsError: dayItems.error,
     segments: Array.from(segMap.values()),
     hotels,
-    events: eventRows ?? [],
     lateNight,
     segmentIds: Array.from(segMap.keys()),
     // Deduplicated: a stay checking in and out across this day would otherwise

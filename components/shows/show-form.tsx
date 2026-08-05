@@ -75,6 +75,11 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
   const [address, setAddress] = useState(initialData?.address ?? '')
   const [venueName, setVenueName] = useState(initialData?.venue_name ?? '')
   const [venueType, setVenueType] = useState(initialData?.venue_type ?? '')
+  // A Radix Select contributes nothing to FormData, so this is state and gets
+  // merged into the payload by hand, the same way venue_type is. Falls back to
+  // 'none' for display only: the column is not null with that default, so a show
+  // that has never been told about catering genuinely is 'none'.
+  const [cateringType, setCateringType] = useState<string>(initialData?.catering_type ?? 'none')
   const [unionStage, setUnionStage] = useState(
     initialData?.union_stage == null ? '' : initialData.union_stage ? 'yes' : 'no'
   )
@@ -111,6 +116,7 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
         venue_name: venueName || fields.venue_name,
         address: address || null,
         venue_type: (venueType as ShowData['venue_type']) || null,
+        catering_type: cateringType as ShowData['catering_type'],
         capacity: fields.capacity,
         stage_dimensions: fields.stage_dimensions,
         parking: fields.parking,
@@ -234,8 +240,27 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
       {/* Load-in and curfew used to sit here, writing shows.load_in_at and
           shows.curfew_at while the Schedule tab wrote day_sheets.load_in and
           day_sheets.curfew, with nothing syncing the two. Brief 36 step 3
-          collapsed them into the day sheet, so the times are edited on the day
-          view timeline and in the Schedule tab, and this tab covers the venue. */}
+          collapsed them into the day sheet, and Brief 42 made every time a
+          day_items row, so times are added and edited on the day view timeline
+          and this form covers the show itself. */}
+
+      <div className="space-y-2">
+        <Label>Catering</Label>
+        {/* Moved off the show panel with the rest of the show when Brief 42
+            retired the day sheet. The meal windows that used to sit under this
+            select are catering items on the day now, so this is the whole of
+            what is left: who is providing it. */}
+        <Select name="catering_type" value={cateringType} onValueChange={setCateringType}>
+          <SelectTrigger>
+            <SelectValue placeholder="Select" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="none">None</SelectItem>
+            <SelectItem value="buyout">Buyout</SelectItem>
+            <SelectItem value="provided">Provided</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
       <p className="pt-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
         Technical

@@ -20,6 +20,7 @@ import { revertDayTypeIfOrphaned } from '@/lib/schedule/day-type-revert'
 import { resolveTourDateId } from '@/lib/schedule/day-link'
 import { localTimeInZone, localDateInZone } from '@/lib/schedule/datetime'
 import { resolveDayOffsets, addDays, daysBetween } from '@/lib/schedule/day-sheet-times'
+import { shiftDayItemsToDate } from '@/lib/schedule/day-items'
 import type { DateMove } from '@/lib/schedule/date-move'
 import type { z } from 'zod'
 import type { SupabaseClient } from '@supabase/supabase-js'
@@ -280,13 +281,22 @@ export async function updateShow(
       .eq('id', existing.tour_id)
       .single()
 
-    carriedTimes = await shiftDaySheetToDate(
+    // Brief 42: the running order is day_items rows, and it moves with the show
+    // or it stays behind on a day that no longer has one. Both the day link and
+    // each instant move, and each item's day offset is carried, so a 01:30
+    // curfew lands on the morning after the NEW date.
+    carriedTimes = await shiftDayItemsToDate(
       supabase,
       showId,
       existing.date,
       parsed.data.date,
+      nextTourDateId,
       tourRow?.timezone ?? null,
     )
+
+    // The day sheet still exists until REE-23 drops it, and nothing writes it any
+    // more, so it is deliberately not shifted. Moving a stale copy would keep it
+    // looking current right up until the moment someone read it.
 
     // After the show row has moved, not before, or the old day still has a show
     // on it and the revert correctly declines to fire.

@@ -186,6 +186,14 @@ describe('day item partial writes', () => {
     return data
   }
 
+  // PostgREST renders a timestamptz as "+00:00" rather than "Z", and that is a
+  // serialisation detail rather than the thing under test. Compared as instants
+  // so a change in how Supabase formats a column cannot fail a test about when
+  // a load-in is.
+  function instant(iso: string | null | undefined): string | null {
+    return iso ? new Date(iso).toISOString() : null
+  }
+
   it('leaves everything else byte-identical when only the time moves', async () => {
     const before = await readItem()
 
@@ -201,7 +209,7 @@ describe('day item partial writes', () => {
 
     // And the time it was asked to move did move, or every assertion above
     // passes on an action that did nothing at all.
-    expect(after?.starts_at).toBe(`${fixture.date}T17:30:00.000Z`)
+    expect(instant(after?.starts_at)).toBe(`${fixture.date}T17:30:00.000Z`)
   })
 
   it('leaves the time alone when only the location moves', async () => {
@@ -222,7 +230,7 @@ describe('day item partial writes', () => {
     // hour and the window still shuts at 19:30.
     await updateDayItem(itemId, { start_clock: '18:30' })
 
-    expect((await readItem())?.ends_at).toBe(`${fixture.date}T18:30:00.000Z`)
+    expect(instant((await readItem())?.ends_at)).toBe(`${fixture.date}T18:30:00.000Z`)
   })
 
   it('clears the end when the TM blanks it, because null is not undefined', async () => {
@@ -235,7 +243,7 @@ describe('day item partial writes', () => {
     expect(after?.ends_at).toBeNull()
     // The start is untouched: clearing when a window shuts is not clearing when
     // it opens.
-    expect(after?.starts_at).toBe(`${fixture.date}T17:00:00.000Z`)
+    expect(instant(after?.starts_at)).toBe(`${fixture.date}T17:00:00.000Z`)
   })
 
   it('clears the notes when the TM blanks them, and not otherwise', async () => {
@@ -258,7 +266,7 @@ describe('day item partial writes', () => {
     expect(result.error).toBe('An end time needs a start time.')
     // And nothing was written, which is the half that matters. An action that
     // reports an error after a partial write is worse than one that throws.
-    expect((await readItem())?.starts_at).toBe(`${fixture.date}T17:00:00.000Z`)
+    expect(instant((await readItem())?.starts_at)).toBe(`${fixture.date}T17:00:00.000Z`)
   })
 })
 
@@ -311,7 +319,7 @@ describe('day item times land on the right calendar day', () => {
     // show it ends.
     expect(data?.tour_date_id).toBe(fixture.tourDateId)
     // The instant is the 15th at 01:30 BST, which is 00:30Z.
-    expect(data?.starts_at).toBe('2026-06-15T00:30:00.000Z')
+    expect(new Date(data?.starts_at ?? '').toISOString()).toBe('2026-06-15T00:30:00.000Z')
   })
 
   it('reads the tour timezone rather than treating the clock as UTC', async () => {
@@ -332,7 +340,7 @@ describe('day item times land on the right calendar day', () => {
       .eq('id', created.itemId)
       .single()
 
-    expect(data?.starts_at).toBe(`${fixture.date}T13:00:00.000Z`)
+    expect(new Date(data?.starts_at ?? '').toISOString()).toBe(`${fixture.date}T13:00:00.000Z`)
   })
 
   it('lets one show hold two soundchecks, which a column could not', async () => {
