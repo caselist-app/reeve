@@ -54,7 +54,7 @@ export type TourContext = {
       doors: string | null
       headliner_on: string | null
       curfew: string | null
-      hotel_departure: string | null
+      lobby_call: string | null
     } | null
   }>
   people: Array<{
@@ -128,7 +128,7 @@ export async function assembleTourContext(tour_id: string): Promise<TourContext>
         .select(`
           id, date, venue_name, address, venue_type,
           show_advance ( status_audio, status_lighting, status_staging, status_hospitality, status_travel ),
-          day_sheets ( venue_access, load_in, soundcheck, doors, headliner_on, curfew, hotel_departure )
+          day_sheets ( lobby_call, venue_access, load_in, soundcheck, doors, headliner_on, curfew )
         `)
         .eq('tour_id', tour_id)
         .order('date', { ascending: true }),

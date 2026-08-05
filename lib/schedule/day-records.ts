@@ -16,9 +16,9 @@ export type DayShow = Pick<
 > & {
   day_sheets: Pick<
     Tables<'day_sheets'>,
-    | 'lobby_call_at' | 'venue_access' | 'load_in' | 'line_check' | 'soundcheck' | 'vip'
+    | 'lobby_call' | 'venue_access' | 'load_in' | 'line_check' | 'soundcheck' | 'vip'
     | 'doors' | 'support_on' | 'support_off' | 'changeover' | 'headliner_on' | 'headliner_off'
-    | 'curfew' | 'load_out' | 'hotel_departure'
+    | 'curfew' | 'load_out'
   > | null
 }
 
@@ -104,9 +104,9 @@ const LATE_NIGHT_ENDS_AT_HOUR = 6
 const SHOW_SELECT = `
   id, venue_name, address, capacity, venue_type,
   day_sheets (
-    lobby_call_at, venue_access, load_in, line_check, soundcheck, vip,
+    lobby_call, venue_access, load_in, line_check, soundcheck, vip,
     doors, support_on, support_off, changeover, headliner_on, headliner_off,
-    curfew, load_out, hotel_departure
+    curfew, load_out
   )
 `
 

@@ -13,9 +13,9 @@ type ContactablePerson = { id: string; name: string; contact_email: string }
 // Mirrors DaySheet from components/schedule/panels/show-panel.tsx
 type ShowDaySheet = Pick<
   Tables<'day_sheets'>,
-  | 'venue_access' | 'load_in' | 'line_check' | 'soundcheck' | 'vip'
+  | 'lobby_call' | 'venue_access' | 'load_in' | 'line_check' | 'soundcheck' | 'vip'
   | 'doors' | 'support_on' | 'support_off' | 'changeover'
-  | 'headliner_on' | 'headliner_off' | 'curfew' | 'load_out' | 'hotel_departure'
+  | 'headliner_on' | 'headliner_off' | 'curfew' | 'load_out'
 >
 
 // Mirrors Segment from components/schedule/panels/transport-panel.tsx

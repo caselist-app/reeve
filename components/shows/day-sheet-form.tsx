@@ -12,6 +12,7 @@ import { NotifyPanel } from '@/components/broadcast/notify-panel'
 import type { Tables } from '@/lib/types/database'
 
 const SCHEDULE = [
+  { key: 'lobby_call', label: 'Lobby call' },
   { key: 'venue_access', label: 'Venue access' },
   { key: 'load_in', label: 'Load in' },
   { key: 'line_check', label: 'Line check' },
@@ -25,7 +26,6 @@ const SCHEDULE = [
   { key: 'headliner_off', label: 'Headliner off' },
   { key: 'curfew', label: 'Curfew' },
   { key: 'load_out', label: 'Load out' },
-  { key: 'hotel_departure', label: 'Hotel departure' },
 ] as const
 
 type ScheduleKey = (typeof SCHEDULE)[number]['key']

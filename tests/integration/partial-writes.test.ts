@@ -20,6 +20,7 @@ import type { ContactForm } from '@/lib/validators/contact'
 // null stops being written, because then a TM could never clear a field.
 
 const TIMES_ONLY = {
+  lobby_call: null,
   venue_access: '09:00',
   load_in: '10:00',
   line_check: null,
@@ -33,7 +34,6 @@ const TIMES_ONLY = {
   headliner_off: null,
   curfew: '23:00',
   load_out: null,
-  hotel_departure: null,
 }
 
 describe('updateDaySheet partial writes', () => {

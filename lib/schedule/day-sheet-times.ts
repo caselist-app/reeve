@@ -43,7 +43,7 @@
 
 // Never cross midnight. A time here is on the show's own date, whatever it says.
 export const DAYTIME_FIELDS = [
-  'hotel_departure',
+  'lobby_call',
   'catering_breakfast_start',
   'catering_breakfast_end',
   'venue_access',

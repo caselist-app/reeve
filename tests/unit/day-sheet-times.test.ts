@@ -58,13 +58,13 @@ describe('resolveDayOffsets', () => {
     // event on the show day, and the TM leaving for an early flight is not
     // doing it tomorrow.
     const offsets = resolveDayOffsets({
-      hotel_departure: '05:00',
+      lobby_call: '05:00',
       load_in: '10:00',
       doors: '19:00',
       curfew: '01:30',
     })
 
-    expect(offsets.hotel_departure ?? 0).toBe(0)
+    expect(offsets.lobby_call ?? 0).toBe(0)
     expect(offsets.curfew).toBe(1)
   })
 

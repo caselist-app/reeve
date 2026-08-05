@@ -91,19 +91,19 @@ describe('day-sheet times that cross midnight', () => {
     // The case every cutoff rule gets wrong, and the reason the rule splits
     // fields into two groups rather than using an hour.
     await updateDaySheet(fixture.showId, {
-      hotel_departure: '05:00',
+      lobby_call: '05:00',
       load_in: '10:00',
       doors: '19:00',
       curfew: '01:30',
     })
 
     const sheet = await readDaySheet()
-    if (!sheet?.hotel_departure || !sheet.curfew) {
+    if (!sheet?.lobby_call || !sheet.curfew) {
       throw new Error('day sheet did not store the times under test')
     }
 
-    expect(localDateInZone(sheet.hotel_departure, TZ)).toBe('2026-06-14')
-    expect(localTimeInZone(sheet.hotel_departure, TZ)).toBe('05:00')
+    expect(localDateInZone(sheet.lobby_call, TZ)).toBe('2026-06-14')
+    expect(localTimeInZone(sheet.lobby_call, TZ)).toBe('05:00')
     // And the curfew on the same sheet still rolled.
     expect(localDateInZone(sheet.curfew, TZ)).toBe('2026-06-15')
   })

@@ -7,6 +7,7 @@ import { z } from 'zod'
 const optionalTime = z.string().nullable().optional()
 
 export const daySheetFormSchema = z.object({
+  lobby_call: optionalTime,
   venue_access: optionalTime,
   load_in: optionalTime,
   line_check: optionalTime,
@@ -20,7 +21,6 @@ export const daySheetFormSchema = z.object({
   headliner_off: optionalTime,
   curfew: optionalTime,
   load_out: optionalTime,
-  hotel_departure: optionalTime,
   // Catering fields: type selector plus meal time windows.
   // No .default() here on purpose. Not every caller submits catering:
   // components/schedule/panels/show-panel.tsx sends the 14 time fields only.

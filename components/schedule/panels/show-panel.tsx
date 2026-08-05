@@ -26,9 +26,9 @@ import type { ChangeDescriptor } from '@/lib/comms/affected'
 
 type DaySheet = Pick<
   Tables<'day_sheets'>,
-  | 'venue_access' | 'load_in' | 'line_check' | 'soundcheck' | 'vip'
+  | 'lobby_call' | 'venue_access' | 'load_in' | 'line_check' | 'soundcheck' | 'vip'
   | 'doors' | 'support_on' | 'support_off' | 'changeover'
-  | 'headliner_on' | 'headliner_off' | 'curfew' | 'load_out' | 'hotel_departure'
+  | 'headliner_on' | 'headliner_off' | 'curfew' | 'load_out'
 >
 
 interface ShowPanelProps {
@@ -77,6 +77,15 @@ const SECTIONS = [
   {
     title: 'Arrival',
     fields: [
+      // Lobby call leads the day, and used to be the last field on the form
+      // under Departure, called Hotel departure. The rename is Brief 36's
+      // decision 3; moving it is a consequence of Brief 40, which classes it as
+      // a field that never crosses midnight and therefore stores it on the
+      // show's own date. Left at the bottom under Departure it would read as
+      // "after load-out", meaning the following morning, and a TM entering it
+      // that way would have it stored a day early with nothing to show for it.
+      // The form now says what the storage rule already assumed.
+      { key: 'lobby_call' as const,   label: 'Lobby call'   },
       { key: 'venue_access' as const, label: 'Venue access' },
       { key: 'load_in' as const,      label: 'Load-in'      },
     ],
@@ -104,8 +113,7 @@ const SECTIONS = [
   {
     title: 'Departure',
     fields: [
-      { key: 'load_out'       as const, label: 'Load-out'       },
-      { key: 'hotel_departure' as const, label: 'Hotel departure' },
+      { key: 'load_out' as const, label: 'Load-out' },
     ],
   },
 ]

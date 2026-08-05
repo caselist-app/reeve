@@ -67,9 +67,31 @@ The rule for anything new: if a client component is not visible on first paint a
 - Advance status has three incompatible vocabularies across `advance-dots.tsx` (`confirmed/in_progress/not_started/na`), `advance-tracker.tsx` (`not_started/in_progress/done`), and `shows-view.tsx` (ad hoc). Check `lib/shows/advance.ts` and the DB constraint for the real enum before touching any of these three files.
 - `components/nav/theme-toggle.tsx` (binary) and `components/tours/settings-form.tsx`'s inline theme picker (3-way) are two separate, un-reconciled theme switchers. Don't add a third.
 
-## Day-sheet fields have three sources of truth, keep them in sync
+## Day-sheet fields have twelve sources of truth, keep them in sync
 
-Adding or renaming a day-sheet field (load-in, curfew, etc.) requires updating all three: `day-timeline.tsx`'s `DAY_SHEET_FIELDS` array, `show-panel.tsx`'s `SECTIONS` constant, and the `ShowDaySheet` type in `stores/side-panel-store.ts`. Missing one produces a silently incomplete UI, not a build error.
+Adding or renaming a day-sheet field (load-in, curfew, etc.) means editing all of these. This list said three until 2026-08-05, when renaming `hotel_departure` to `lobby_call` found the other nine. Two of them are not typed, so nothing but a running query will tell you they are wrong.
+
+**Typed, so `tsc` catches a miss:**
+
+- `components/schedule/day-timeline.tsx`, `DAY_SHEET_FIELDS`
+- `components/schedule/panels/show-panel.tsx`, both the local `DaySheet` type and the `SECTIONS` constant (two edits, not one)
+- `components/shows/day-sheet-form.tsx`, `SCHEDULE`
+- `stores/side-panel-store.ts`, the `ShowDaySheet` type
+- `lib/actions/shows.ts`, `DAY_SHEET_TIME_FIELDS` (the writer, shared by `updateDaySheet` and `shiftDaySheetToDate`)
+- `lib/schedule/day-sheet-times.ts`, `DAYTIME_FIELDS` or `EVENING_FIELDS` (Brief 40; miss it and the field silently stops being protected from rolling over midnight)
+- `lib/schedule/day-records.ts`, the `DayShow['day_sheets']` Pick type
+- `lib/validators/day-sheet.ts`, `daySheetFormSchema`
+- `lib/ai/context.ts`, the `TourContext` day_sheet type
+- `lib/types/database.ts`, regenerated, never hand-edited
+
+**Untyped, so only a real query catches a miss:**
+
+- `lib/schedule/day-records.ts`, the `SHOW_SELECT` string
+- `lib/ai/context.ts`, the `day_sheets ( ... )` embed string
+
+Those last two are why `tests/integration/one-lobby-call.test.ts` exists. The AI one runs on Trigger.dev and nowhere else, so a miss in it is invisible in Vercel's logs and reaches a crew member.
+
+**A rename is two migrations, not one.** There is no safe moment to run a single `rename column`: before the deploy the running code reads the old name and it has gone, after the deploy it reads the new name and it does not exist yet, and the gap is a deploy rather than a second. Add the new column and copy into it first, ship the code, then drop the old one in a later commit. See `supabase/migrations/20260805130000_add_lobby_call.sql` for the shape.
 
 ## Naming, not to be confused
 

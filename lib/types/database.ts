@@ -550,6 +550,7 @@ export type Database = {
           line_check: string | null
           load_in: string | null
           load_out: string | null
+          lobby_call: string | null
           lobby_call_at: string | null
           show_id: string
           soundcheck: string | null
@@ -578,6 +579,7 @@ export type Database = {
           line_check?: string | null
           load_in?: string | null
           load_out?: string | null
+          lobby_call?: string | null
           lobby_call_at?: string | null
           show_id: string
           soundcheck?: string | null
@@ -606,6 +608,7 @@ export type Database = {
           line_check?: string | null
           load_in?: string | null
           load_out?: string | null
+          lobby_call?: string | null
           lobby_call_at?: string | null
           show_id?: string
           soundcheck?: string | null
@@ -1190,7 +1193,6 @@ export type Database = {
           hub_ground_minutes: number | null
           hub_resolved_at: string | null
           id: string
-          notes: string | null
           parking: string | null
           production_office: boolean | null
           shore_power: string | null
@@ -1220,7 +1222,6 @@ export type Database = {
           hub_ground_minutes?: number | null
           hub_resolved_at?: string | null
           id?: string
-          notes?: string | null
           parking?: string | null
           production_office?: boolean | null
           shore_power?: string | null
@@ -1250,7 +1251,6 @@ export type Database = {
           hub_ground_minutes?: number | null
           hub_resolved_at?: string | null
           id?: string
-          notes?: string | null
           parking?: string | null
           production_office?: boolean | null
           shore_power?: string | null

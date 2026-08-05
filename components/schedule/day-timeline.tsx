@@ -36,7 +36,7 @@ function sortKey(iso: string | null, dateFallback: string): string {
 // ---- Show spine -------------------------------------------------------------
 
 const DAY_SHEET_FIELDS = [
-  { key: 'lobby_call_at',   label: 'Lobby call'      },
+  { key: 'lobby_call',      label: 'Lobby call'      },
   { key: 'venue_access',    label: 'Venue access'    },
   { key: 'load_in',         label: 'Load-in'         },
   { key: 'line_check',      label: 'Line check'      },
@@ -50,7 +50,6 @@ const DAY_SHEET_FIELDS = [
   { key: 'headliner_off',   label: 'Headliner off'   },
   { key: 'curfew',          label: 'Curfew'          },
   { key: 'load_out',        label: 'Load-out'        },
-  { key: 'hotel_departure', label: 'Hotel departure' },
 ] as const
 
 // ---- Component --------------------------------------------------------------

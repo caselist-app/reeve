@@ -28,9 +28,12 @@ export type ShowActionState = { error: string | null; showId?: string; moved?: D
 // re-derives them when the show moves), so a column added to one is not
 // silently missing from the other.
 //
-// lobby_call_at is deliberately absent: nothing writes it, so it is always
-// null. Brief 36 Part 3 drops it and renames hotel_departure to lobby_call.
+// This list is NOT chronological and must not be read as if it were. The six
+// catering fields sit at the end, after load_out, which is why the roll-over
+// rule in lib/schedule/day-sheet-times.ts runs over its own two groups rather
+// than over this one in order.
 const DAY_SHEET_TIME_FIELDS = [
+  'lobby_call',
   'venue_access',
   'load_in',
   'line_check',
@@ -44,7 +47,6 @@ const DAY_SHEET_TIME_FIELDS = [
   'headliner_off',
   'curfew',
   'load_out',
-  'hotel_departure',
   'catering_breakfast_start',
   'catering_breakfast_end',
   'catering_lunch_start',
