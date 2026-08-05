@@ -74,9 +74,9 @@ describe('load-in and curfew have one home', () => {
     // regenerated, `select('load_in_at')` is a compile error, which is a useful
     // guard but not a runtime one. Types can be stale against the database, and
     // the database is what the crew-facing reads actually hit.
-    async function selectShowColumn(column: string) {
+    async function selectColumn(table: string, column: string) {
       const res = await fetch(
-        `${process.env.SUPABASE_TEST_URL}/rest/v1/shows?select=${column}&limit=1`,
+        `${process.env.SUPABASE_TEST_URL}/rest/v1/${table}?select=${column}&limit=1`,
         {
           headers: {
             apikey: process.env.SUPABASE_TEST_SERVICE_ROLE_KEY ?? '',
@@ -86,6 +86,8 @@ describe('load-in and curfew have one home', () => {
       )
       return { status: res.status, body: await res.json() }
     }
+
+    const selectShowColumn = (column: string) => selectColumn('shows', column)
 
     it('has dropped shows.load_in_at', async () => {
       const { status, body } = await selectShowColumn('load_in_at')
@@ -104,15 +106,17 @@ describe('load-in and curfew have one home', () => {
       expect(body.code).toBe('42703')
     })
 
-    it('keeps the row that replaced them, on day_items', async () => {
-      // The inverse case. Two of the three tests above would also pass if the
-      // whole schema had been dropped, or a table renamed, so this pins down that
-      // the survivor survived.
-      const { status } = await selectShowColumn('id')
-      expect(status).toBe(200)
-
-      expect(await storedTime('load_in')).toBeTruthy()
-      expect(await storedTime('curfew')).toBeTruthy()
+    it('answers on day_items instead', async () => {
+      // The inverse case. Both tests above would also pass if the whole schema
+      // had been dropped or a table renamed, which is a far worse migration and
+      // an identical error code, so this pins down that the survivor survived.
+      //
+      // Structural, like its siblings, and asserting nothing about the contents.
+      // This block seeds no times: the surfaces-agree block below does that, and
+      // an assertion here that needed a row would fail on an empty table for a
+      // reason that has nothing to do with what it claims to check.
+      expect((await selectShowColumn('id')).status).toBe(200)
+      expect((await selectColumn('day_items', 'kind,starts_at')).status).toBe(200)
     })
   })
 
@@ -179,6 +183,22 @@ describe('load-in and curfew have one home', () => {
 
       expect(itinerary).toContain(`Load-in: ${LOAD_IN_LOCAL}`)
       expect(itinerary).toContain(`Curfew: ${CURFEW_LOCAL}`)
+    })
+
+    it('tells the crew which day the show is, not just what time', async () => {
+      // Added after this regressed. The old template carried the date on the
+      // venue access line, because that was the one entry in a fixed nine-line
+      // list that used a date format, and removing the list removed the date
+      // with it. For one commit /itinerary answered with a venue, a list of
+      // times and no day at all, which is worse than useless to a crew member
+      // deciding whether to travel tonight or in the morning.
+      //
+      // Asserted on the day and month rather than the rendered weekday, so this
+      // does not encode a date calculation of its own and then check its own
+      // arithmetic.
+      const itinerary = await renderItinerary(fixture.personId, fixture.tourId)
+
+      expect(itinerary).toContain('14 Jun')
     })
 
     it('sends no line at all for a time the TM has not set', async () => {

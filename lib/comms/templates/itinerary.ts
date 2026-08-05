@@ -23,11 +23,23 @@ function formatTime(iso: string | null, tz: string): string {
   })
 }
 
-// formatDateTime is gone with the fixed nine-line list. Venue access was the one
-// entry that carried a date as well as a time, and it carried it because it was
-// the only day-sheet column a TM might set for the day before. An item's day is
-// its tour_date_id now, so every line in a show's running order is on that show's
-// day by construction and a date on one of them says nothing the rest do not.
+// The show's own date, for the header. `shows.date` is a plain date column, not
+// a timestamptz, so it is formatted as UTC deliberately: converting a date to a
+// timezone is what turns 15 June into 14 June for half the world.
+//
+// This used to be bolted onto the venue access line, which was the only entry in
+// the old fixed nine-line list that carried a date. Removing that list removed
+// the date with it, and for one commit /itinerary answered a crew member with a
+// venue and a list of times and no day at all. It belongs on the header: it is a
+// property of the show, not of one item on it.
+function formatShowDate(date: string): string {
+  return new Date(`${date}T00:00:00Z`).toLocaleDateString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  })
+}
 
 // How long after its own date a show stays the "active" show.
 //
@@ -132,6 +144,10 @@ export async function renderItinerary(
 
   const lines: string[] = [
     `*${show.venue_name}*`,
+    // Second, before the address. A crew member scanning this on a phone needs
+    // to know which day before they need to know the postcode, and the times
+    // below mean nothing without it.
+    formatShowDate(show.date),
     show.address ?? '',
     ``,
     // One line per item the TM has actually set, in running order, rather than a
