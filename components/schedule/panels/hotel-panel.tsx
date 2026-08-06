@@ -6,6 +6,7 @@ import { DateMoveNotice } from '@/components/schedule/date-move-notice'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import { PlacesAddressInput } from '@/components/shows/places-address-input'
 import { updateHotelStay } from '@/lib/actions/hotels'
 import type { Tables } from '@/lib/types/database'
 import { useEntityForm } from '@/hooks/use-entity-form'
@@ -29,6 +30,8 @@ export function HotelPanel({ stay }: HotelPanelProps) {
   // so React 19's post-action reset to defaultValue still behaves as CLAUDE.md
   // describes.
   const [checkInDate, setCheckInDate] = useState(stay.check_in_date ?? '')
+  // Controlled so the Places widget can write the selected address back in.
+  const [address, setAddress] = useState(stay.address ?? '')
 
   const { submit, pending, error, saved } = useEntityForm({
     action: (fd) => {
@@ -56,7 +59,12 @@ export function HotelPanel({ stay }: HotelPanelProps) {
 
         <div className="space-y-1">
           <Label className="text-xs">Address</Label>
-          <Input name="address" defaultValue={stay.address ?? ''} className="h-7 text-xs" />
+          <PlacesAddressInput
+            name="address"
+            value={address}
+            onChange={setAddress}
+            className="h-7 text-xs"
+          />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

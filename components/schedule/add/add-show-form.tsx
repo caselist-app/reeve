@@ -1,8 +1,10 @@
 'use client'
 
+import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import { PlacesAddressInput } from '@/components/shows/places-address-input'
 import { createShow } from '@/lib/actions/shows'
 import { useEntityForm } from '@/hooks/use-entity-form'
 import { readForm } from '@/lib/forms/read-form'
@@ -15,6 +17,7 @@ interface AddShowFormProps {
 }
 
 export function AddShowForm({ tourId, date, onBack, onSuccess }: AddShowFormProps) {
+  const [address, setAddress] = useState('')
   const { submit, pending, error } = useEntityForm({
     refreshOnSuccess: true,
     onSuccess,
@@ -35,7 +38,13 @@ export function AddShowForm({ tourId, date, onBack, onSuccess }: AddShowFormProp
       </div>
       <div className="space-y-1">
         <Label className="text-xs">Address</Label>
-        <Input name="address" placeholder="Chalk Farm Rd, London NW1 8EH" className="h-7 text-xs" />
+        <PlacesAddressInput
+          name="address"
+          value={address}
+          onChange={setAddress}
+          placeholder="Chalk Farm Rd, London NW1 8EH"
+          className="h-7 text-xs"
+        />
       </div>
       {/* Brief 36 step 3: no load-in or curfew here. They are day-sheet fields
           now, and this form used to default them to 10:00 and 23:00 and write

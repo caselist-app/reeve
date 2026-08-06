@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { PanelShell } from '@/components/layout/panel-shell'
 import { Input } from '@/components/ui/input'
+import { PlacesAddressInput } from '@/components/shows/places-address-input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
@@ -89,6 +90,8 @@ export function DayItemPanel({ item, tourId, timezone }: DayItemPanelProps) {
   // save and then compare every later save against the original value, offering
   // to tell crew about a change the TM already sent.
   const [savedStart, setSavedStart] = useState(() => toClock(item.starts_at, timezone))
+  // Controlled so the Places widget can write the selected location back in.
+  const [location, setLocation] = useState(item.location ?? '')
 
   async function handleDelete() {
     setDeleting(true)
@@ -186,9 +189,10 @@ export function DayItemPanel({ item, tourId, timezone }: DayItemPanelProps) {
 
         <div className="space-y-1">
           <Label className="text-xs">Location</Label>
-          <Input
+          <PlacesAddressInput
             name="location"
-            defaultValue={item.location ?? ''}
+            value={location}
+            onChange={setLocation}
             placeholder="Optional"
             className="h-7 text-xs"
           />
