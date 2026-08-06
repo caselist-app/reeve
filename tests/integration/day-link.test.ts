@@ -430,6 +430,9 @@ describe('the day link survives an edit', () => {
 
       const newDay = await tourDateFor(NEXT_DAY)
       expect(newDay).not.toBeNull()
+      // A day that exists only because a departure landed on it is a travel day,
+      // not the table's day_off default (REE-43).
+      expect(newDay?.day_type).toBe('travel')
 
       const after = await dayRecords(NEXT_DAY)
       expect(after.segments.map((s) => s.id)).toContain(created.segmentId)
