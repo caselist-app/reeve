@@ -68,10 +68,9 @@ export interface RenderedTelegram {
 }
 
 export interface NotificationDef<D> {
-  // Time-critical nudges (bus_call, lobby_call) prefer whichever real-time
-  // channel (WhatsApp or Telegram) the person has an address for, regardless
-  // of their operational-channel choice; email is used only when they have
-  // neither.
+  // Time-critical nudges (bus_call, lobby_call, flight alerts) go to the one
+  // operational channel the contact chose (WhatsApp or Telegram), skipping
+  // formal email; email is used only when that channel is unset or unreachable.
   timeCritical: boolean
   // Renderers are optional: block types are WhatsApp/Telegram-only (no
   // email() renderer), and resolveChannels drops a channel when its renderer
