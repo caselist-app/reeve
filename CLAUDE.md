@@ -50,7 +50,7 @@ RENFE                           Spanish rail
 National Rail Darwin (free)     UK rail
 Google Maps                     geocoding, venue hub resolution, drive times
 RateHawk / Hotelbeds / Expedia Rapid   hotels (search and filter only in V1)
-FlightAware AeroAPI             live flight tracking (seam in V1, alerts in V2)
+AirLabs                         live flight tracking and disruption alerts (shipped, Brief 31)
 Meta WhatsApp Cloud API         operational comms (primary)
 Twilio                          WhatsApp and SMS fallback
 ```
