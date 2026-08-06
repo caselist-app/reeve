@@ -1495,15 +1495,6 @@ export type Database = {
         }
         Returns: string
       }
-      backfill_day_items: {
-        Args: { p_tour_id?: string }
-        Returns: {
-          catering_pairs_skipped: number
-          event_ends_dropped: number
-          items_created: number
-          tour_dates_created: number
-        }[]
-      }
       create_show_with_dependents: {
         Args: { p_show_data: Json; p_tour_id: string }
         Returns: string
