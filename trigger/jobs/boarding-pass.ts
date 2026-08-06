@@ -16,9 +16,13 @@ export type BoardingPassPayload = {
   segment_id: string
 }
 
-// Sent 3 hours before departure when the TM uploads a boarding pass.
-// Dedup dimension: assignment_id. One send ever per assignment.
-const SEND_HOURS_BEFORE_DEPARTURE = 3
+// The send time (6h before departure, capped out of the small hours to the
+// evening before) is decided by boardingPassSendAt in lib/actions/transport.ts,
+// which schedules this job. Dedup dimension: assignment_id, one send per assignment.
+//
+// How long the boarding pass PDF's signed URL stays valid, measured from when
+// this job runs. Long enough for a crew member to open it well after delivery.
+const SIGNED_URL_TTL_HOURS = 6
 
 export const boardingPassJob = task({
   id: 'boarding-pass',
@@ -140,7 +144,7 @@ export const boardingPassJob = task({
       if (doc?.storage_path) {
         const { data: signed } = await admin.storage
           .from('documents')
-          .createSignedUrl(doc.storage_path, 60 * 60 * SEND_HOURS_BEFORE_DEPARTURE)
+          .createSignedUrl(doc.storage_path, 60 * 60 * SIGNED_URL_TTL_HOURS)
         signedUrl = signed?.signedUrl ?? null
       }
     }

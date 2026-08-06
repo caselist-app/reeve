@@ -10,6 +10,7 @@ import type { TablesUpdate } from '@/lib/types/database'
 import { bustTourContextCache } from '@/lib/ai/context'
 import { resolveTourDateId } from '@/lib/schedule/day-link'
 import { localDateInZone } from '@/lib/schedule/datetime'
+import { boardingPassSendAt } from '@/lib/comms/boarding-pass-timing'
 import type { DateMove } from '@/lib/schedule/date-move'
 
 // `moved` is set only when the segment actually landed on a day other than the
@@ -385,16 +386,18 @@ export async function deleteTransportSegment(segmentId: string): Promise<Transpo
 }
 
 // Called after the TM uploads a boarding pass against a transport_assignment.
-// Schedules the boarding pass send job 3 hours before the segment departs.
-// If departure is fewer than 3 hours away, triggers immediately.
+// Schedules the boarding pass send job 6 hours before the segment departs,
+// capped so a small-hours send moves to the evening before instead. See
+// boardingPassSendAt. If the computed time has passed, triggers immediately.
 export async function scheduleBoardingPassSend(assignmentId: string, tourId: string): Promise<void> {
   const user = await requireUser()
   const supabase = await createClient()
 
-  // Verify caller owns this tour before using the admin client.
+  // Verify caller owns this tour before using the admin client. Also pull the
+  // timezone: the night cap is a wall-clock rule, so it needs the tour's zone.
   const { data: tour } = await supabase
     .from('tours')
-    .select('id')
+    .select('id, timezone')
     .eq('id', tourId)
     .eq('account_id', user.id)
     .single()
@@ -420,7 +423,7 @@ export async function scheduleBoardingPassSend(assignmentId: string, tourId: str
   }
 
   const seg = assignment.transport_segments as { depart_at: string | null } | null
-  const departAt = seg?.depart_at ? new Date(seg.depart_at) : null
+  const departAt = seg?.depart_at ?? null
 
   const payload = {
     tour_id: assignment.tour_id,
@@ -435,11 +438,12 @@ export async function scheduleBoardingPassSend(assignmentId: string, tourId: str
     return
   }
 
-  const sendAt = new Date(departAt.getTime() - 3 * 60 * 60 * 1000)
+  const sendAt = boardingPassSendAt(departAt, tour.timezone ?? 'UTC')
   const now = new Date()
 
   if (sendAt <= now) {
-    // Fewer than 3 hours to departure: send now.
+    // Computed send time has already passed (departure under 6h away, or the
+    // capped evening-before is behind us): send now.
     await boardingPassJob.trigger(payload)
   } else {
     await boardingPassJob.trigger(payload, { delay: sendAt })

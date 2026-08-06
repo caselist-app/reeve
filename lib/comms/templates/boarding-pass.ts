@@ -1,5 +1,5 @@
 // Zero-AI boarding pass message. Renders directly from structured data.
-// Sent 3 hours before departure via WhatsApp with the PDF attached (template)
+// Sent 6 hours before departure via WhatsApp with the PDF attached (template)
 // and via email with the PDF as an attachment.
 
 export type BoardingPassData = {
