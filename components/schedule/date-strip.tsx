@@ -5,6 +5,7 @@ import { useEffect, useRef } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { CalendarPlus } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { datePrefetch, MOBILE_PREFETCH_WINDOW } from '@/lib/schedule/prefetch'
 import { AddDayButton } from '@/components/schedule/add-day-button'
 
 interface TourDate {
@@ -48,6 +49,7 @@ function chipDate(dateStr: string): { day: string; month: string } {
 export function DateStrip({ tourId, dates, defaultDate }: DateStripProps) {
   const selectedDate = useSearchParams().get('date') ?? defaultDate
   const selectedRef = useRef<HTMLAnchorElement>(null)
+  const selectedIndex = dates.findIndex((d) => d.date === selectedDate)
 
   useEffect(() => {
     selectedRef.current?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' })
@@ -56,7 +58,7 @@ export function DateStrip({ tourId, dates, defaultDate }: DateStripProps) {
   return (
     <div className="lg:hidden flex shrink-0 items-center border-b border-border">
       <div className="flex flex-1 overflow-x-auto gap-1.5 px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-        {dates.map((d) => {
+        {dates.map((d, i) => {
           const isSelected = d.date === selectedDate
           const chip = chipClass(d.day_type)
           const { day, month } = chipDate(d.date)
@@ -65,6 +67,7 @@ export function DateStrip({ tourId, dates, defaultDate }: DateStripProps) {
             <Link
               key={d.id}
               href={`/tours/${tourId}/schedule?date=${d.date}`}
+              prefetch={datePrefetch(i, selectedIndex, MOBILE_PREFETCH_WINDOW)}
               ref={isSelected ? selectedRef : undefined}
               className={cn(
                 'flex shrink-0 flex-col items-center justify-center rounded-md px-2 py-1.5 transition-colors min-w-[2.5rem]',
