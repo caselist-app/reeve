@@ -56,7 +56,7 @@ Commit all three together (migration, code using it, regenerated types) in one c
   - person has person_type (artist | crew | management | support). Role-specific fields go in extensions like crew_detail (per_diem_rate, daily_wage_rate). Do NOT duplicate dietary or allergies onto riders, read them from person.
   - transport_segment is ONE table with mode (bus | truck | flight | rail | ground | hire). People attach via transport_assignment (many-to-many) which holds per-person detail (seat, PNR, boarding pass). The planner writes status = 'planned'. The TM promotes to 'booked' after booking off-platform and pasting the reference. Do NOT auto-set booked.
   - hotel_stay plus room_assignment (per-person, room_tier of artist | crew).
-  - show has show_advance (per-department status), day_sheet, promoter, settlement, pass_sheet, guest list and vendors hanging off it.
+  - show has show_advance (per-department status), promoter, settlement, pass_sheet, guest list and vendors hanging off it. Its times are day_items rows, which hang off the day (tour_date_id, not null) and reference the show (show_id, nullable), so a day can hold items with no show. day_sheet is gone.
 - document_share is the read-receipt ledger (sent, opened, acknowledged) and drives advance status automatically. Append-mostly: do not delete share rows.
 - daily_wage_rate and per_diem_rate are operational (settlement and per diem), in scope early. Hotel nightly rates and truck hire rates are financial-planning fields, lower priority.
 

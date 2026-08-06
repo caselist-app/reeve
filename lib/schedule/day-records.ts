@@ -1,7 +1,6 @@
 import type { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/lib/types/database'
-import { localDayWindowUtc } from '@/lib/schedule/datetime'
-import { addDays } from '@/lib/schedule/day-sheet-times'
+import { addDays, localDayWindowUtc } from '@/lib/schedule/datetime'
 import { fetchDayItems, type DayItem } from '@/lib/schedule/day-items'
 
 // Single source of truth for a schedule day's records. The day view used to
@@ -9,13 +8,13 @@ import { fetchDayItems, type DayItem } from '@/lib/schedule/day-items'
 // the timeline for display, the info panel for the show). It is now fetched
 // once here and passed down as props.
 //
-// Brief 42, REE-17. A day's times are rows in day_items now, not twenty columns
-// on a day_sheets row plus a separate day_events fetch. Two queries became one,
-// and the show stopped being the thing a time hangs off.
+// Brief 42, REE-17. A day's times are rows in day_items now, not twenty fixed
+// columns on one show row plus a separate freeform-events fetch. Two queries
+// became one, and the show stopped being the thing a time hangs off.
 
 type Client = Awaited<ReturnType<typeof createClient>>
 
-// catering_type is on shows since REE-19: it is the one column on day_sheets
+// catering_type is on shows since REE-19: it is the one old day-sheet column
 // that was not a time and had no row to become.
 export type DayShow = Pick<
   Tables<'shows'>,
@@ -59,8 +58,9 @@ export type DayHotelItem = DayHotel & { isCheckout: boolean }
 //
 // DAY ITEMS ARE NOT IN THE TAIL, AND THAT IS THE BRIEF'S STRUCTURAL WIN.
 //
-// day_events had no tour_date_id: it was placed by `date` alone, so a 01:30
-// after-show party stored on the 15th rendered on the 15th, and the tail existed
+// The old freeform events had no tour_date_id: they were placed by `date` alone,
+// so a 01:30 after-show party stored on the 15th rendered on the 15th, and the
+// tail existed
 // to put it back under the 14th where the TM had been working. day_items has the
 // day link and the instant as separate facts, so a curfew a TM sets on the 14th
 // has tour_date_id pointing at the 14th and starts_at falling on the 15th. It
@@ -178,10 +178,10 @@ export async function fetchDayRecords(
   ] = await Promise.all([
     supabase.from('shows').select(SHOW_SELECT).eq('tour_id', tourId).eq('tour_date_id', tourDateId),
 
-    // The day's times, in one read of one table. This replaces the day_sheets
-    // embed above and the separate day_events fetch that used to sit below, and
-    // it is the point of the brief: a load-in, a second soundcheck and a press
-    // call are the same kind of thing now.
+    // The day's times, in one read of one table. This replaces the old day-sheet
+    // embed above and the separate freeform-events fetch that used to sit below,
+    // and it is the point of the brief: a load-in, a second soundcheck and a
+    // press call are the same kind of thing now.
     fetchDayItems(supabase, { tourId, tourDateId }),
 
     // Linked segments are date-guarded too, but in JS below rather than here.

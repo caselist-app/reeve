@@ -1,14 +1,12 @@
 import { dayItemKind, DAY_ITEM_KIND_NAMES } from '@/lib/schedule/day-item-kinds'
-import { addDays } from '@/lib/schedule/day-sheet-times'
-import { wallClockToUtc } from '@/lib/schedule/datetime'
+import { addDays, wallClockToUtc } from '@/lib/schedule/datetime'
 
 // Which calendar day each day item's time actually falls on, for rows rather
 // than columns.
 //
-// This replaces resolveDayOffsets in lib/schedule/day-sheet-times.ts. Both exist
-// for now: the write path still goes through day_sheets until Brief 42 step 3,
-// and deleting the old one before then would break editing a load-in. The old
-// file goes with day_sheets.
+// This is the roll-over for day items. It replaced an earlier column-based
+// version that walked a fixed field list; that version and the table it read
+// are gone (REE-23), and this is the only roll-over now.
 //
 // THE RULE IS UNCHANGED AND IS NOT BEING REOPENED. It is Brief 40's, and it is
 // correct: times that cannot be after midnight sit on the show's own date

@@ -17,14 +17,15 @@ interface AddEventFormProps {
   onSuccess: () => void
 }
 
-// Adds a custom item to a day. Brief 42 repointed this off day_events.
+// Adds a custom item to a day. Brief 42 repointed this off the old freeform
+// events table.
 //
 // TWO THINGS CHANGED AND BOTH ARE DELIBERATE.
 //
-// It writes a day_items row of kind 'other' rather than a day_events row. It had
-// to move in the same commit the timeline repointed, or a TM would add an event,
-// see it accepted, and watch it never appear, because day_events is a table
-// nothing reads any more. That is the exact silent-failure shape this brief
+// It writes a day_items row of kind 'other' rather than a freeform-event row. It
+// had to move in the same commit the timeline repointed, or a TM would add an
+// event, see it accepted, and watch it never appear, because the old table was
+// no longer read by anything. That is the exact silent-failure shape this brief
 // exists to remove, so it does not get to ship on the way to removing it.
 //
 // The times are HH:MM rather than datetime-local. An item's day is its

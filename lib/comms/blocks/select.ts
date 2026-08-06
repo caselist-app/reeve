@@ -9,7 +9,7 @@
 // are flagged for future work (rehearsal in particular needs schema Reeve does
 // not have yet: session structure, lobby call, pack-down).
 
-// The four day_sheets columns the show-info block reads.
+// The four show-day times the show-info block reads.
 export type ShowInfoInput = {
   load_in: string | null
   soundcheck: string | null
@@ -85,7 +85,7 @@ export type DayBlockInput = ShowInfoInput &
 // Which block types fire today, in send order.
 // 'opener' is only included when at least one other block fires.
 // The caller supplies the resolved onward travel leg separately because it
-// requires a transport_assignments query (not a day_sheets column).
+// requires a transport_assignments query (not a day item).
 export type BlockType = 'opener' | 'show_information' | 'catering' | 'wrap'
 
 export function resolveDayBlocks(

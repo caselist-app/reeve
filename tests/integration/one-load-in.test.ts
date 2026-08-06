@@ -7,16 +7,16 @@ import { fetchDayRecords } from '@/lib/schedule/day-records'
 import { renderItinerary } from '@/lib/comms/templates/itinerary'
 import { assembleTourContext } from '@/lib/ai/context'
 
-// Brief 36 step 3. shows.load_in_at and day_sheets.load_in both meant "when is
+// Brief 36 step 3. A load-in once lived in two columns that both meant "when is
 // load-in", written by two different tabs of the same page, with nothing syncing
 // them. The split in the consumers is the dangerous part: the planner's
 // feasibility ranking, the AI tour context, broadcast change alerts and the
 // /itinerary reply sent to crew all read the show column, while the timeline the
-// TM looks at read the day sheet.
+// TM looks at read the other one.
 //
 // So a crew member could be sent a load-in time the TM could not see anywhere on
-// their schedule. Matt's call, 2026-08-04: a show has times, the day sheet is
-// those times, everything else feeds off it.
+// their schedule. Matt's call, 2026-08-04: a show has times, the day is those
+// times, everything else feeds off them.
 //
 // This file is the acceptance criterion written as a test rather than as a manual
 // check nobody will repeat. It has two halves and both are needed:
@@ -54,9 +54,9 @@ describe('load-in and curfew have one home', () => {
   // timestamp, so the test says "they agree" rather than encoding a timezone
   // calculation of its own and then checking its own arithmetic.
   //
-  // Brief 42 moved the home from a day_sheets column to a day_items row. The
-  // question this file asks is unchanged: is there exactly one, and does every
-  // surface read it.
+  // Brief 42 moved the home from a fixed column to a day_items row. The question
+  // this file asks is unchanged: is there exactly one, and does every surface
+  // read it.
   async function storedTime(kind: string) {
     const { data, error } = await testDb
       .from('day_items')
@@ -213,7 +213,7 @@ describe('load-in and curfew have one home', () => {
 
     it('still finds the show on its own show day, so the crew are told about tonight', async () => {
       // The active-show query used to key off shows.curfew_at as an absolute
-      // instant. day_sheets.curfew is pinned to the show's own date, so
+      // instant. The old day-sheet curfew was pinned to the show's own date, so
       // repointing that filter at it would have made a show stop being active at
       // its own curfew rather than at the end of the night. This asserts the show
       // is still selected while it is on.

@@ -5,38 +5,24 @@ import {
   dayItemKind,
   dayItemLabel,
 } from '@/lib/schedule/day-item-kinds'
-import { DAYTIME_FIELDS, EVENING_FIELDS } from '@/lib/schedule/day-sheet-times'
 
 // Brief 42 step 2. The kind list is the single source of truth for what can be
 // on a day, so the things that make it correct are not visible by reading it.
 // Two of them in particular:
 //
-//   1. The ORDER of the crossesMidnight kinds is load bearing. resolveDayOffsets
-//      walks them in sequence and treats the clock going backwards as evidence
-//      of midnight. Reordering them looks cosmetic and silently breaks Brief 40.
-//   2. crossesMidnight has to agree with DAYTIME_FIELDS and EVENING_FIELDS, which
-//      were the source of truth before this file existed. If the two disagree,
-//      one of them is wrong and a curfew lands on the wrong morning.
-//
-// The database check constraint is the third thing that has to agree, and that
-// one is checked by scripts/check-conventions.mjs rule 10 rather than here,
-// because it needs to read the migration.
-
-// Maps a day_sheets column name onto the kind it became. The three catering
-// pairs collapse two columns each into one kind, which is where twenty columns
-// become seventeen.
-function kindForColumn(column: string): string {
-  if (column.startsWith('catering_breakfast')) return 'catering_breakfast'
-  if (column.startsWith('catering_lunch')) return 'catering_lunch'
-  if (column.startsWith('catering_dinner')) return 'catering_dinner'
-  return column
-}
+//   1. The ORDER of the crossesMidnight kinds is load bearing. The roll-over in
+//      resolveItemDayOffsets walks them in sequence and treats the clock going
+//      backwards as evidence of midnight. Reordering them looks cosmetic and
+//      silently breaks Brief 40.
+//   2. The check constraint on day_items.kind has to hold exactly this set. That
+//      one is checked by scripts/check-conventions.mjs rule 10 rather than here,
+//      because it needs to read the migration.
 
 describe('the day item kind list', () => {
   it('holds the eighteen kinds and nothing else', () => {
-    // The seventeen that existed as day_sheets columns, plus 'other'. Written
-    // out rather than counted, so adding a speculative kind fails here and has
-    // to be argued for rather than slipped in.
+    // The seventeen distinct times a day used to carry as fixed columns, plus
+    // 'other'. Written out rather than counted, so adding a speculative kind
+    // fails here and has to be argued for rather than slipped in.
     expect(new Set(DAY_ITEM_KIND_NAMES)).toEqual(
       new Set([
         'lobby_call',
@@ -67,8 +53,8 @@ describe('the day item kind list', () => {
   })
 
   it('keeps the crossing kinds in the order they occur', () => {
-    // The sequence resolveDayOffsets walks. A support act finishes before the
-    // changeover, which finishes before the headliner goes on. This is the
+    // The sequence resolveItemDayOffsets walks. A support act finishes before
+    // the changeover, which finishes before the headliner goes on. This is the
     // assertion that makes reordering the array a failing test rather than a
     // silent bug.
     const crossing = DAY_ITEM_KINDS.filter((k) => k.crossesMidnight).map((k) => k.kind)
@@ -81,27 +67,6 @@ describe('the day item kind list', () => {
       'curfew',
       'load_out',
     ])
-  })
-
-  it('agrees with EVENING_FIELDS about what can cross midnight', () => {
-    // EVENING_FIELDS was the source of truth before this file. Same set, same
-    // order, so Brief 40's rule survives the move from columns to rows.
-    const crossing = DAY_ITEM_KINDS.filter((k) => k.crossesMidnight).map((k) => k.kind)
-    expect(crossing).toEqual([...EVENING_FIELDS])
-  })
-
-  it('agrees with DAYTIME_FIELDS about what cannot', () => {
-    // Every daytime column maps to a kind that does not cross. The guard on the
-    // count matters: a mapping that silently returned nothing would make this
-    // pass while checking not one field.
-    const daytimeKinds = new Set(DAYTIME_FIELDS.map(kindForColumn))
-    expect(daytimeKinds.size).toBe(11)
-
-    for (const kind of daytimeKinds) {
-      const definition = dayItemKind(kind)
-      if (!definition) throw new Error(`${kind} came from DAYTIME_FIELDS but is not a known kind`)
-      expect(definition.crossesMidnight).toBe(false)
-    }
   })
 
   it('surfaces an end time in comms for catering and nothing else', () => {

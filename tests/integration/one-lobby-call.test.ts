@@ -6,28 +6,20 @@ import { fetchDayRecords } from '@/lib/schedule/day-records'
 import { assembleTourContext } from '@/lib/ai/context'
 import { localDateInZone, localTimeInZone } from '@/lib/schedule/datetime'
 
-// Brief 36 Part 3, decision 3. day_sheets held two columns for one event.
-// lobby_call_at was read by the day timeline and written by nothing, so it was
-// always null and its card never rendered. hotel_departure was fully wired and
-// held the same fact. Matt's call, 2026-08-04: lobby call is the term, and the
-// column gets renamed rather than the input relabelled.
+// Brief 36 Part 3, decision 3, then Brief 42. A lobby call was once two columns
+// for one event (a written-but-unread one and a wired one holding the same
+// fact), collapsed to a single column and then, in Brief 42, moved off columns
+// entirely into a day_items row. REE-23 dropped the old table for good.
 //
-// This file exists because tsc cannot check the thing most likely to break in a
-// rename. Every typed reference is a compile error if it is missed, but the two
-// PostgREST select strings (SHOW_SELECT in lib/schedule/day-records.ts, and the
-// day_sheets embed in lib/ai/context.ts) are plain text. A missed rename in
-// either one fails at runtime, on the day view and in the crew Q&A context
-// respectively, and nothing before this test would have said so.
+// This file exists because tsc cannot check the thing most likely to break when
+// a store moves: every typed reference is a compile error if it is missed, but a
+// day view that reads one place while comms read another agrees with the
+// compiler and still tells the crew a different time from the TM. So it sets the
+// lobby call once, through the one writer, and asks each surface separately.
 //
-// Two halves, as in one-load-in.test.ts:
-//
-//   1. There is nowhere else to put a lobby call.
-//   2. Every surface reads the one that survives, under its new name.
-//
-// The first half arrived a commit later than the second, because the rename
-// shipped as an add-and-copy followed by a drop. While hotel_departure still
-// existed as an unread copy, asserting it was gone would have been a test that
-// had to be wrong for a while.
+// That the old homes are gone rather than merely unread is covered structurally
+// now, by tests/unit/no-retired-tables.test.ts, which is why this file no longer
+// pokes the dropped relation directly.
 
 const DATE = '2030-06-14'
 const TIMEZONE = 'Europe/London'
@@ -44,11 +36,9 @@ describe('the lobby call has one home and one name', () => {
     await destroyFixture(fixture)
   })
 
-  // Brief 42 moved the home again, from a day_sheets column to a day_items row.
-  // The question is unchanged and so is the reason this file exists: the two
-  // untyped PostgREST select strings are gone now, but the surfaces still have to
-  // agree, and a day view that reads one table while comms read another is the
-  // same failure wearing different clothes.
+  // The one place a lobby call is stored now: a day_items row keyed by show and
+  // kind. Every surface below is checked against this, so the test says "they
+  // agree" rather than encoding a second copy of the answer.
   async function storedTime(kind: string) {
     const { data, error } = await testDb
       .from('day_items')
@@ -59,46 +49,6 @@ describe('the lobby call has one home and one name', () => {
     if (error) throw new Error(`could not read the ${kind} item: ${error.message}`)
     return data.starts_at
   }
-
-  describe('there is nowhere else to put one', () => {
-    async function selectDaySheetColumn(column: string) {
-      const res = await fetch(
-        `${process.env.SUPABASE_TEST_URL}/rest/v1/day_sheets?select=${column}&limit=1`,
-        {
-          headers: {
-            apikey: process.env.SUPABASE_TEST_SERVICE_ROLE_KEY ?? '',
-            Authorization: `Bearer ${process.env.SUPABASE_TEST_SERVICE_ROLE_KEY ?? ''}`,
-          },
-        },
-      )
-      return { status: res.status, body: await res.json() }
-    }
-
-    it('has dropped day_sheets.hotel_departure', async () => {
-      const { status, body } = await selectDaySheetColumn('hotel_departure')
-
-      // 42703 is Postgres for undefined_column. Asserted on the code rather
-      // than on "an error happened", so a 400 for an unrelated reason cannot
-      // let this pass while the column is still there.
-      expect(status).toBe(400)
-      expect(body.code).toBe('42703')
-    })
-
-    it('has dropped day_sheets.lobby_call_at', async () => {
-      const { status, body } = await selectDaySheetColumn('lobby_call_at')
-
-      expect(status).toBe(400)
-      expect(body.code).toBe('42703')
-    })
-
-    it('answers to lobby_call instead', async () => {
-      // The inverse case. Both tests above would also pass if day_sheets had
-      // been dropped or renamed outright, which is a far worse migration and an
-      // identical error code.
-      const { status } = await selectDaySheetColumn('lobby_call')
-      expect(status).toBe(200)
-    })
-  })
 
   describe('every surface reads the one that survives', () => {
     beforeEach(async () => {
@@ -145,18 +95,12 @@ describe('the lobby call has one home and one name', () => {
       if (!lobbyCall) throw new Error('the day is missing its lobby call')
 
       expect(lobbyCall.starts_at).toBe(await storedTime('lobby_call'))
-
-      // Nothing the day view is handed still claims to hold a day sheet. The
-      // embed and its two old column names are gone from SHOW_SELECT together.
-      const show = records.shows.find((s) => s.id === fixture.showId)
-      if (!show) throw new Error('the show is not on its own day')
-      expect(Object.keys(show)).not.toContain('day_sheets')
     })
 
     it('gives the AI the same lobby call the timeline got', async () => {
       // The AI context runs on Trigger.dev, so a miss here is invisible on Vercel
-      // and reaches a crew member. It had the second of the two untyped select
-      // strings; both are gone, and this is what keeps them gone.
+      // and reaches a crew member. It reads the lobby call from the same day
+      // items the timeline does, and this is what keeps the two in step.
       const context = await assembleTourContext(fixture.tourId)
       const show = context.shows.find((s) => s.id === fixture.showId)
       if (!show) throw new Error('the show is missing from the AI context')
@@ -186,9 +130,9 @@ describe('the lobby call has one home and one name', () => {
 
     it('keeps the rolled curfew on the day it was set on', async () => {
       // The structural claim, end to end. The instant is on the 15th and the day
-      // link is the 14th, so the timeline shows it under the show it ends without
-      // the late-night tail that day_events needed. A column could not hold both
-      // facts, which is why the tail existed at all.
+      // link is the 14th, so the timeline shows it under the show it ends. A day
+      // item carries both facts on one row, which is why it needs no late-night
+      // tail to place a small-hours curfew.
       const records = await fetchDayRecords(testDb, {
         tourId: fixture.tourId,
         tourDateId: fixture.tourDateId,

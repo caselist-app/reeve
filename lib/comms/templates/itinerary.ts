@@ -44,11 +44,10 @@ function formatShowDate(date: string): string {
 // How long after its own date a show stays the "active" show.
 //
 // This replaces a filter on shows.curfew_at, which was an absolute instant the
-// Venue tab's datetime-local could put at 03:00 the following morning. Under
-// Brief 36 step 3 the surviving column is day_sheets.curfew, and updateDaySheet
-// pins every day-sheet time to the show's own date, so a 02:00 curfew stores as
-// 02:00 ON the show day, twenty hours before the show. Filtering on that would
-// have made a show stop being active before it started.
+// Venue tab's datetime-local could put at 03:00 the following morning. The old
+// day-sheet curfew was pinned to the show's own date, so a 02:00 curfew stored
+// as 02:00 ON the show day, twenty hours before the show. Filtering on that
+// would have made a show stop being active before it started.
 //
 // A fixed window is also better than the column was: it does not depend on the TM
 // having entered a curfew at all, and a crew member messaging at 01:00 wants

@@ -20,13 +20,13 @@ import type { ContactForm } from '@/lib/validators/contact'
 // null stops being written, because then a TM could never clear a field.
 //
 // The updateDaySheet block that used to sit here is gone with the action, in the
-// commit that retired day_sheets as a write target. What replaced it is below,
-// and it is not the same test with new column names. A day sheet was one wide
-// row, so a partial save was a subset of twenty columns. An item is a narrow
-// row, so the equivalent mistake is a panel that edits a location nulling the
-// time, or a form that edits a time nulling the notes. The surface is smaller
-// and the consequence is the same: a TM edits one thing and loses another,
-// silently, and finds out on a day sheet that has already gone out over
+// commit that retired the old day-sheet table as a write target. What replaced
+// it is below, and it is not the same test with new column names. A day sheet
+// was one wide row, so a partial save was a subset of twenty columns. An item is
+// a narrow row, so the equivalent mistake is a panel that edits a location
+// nulling the time, or a form that edits a time nulling the notes. The surface
+// is smaller and the consequence is the same: a TM edits one thing and loses
+// another, silently, and finds out on a day sheet that has already gone out over
 // WhatsApp.
 //
 // Both directions for every field, because a fix that only skips undefined makes

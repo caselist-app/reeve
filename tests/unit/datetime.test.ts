@@ -6,6 +6,8 @@ import {
   localDateInZone,
   localTimeInZone,
   localDayWindowUtc,
+  addDays,
+  daysBetween,
 } from '@/lib/schedule/datetime'
 
 // These are pure, so they are unit tests: they run with `pnpm test` and need no
@@ -110,5 +112,62 @@ describe('toDatetimeLocal and fromDatetimeLocal round trip', () => {
   it('treats an empty input as a cleared value rather than an instant', () => {
     expect(fromDatetimeLocal('', 'Europe/London')).toBeNull()
     expect(fromDatetimeLocal(null, 'Europe/London')).toBeNull()
+  })
+})
+
+// Plain calendar arithmetic, no timezone. These moved here from the retired
+// day-sheet-times module (REE-23): the day item roll-over still needs them, and
+// they belong beside the other date helpers rather than in a file named after a
+// table that no longer exists.
+describe('addDays', () => {
+  it('returns the same date for offset zero', () => {
+    expect(addDays('2026-06-14', 0)).toBe('2026-06-14')
+  })
+
+  it('advances one day', () => {
+    expect(addDays('2026-06-14', 1)).toBe('2026-06-15')
+  })
+
+  it('crosses a month boundary', () => {
+    expect(addDays('2026-06-30', 1)).toBe('2026-07-01')
+  })
+
+  it('crosses a year boundary', () => {
+    expect(addDays('2026-12-31', 1)).toBe('2027-01-01')
+  })
+
+  it('handles a leap day', () => {
+    expect(addDays('2028-02-28', 1)).toBe('2028-02-29')
+  })
+
+  it('is unaffected by a DST transition, because it is plain calendar arithmetic', () => {
+    // 29 March 2026 is the UK spring forward. The day after 28 March is 29
+    // March regardless of what the clocks did, which is exactly why this is
+    // done on the date and the timezone is applied afterwards.
+    expect(addDays('2026-03-28', 1)).toBe('2026-03-29')
+  })
+})
+
+describe('daysBetween', () => {
+  it('counts whole days forward', () => {
+    expect(daysBetween('2026-06-14', '2026-06-15')).toBe(1)
+  })
+
+  it('is zero for the same date', () => {
+    expect(daysBetween('2026-06-14', '2026-06-14')).toBe(0)
+  })
+
+  it('is negative when the second date is earlier', () => {
+    expect(daysBetween('2026-06-15', '2026-06-14')).toBe(-1)
+  })
+
+  it('counts across a month boundary', () => {
+    expect(daysBetween('2026-06-30', '2026-07-02')).toBe(2)
+  })
+
+  it('is the inverse of addDays', () => {
+    // The pair the day item move relies on: shift a date forward, and the gap
+    // back to the original is the same offset.
+    expect(daysBetween('2026-06-14', addDays('2026-06-14', 10))).toBe(10)
   })
 })

@@ -108,3 +108,31 @@ export function localDayWindowUtc(date: string, tz: string): { start: string; en
     end: wallClockToUtc(`${nextDate}T00:00`, tz),
   }
 }
+
+/**
+ * `date` shifted forward by `offset` days, as YYYY-MM-DD.
+ *
+ * Deliberately UTC arithmetic on a plain calendar date, with no timezone
+ * involved: this is "the day after 14 June", which is 15 June everywhere. The
+ * tour timezone is applied afterwards, when the caller combines this date with
+ * an HH:MM to produce an instant. Doing it in a zone here would be the
+ * timestamptz-day trap in reverse.
+ */
+export function addDays(date: string, offset: number): string {
+  if (offset === 0) return date
+  return new Date(new Date(`${date}T00:00:00Z`).getTime() + offset * 86_400_000)
+    .toISOString()
+    .slice(0, 10)
+}
+
+/**
+ * Whole days from `from` to `to`, both YYYY-MM-DD. Negative if `to` is earlier.
+ *
+ * Same reasoning as addDays: plain calendar arithmetic in UTC, no timezone.
+ * Used to read back the offset a stored time already carries when a day item
+ * moves date, so the roll-over survives the move instead of being recomputed.
+ */
+export function daysBetween(from: string, to: string): number {
+  const ms = new Date(`${to}T00:00:00Z`).getTime() - new Date(`${from}T00:00:00Z`).getTime()
+  return Math.round(ms / 86_400_000)
+}

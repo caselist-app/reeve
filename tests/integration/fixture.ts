@@ -1,9 +1,11 @@
 import { testDb, setTestUserId } from './test-db'
 
-// One tour, one show day, one show, one empty day sheet. Built by direct insert
-// rather than through create_show_with_dependents, because that RPC gates on
-// owns_tour() and therefore on auth.uid(), which a service-role client does not
-// have. The shape it produces is the same.
+// One tour, one show day, one show. Built by direct insert rather than through
+// create_show_with_dependents, because that RPC gates on owns_tour() and
+// therefore on auth.uid(), which a service-role client does not have. The shape
+// it produces is the same: since REE-23 the RPC seeds no side rows, so a show is
+// just its shows row and its show_advance row, and a day's times are day_items a
+// test adds when it needs them.
 //
 // Every fixture gets its own account and tour, so one test cannot see another's
 // rows and a failure points at one test rather than at ordering.
@@ -85,13 +87,6 @@ export async function createFixture(
     .select('id')
     .single()
   if (showError || !show) throw new Error(`fixture: could not create show: ${showError?.message}`)
-
-  // create_show_with_dependents always inserts an empty day_sheets row, so the
-  // fixture matches production: the row exists with every time column null.
-  const { error: daySheetError } = await testDb
-    .from('day_sheets')
-    .insert({ show_id: show.id, tour_id: tour.id })
-  if (daySheetError) throw new Error(`fixture: could not create day_sheet: ${daySheetError.message}`)
 
   // A crew member on this tour. Needed so a cross-tour test can pass a *valid*
   // id for every argument except the one under test: without that, a test can
@@ -178,7 +173,7 @@ export async function createE2eSeed(): Promise<E2eSeed> {
   const a = await createFixture({ tourName: E2E_TOUR_A_NAME, artistName: 'Seeded Artist' })
   const b = await createFixture({ tourName: E2E_TOUR_B_NAME, artistName: 'Other Artist' })
 
-  // A day_items row since Brief 42, not a day_sheets column. Inserted directly
+  // A day_items row since Brief 42, not a fixed day-sheet column. Inserted directly
   // rather than through createDayItem because this runs in Playwright's global
   // setup, which is plain Node with no mocked requireUser, and a server action
   // needs one. The instant is written straight in for the same reason: the

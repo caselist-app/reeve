@@ -4,11 +4,11 @@ import { createFixture, destroyFixture, type Fixture } from './fixture'
 import { updateDayNotes } from '@/lib/actions/tour-dates'
 import { fetchDayRecords } from '@/lib/schedule/day-records'
 
-// Brief 36 Part 4. A day's notes lived in three places: shows.notes, a
-// day_events row with the sentinel title __day_notes__, and tour_dates.notes.
-// The day info panel wrote the first on a show day and the second on every
-// other day. Add/Edit Day wrote the third, and the Dates sidebar and the
-// press-day header read it.
+// Brief 36 Part 4. A day's notes lived in three places: shows.notes, a freeform
+// row with the sentinel title __day_notes__ on the old day-events table, and
+// tour_dates.notes. The day info panel wrote the first on a show day and the
+// sentinel on every other day. Add/Edit Day wrote the third, and the Dates
+// sidebar and the press-day header read it.
 //
 // So a TM typed a note into the day info panel and it never appeared in the
 // sidebar, and typed one into Add Day and it never appeared in the panel. Two
@@ -53,16 +53,6 @@ describe('a day has one notes field', () => {
       .maybeSingle()
     if (error) throw new Error(`could not read the tour date: ${error.message}`)
     return data
-  }
-
-  async function sentinelRowCount() {
-    const { count, error } = await testDb
-      .from('day_events')
-      .select('id', { count: 'exact', head: true })
-      .eq('tour_id', fixture.tourId)
-      .eq('title', '__day_notes__')
-    if (error) throw new Error(`could not count sentinel rows: ${error.message}`)
-    return count ?? 0
   }
 
   describe('there is nowhere else to put one', () => {
@@ -131,9 +121,10 @@ describe('a day has one notes field', () => {
     })
 
     it('puts a note typed on a day with no show in the same column', async () => {
-      // This one used to go to a __day_notes__ row in day_events, a third
-      // place, so the two halves of the same textarea wrote to two tables
-      // depending on whether the day happened to have a show on it.
+      // This one used to go to a __day_notes__ sentinel row on the old
+      // day-events table, a third place, so the two halves of the same textarea
+      // wrote to two tables depending on whether the day happened to have a show
+      // on it.
       const { error } = await testDb
         .from('tour_dates')
         .insert({ tour_id: fixture.tourId, date: DAY_OFF_DATE, day_type: 'day_off' })
@@ -146,19 +137,10 @@ describe('a day has one notes field', () => {
       expect(day?.notes).toBe('Laundry day.')
     })
 
-    it('writes no sentinel row on either kind of day', async () => {
-      // The sentinel is not just unread, it is unwritten. Leaving the writer in
-      // place would keep producing rows that the migration has already deleted
-      // and that nothing would ever show the TM again.
-      await updateDayNotes(fixture.tourId, SHOW_DATE, 'Ramp is round the back.')
-
-      await testDb
-        .from('tour_dates')
-        .insert({ tour_id: fixture.tourId, date: DAY_OFF_DATE, day_type: 'day_off' })
-      await updateDayNotes(fixture.tourId, DAY_OFF_DATE, 'Laundry day.')
-
-      expect(await sentinelRowCount()).toBe(0)
-    })
+    // A test that the writer produces no __day_notes__ sentinel row used to sit
+    // here. It read the old day-events table, which REE-23 dropped, so the
+    // guarantee is now structural: there is no table for a sentinel row to land
+    // in, and tests/unit/no-retired-tables.test.ts is what keeps it gone.
 
     it('stores null when the TM clears the note, not an empty string', async () => {
       // null is the day having no note, which is what the sidebar subtitle and

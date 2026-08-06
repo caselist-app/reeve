@@ -4,17 +4,19 @@ import {
   resolveItemInstants,
   type DayItemClock,
 } from '@/lib/schedule/day-item-times'
-import { resolveDayOffsets } from '@/lib/schedule/day-sheet-times'
 
-// Brief 42 step 2. resolveItemDayOffsets replaces resolveDayOffsets for rows.
+// Brief 42 step 2. resolveItemDayOffsets decides which day each of a day's items
+// falls on.
 //
-// The first block is every one of the old function's eleven assertions, carried
-// across unchanged in meaning. That is the point of this file: Brief 40's rule is
-// not being reopened, only the shape of the thing it reads. If one of these
-// fails, the rule has changed and that is a decision nobody took.
+// The first block is every one of the eleven assertions the earlier
+// column-based roll-over carried, ported across unchanged in meaning. That is
+// the point of this file: Brief 40's rule is not being reopened, only the shape
+// of the thing it reads. If one of these fails, the rule has changed and that is
+// a decision nobody took.
 //
-// The second block is the cases rows can produce and columns could not: two
-// items of one kind, and a catering window whose end is the latest daytime time.
+// The second block is the cases rows can produce and the old fixed columns could
+// not: two items of one kind, and a catering window whose end is the latest
+// daytime time.
 //
 // A tour day is a working period, not a calendar day. Offset 0 is the day's own
 // date, offset 1 is the morning after.
@@ -174,31 +176,6 @@ describe('resolveItemDayOffsets carries Brief 40 across unchanged', () => {
   })
 })
 
-describe('resolveItemDayOffsets agrees with the function it replaces', () => {
-  // Belt and braces on the port. The same running order through both functions
-  // has to produce the same answer, so a future edit to one that changes the
-  // rule cannot pass while the other still holds it. Removed when day_sheets
-  // goes, along with the old function.
-  const RUNNING_ORDERS: Record<string, string>[] = [
-    { load_in: '10:00', doors: '19:00', headliner_off: '23:00', curfew: '01:30' },
-    { doors: '19:00', curfew: '01:30', load_out: '03:00' },
-    { lobby_call: '05:00', load_in: '10:00', doors: '19:00', curfew: '01:30' },
-    { load_in: '06:00', doors: '10:00', support_off: '11:30', curfew: '23:00' },
-    { soundcheck: '15:00', curfew: '02:00' },
-    { curfew: '01:30' },
-    { doors: '19:00', curfew: '00:00' },
-  ]
-
-  it.each(RUNNING_ORDERS)('matches resolveDayOffsets for %o', (order) => {
-    const old = resolveDayOffsets(order)
-    const now = offsetsByKind(Object.entries(order).map(([kind, clock]) => item(kind, clock)))
-
-    // Compared as full maps rather than field by field, so an extra or missing
-    // entry fails too.
-    expect(now).toEqual(old)
-  })
-})
-
 describe('resolveItemDayOffsets handles what rows can express and columns could not', () => {
   it('gives two items of the same kind their own offsets', () => {
     // The change that makes the old signature impossible rather than awkward. A
@@ -233,8 +210,9 @@ describe('resolveItemDayOffsets handles what rows can express and columns could 
     // latest daytime time is 19:30, so the anchor is 19:30 and not 18:00.
     //
     // The assertion is 1 rather than 0, and that is the inherited behaviour
-    // rather than a choice made here: catering_dinner_end was in DAYTIME_FIELDS,
-    // so the old function anchored on 19:30 too and rolled a 19:00 curfew the
+    // rather than a choice made here: a catering end is a daytime time, so it
+    // joins the anchor, and the latest daytime time is 19:30. The old
+    // column-based roll-over anchored on 19:30 too and rolled a 19:00 curfew the
     // same way. Reading the start alone would give 0, which is why this proves
     // the end is read.
     //
@@ -283,9 +261,10 @@ describe('resolveItemDayOffsets handles what rows can express and columns could 
   })
 
   it('leaves a custom item on the day, even in the small hours', () => {
-    // 'other' has crossesMidnight false, which preserves exactly what day_events
-    // does today. The cost is named in the kind list: an after-show party typed
-    // as 1am lands at 01:00 that morning. Pinned so changing it is a decision.
+    // 'other' has crossesMidnight false, which preserves exactly what the old
+    // freeform events did. The cost is named in the kind list: an after-show
+    // party typed as 1am lands at 01:00 that morning. Pinned so changing it is a
+    // decision.
     const party = item('other', '01:00')
     const byId = resolveItemDayOffsets([item('doors', '19:00'), party])
 
