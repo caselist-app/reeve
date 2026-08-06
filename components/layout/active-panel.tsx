@@ -20,6 +20,8 @@ const DayItemPanel = dynamic(() => import('@/components/schedule/panels/day-item
 const TransportPanel = dynamic(() => import('@/components/schedule/panels/transport-panel').then((m) => m.TransportPanel), { ssr: false })
 const HotelPanel = dynamic(() => import('@/components/schedule/panels/hotel-panel').then((m) => m.HotelPanel), { ssr: false })
 const AddFlow = dynamic(() => import('@/components/schedule/add/add-flow').then((m) => m.AddFlow), { ssr: false })
+// REE-22: the typed one-line fast path, beside the AddFlow category picker.
+const DayForm = dynamic(() => import('@/components/schedule/day-form').then((m) => m.DayForm), { ssr: false })
 
 // Renders the correct panel content based on the active descriptor.
 // Mounted inside AppContent, which handles the slide-in animation and
@@ -123,6 +125,10 @@ export function ActivePanel() {
           category={panel.category}
           onBack={panel.onBack}
         />
+      )
+    case 'day-form':
+      return (
+        <DayForm tourId={panel.tourId} tourDateId={panel.tourDateId} />
       )
     default:
       return null

@@ -160,6 +160,16 @@ export type PanelDescriptor =
       category: ScheduleAddCategory
       onBack: () => void
     }
+  // REE-22: the typed fast path for a day item. One text input, a preview of
+  // what was understood, enter commits. Sits beside the add-to-day picker above,
+  // not in place of it: typing is for anything where the time is the point (a
+  // load-in, a soundcheck, a curfew), the picker is for a flight, drive, rail or
+  // hotel. It only ever writes a day_items row, never a transport or hotel one.
+  | {
+      type: 'day-form'
+      tourId: string
+      tourDateId: string
+    }
 
 // The subset of PanelDescriptor that timeline-card.tsx can open: the variants
 // that carry a stable key, used for active-state comparison instead of
