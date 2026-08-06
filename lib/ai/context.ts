@@ -134,7 +134,7 @@ export async function assembleTourContext(tour_id: string): Promise<TourContext>
       admin.from('tours').select('id, name, artists(name), territory, base_currency').eq('id', tour_id).single(),
       admin
         .from('shows')
-        // The day_sheets embed is gone. It was the second of the two untyped
+        // The old day-sheet embed is gone. It was the second of the two untyped
         // select strings that had to agree about what can be on a day, and the
         // one that runs on Trigger.dev, so a missed field here was invisible on
         // Vercel and reached a crew member. Items are fetched below instead.

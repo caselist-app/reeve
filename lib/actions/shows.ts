@@ -31,8 +31,8 @@ export type ShowActionState = { error: string | null; showId?: string; moved?: D
 // DAY_SHEET_TIME_FIELDS, localTimeToUtcIso and shiftDaySheetToDate all went with
 // updateDaySheet in Brief 42. A day's times are day_items rows, written by
 // lib/actions/day-items.ts, and a show that moves date carries them through
-// shiftDayItemsToDate. day_sheets is not written by anything any more; REE-23
-// drops it.
+// shiftDayItemsToDate. The old day-sheet table has no writer any more, and
+// REE-23 dropped it.
 
 export async function createShow(
   tourId: string,
@@ -233,7 +233,7 @@ export async function deleteShow(showId: string): Promise<ShowActionState> {
     return { error: 'Show not found.' }
   }
 
-  // show_advance and day_sheets cascade-delete from show_id.
+  // show_advance and day_items cascade-delete from show_id.
   const { error } = await supabase.from('shows').delete().eq('id', showId)
 
   if (error) {

@@ -1,13 +1,19 @@
 import type { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/lib/types/database'
-import { localDateInZone, localTimeInZone, wallClockToUtc } from '@/lib/schedule/datetime'
-import { addDays, daysBetween } from '@/lib/schedule/day-sheet-times'
+import {
+  addDays,
+  daysBetween,
+  localDateInZone,
+  localTimeInZone,
+  wallClockToUtc,
+} from '@/lib/schedule/datetime'
 
 // Reading a day's items. Brief 42 step 2.
 //
-// This is the query that replaces two things: the day_sheets embed on
-// SHOW_SELECT in lib/schedule/day-records.ts, and the separate day_events fetch
-// beside it. Both become one read of one table, which is the point of the brief.
+// This is the query that replaces two things: the old day-sheet embed on
+// SHOW_SELECT in lib/schedule/day-records.ts, and the separate freeform-events
+// fetch beside it. Both become one read of one table, which is the point of the
+// brief.
 //
 // Nothing calls this yet. The timeline and day-records repoint lands with the
 // write path in REE-18, because a day view that READS items while edits still
@@ -52,8 +58,8 @@ export interface DayItemsResult {
  * path has to maintain.
  *
  * Untimed items sort first rather than last, so they read as a to-do rail at the
- * top of the day instead of appearing after the load-out. day_events.starts_at is
- * already nullable today, so these exist.
+ * top of the day instead of appearing after the load-out. day_items.starts_at is
+ * nullable, so these exist.
  *
  * `tourDateId` null means the date is not a day of the tour, which is a real
  * state (an off-calendar date has no tour_dates row). That is not an error and

@@ -11,9 +11,9 @@ export const showSchema = z.object({
     .nullable()
     .optional(),
   capacity: z.number().int().positive().nullable().optional(),
-  // Brief 42: catering_type moved from day_sheets to shows in REE-19, because it
-  // is the one column on that table that was not a time and had no row to
-  // become. It is per-show ("who is providing catering"), so it belongs to the
+  // Brief 42: catering_type moved onto shows in REE-19, because it is the one
+  // old day-sheet column that was not a time and had no row to become. It is
+  // per-show ("who is providing catering"), so it belongs to the
   // show form, and the meal windows that used to sit beside it are catering
   // items on the day now.
   //

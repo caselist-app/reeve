@@ -234,11 +234,11 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
       </div>
 
       {/* Load-in and curfew used to sit here, writing shows.load_in_at and
-          shows.curfew_at while the Schedule tab wrote day_sheets.load_in and
-          day_sheets.curfew, with nothing syncing the two. Brief 36 step 3
-          collapsed them into the day sheet, and Brief 42 made every time a
-          day_items row, so times are added and edited on the day view timeline
-          and this form covers the show itself. */}
+          shows.curfew_at while the Schedule tab wrote the same times onto the
+          old day-sheet row, with nothing syncing the two. Brief 36 step 3
+          collapsed them together, and Brief 42 made every time a day_items row,
+          so times are added and edited on the day view timeline and this form
+          covers the show itself. */}
 
       <div className="space-y-2">
         <Label>Catering</Label>

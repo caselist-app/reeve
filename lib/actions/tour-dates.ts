@@ -159,7 +159,7 @@ export async function updateDayTitle(
 //
 // Brief 36 Part 4: there used to be three notes fields and a TM could see two
 // of them at once. The day info panel wrote shows.notes on a show day and a
-// __day_notes__ sentinel row in day_events otherwise; Add/Edit Day wrote
+// __day_notes__ sentinel freeform row otherwise; Add/Edit Day wrote
 // tour_dates.notes; the Dates sidebar and the press-day header read
 // tour_dates.notes. So a note typed into the panel never appeared in the
 // sidebar, and a note typed into Add Day never appeared in the panel, with both

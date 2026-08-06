@@ -1,13 +1,13 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/types/database'
 
-// Brief 36 step 3. shows.load_in_at and day_sheets.load_in both meant "when is
-// load-in". The Venue tab wrote the first, the Schedule tab wrote the second, and
+// Brief 36 step 3. A load-in once lived in two columns that both meant "when is
+// load-in". The Venue tab wrote one, the Schedule tab wrote the other, and
 // nothing synced them, so the planner's feasibility ranking and the timeline the
 // TM was looking at could disagree about when the crew had to be on site.
 //
-// Matt's call, 2026-08-04: a show has times, the day sheet is those times, and
-// everything else feeds off it. This is the "everything else feeds off it" part,
+// Matt's call, 2026-08-04: a show has times, the day is those times, and
+// everything else feeds off them. This is the "everything else feeds off it" part,
 // in one function, so the planner's server action and the planner page cannot
 // drift the way the two columns did. Two callers reading one column through one
 // function is the whole point; adding a third caller means calling this, not

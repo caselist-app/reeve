@@ -18,7 +18,7 @@
 //
 // So: add a kind in its chronological place, never at the end for convenience.
 //
-// The eighteen kinds are exactly the seventeen that existed as day_sheets
+// The eighteen kinds are exactly the seventeen that existed as fixed day-sheet
 // columns plus 'other'. No speculative kinds, not even press, even though press
 // is already a tour_dates.day_type. The mechanism for finding out what deserves
 // promoting is what TMs actually type into 'other' (decision 8), not a guess
@@ -36,9 +36,9 @@ export interface DayItemKind {
   // Semantic, not a colour. The render site maps it to a class, because the card
   // token and the timeline's accent classes live in components, not here.
   accent: 'show' | 'catering' | 'other'
-  // Was DAYTIME_FIELDS versus EVENING_FIELDS in lib/schedule/day-sheet-times.ts.
   // True means a time earlier than the day's latest daytime time has crossed
-  // midnight and belongs to the following morning.
+  // midnight and belongs to the following morning. resolveItemDayOffsets walks
+  // the crossing kinds in list order, so their order here is load bearing.
   crossesMidnight: boolean
   // How a bare hour resolves. 'load 2' is 14:00, 'lobby 5' is 05:00. There is no
   // group rule that gets both right, because load-in and lobby call are both
@@ -259,8 +259,9 @@ export const DAY_ITEM_KINDS: readonly DayItemKind[] = [
     aliases: [],
     accent: 'other',
     // False, and this is the one judgement in the list with no precedent to
-    // follow. day_events carries an explicit timestamp from a form today and no
-    // roll-over logic touches it, so false preserves exactly what happens now.
+    // follow. A custom item carries an explicit timestamp from a form and no
+    // roll-over logic touches it, so false preserves exactly what the old
+    // freeform events did.
     // The cost is that an after-show party typed as '1am' lands at 01:00 that
     // morning rather than the following one. The preview row shows the time
     // either way, and promoting a popular custom title to a real kind is how
