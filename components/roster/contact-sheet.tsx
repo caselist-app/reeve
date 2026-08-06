@@ -11,6 +11,7 @@ import { PanelShell } from '@/components/layout/panel-shell'
 import { Button } from '@/components/ui/button'
 import { SectionHeader } from '@/components/ui/section-header'
 import { Input } from '@/components/ui/input'
+import { PlacesAddressInput } from '@/components/shows/places-address-input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
@@ -53,6 +54,9 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
 
   const isEditing = contact !== null
   const hasTourContext = tourContext !== undefined
+
+  // Controlled so the Places city autocomplete can write the selection back in.
+  const [homeCity, setHomeCity] = useState(contact?.home_city ?? '')
 
   // Tour-context initial values come from the membership row; roster defaults
   // come from the contact.
@@ -494,11 +498,13 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
 
         <div className="space-y-2">
           <Label htmlFor={`${formId}-home_city`}>Home city</Label>
-          <Input
+          <PlacesAddressInput
             id={`${formId}-home_city`}
             name="home_city"
-            defaultValue={contact?.home_city ?? ''}
+            value={homeCity}
+            onChange={setHomeCity}
             placeholder="London"
+            types={['(cities)']}
           />
         </div>
 

@@ -8,7 +8,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { PlacesAddressInput } from '@/components/shows/places-address-input'
 import { cn } from '@/lib/utils'
 import { resolveHomeCity } from '@/lib/actions/planner'
 
@@ -122,14 +122,16 @@ export function DepartureSelector({
             <MapPin className="h-4 w-4 shrink-0 text-muted-foreground" />
             <p className="text-sm font-medium">Somewhere else</p>
           </div>
-          <Input
+          <PlacesAddressInput
+            name="departure_city"
             placeholder="Any city or airport…"
             value={customCity}
-            onChange={(e) => {
-              setCustomCity(e.target.value)
+            onChange={(value) => {
+              setCustomCity(value)
               setCustomError(null)
             }}
             onKeyDown={(e) => e.key === 'Enter' && handleCustomSubmit()}
+            types={['(cities)']}
             className="h-8 text-sm"
           />
           {customError && (

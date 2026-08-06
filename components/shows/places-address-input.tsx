@@ -38,6 +38,11 @@ interface PlacesAddressInputProps {
   onPlaceSelect?: (address: string, venueName: string | undefined) => void
   placeholder?: string
   className?: string
+  // Autocomplete result types. Defaults to street addresses and establishments.
+  // Pass ['(cities)'] for city-only results (home city, departure city).
+  types?: string[]
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void
+  onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void
 }
 
 // Loads the Google Maps Places API script once per page and attaches an
@@ -51,6 +56,9 @@ export function PlacesAddressInput({
   onPlaceSelect,
   placeholder,
   className,
+  types = ['establishment', 'geocode'],
+  onKeyDown,
+  onBlur,
 }: PlacesAddressInputProps) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
   const inputRef = useRef<HTMLInputElement>(null)
@@ -95,7 +103,7 @@ export function PlacesAddressInput({
     if (!scriptReady || !inputRef.current || !window.google) return
 
     const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
-      types: ['establishment', 'geocode'],
+      types,
       fields: ['formatted_address', 'name'],
     })
 
@@ -119,6 +127,8 @@ export function PlacesAddressInput({
         name={name}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={onKeyDown}
+        onBlur={onBlur}
         placeholder={placeholder}
         className={className}
       />
@@ -132,6 +142,8 @@ export function PlacesAddressInput({
       name={name}
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      onKeyDown={onKeyDown}
+      onBlur={onBlur}
       placeholder={placeholder}
       className={className}
       autoComplete="off"
