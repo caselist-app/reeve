@@ -161,6 +161,7 @@ export function Sidebar({
               <TooltipTrigger asChild>
                 <Link
                   href="/roster"
+                  prefetch={false}
                   className={itemClass(isRoster)}
                   style={isRoster ? undefined : { color: 'var(--sidebar-muted-foreground)' }}
                   aria-label="Roster"
@@ -173,6 +174,7 @@ export function Sidebar({
           ) : (
             <Link
               href="/roster"
+              prefetch={false}
               className={itemClass(isRoster)}
               style={isRoster ? undefined : { color: 'var(--sidebar-muted-foreground)' }}
             >
@@ -197,10 +199,23 @@ export function Sidebar({
           <nav className="space-y-0.5">
             {TOUR_NAV.map(({ section, label, icon: Icon }) => {
               const active = isActive(section)
+              // prefetch={false} here and on Roster above is a probe, not a
+              // settled decision. tests/e2e/revalidate.spec.ts:104 hangs in CI:
+              // the browser has the correct RSC payload from updateTourAction
+              // and never commits the transition, leaving the Save button on
+              // "Saving..." and the old tour name in the sidebar. Every failing
+              // trace shows the same sequence: these links prefetch the schedule
+              // route into the router cache, revalidatePath(..., 'layout')
+              // invalidates that subtree, and the router then fetches the
+              // schedule @secondaryPanel layout chunk while sitting on /settings
+              // and stops. Turning the prefetch off removes the cached slot the
+              // reconcile appears to choke on. If CI goes green and stays green,
+              // that confirms the mechanism and the real fix gets chosen then.
               const link = (
                 <Link
                   key={section}
                   href={navHref(section)}
+                  prefetch={false}
                   className={itemClass(active)}
                   style={active ? undefined : { color: 'var(--sidebar-muted-foreground)' }}
                   aria-label={collapsed ? label : undefined}
