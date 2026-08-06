@@ -115,10 +115,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Pinned, for the same reason the Node version above is. `latest` makes
+      # the action resolve the newest release through the GitHub API on every
+      # run, unauthenticated, which shares a 60 per hour limit across runners.
+      # This job and the e2e job start together and request it at the same
+      # moment, so one of the two intermittently fails at setup having never
+      # run a test. It also means the CLI applying the migrations, and so the
+      # schema every integration test runs against, can change with no commit.
       - name: Set up Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.98.2
 
       # Applies every migration in supabase/migrations from scratch, so the
       # schema under test is the committed schema and nothing else.
@@ -174,10 +181,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Same pin as the integration job, and it has to stay the same value.
+      # Two CLI versions across the two jobs would mean two schemas, so a
+      # migration could pass one suite and fail the other for no visible reason.
       - name: Set up Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          version: 2.98.2
 
       - name: Start Supabase
         run: supabase start
