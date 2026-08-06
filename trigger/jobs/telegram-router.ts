@@ -55,6 +55,7 @@ export const telegramRouterJob = task({
             { text: '/itinerary', callback_data: '/itinerary' },
             { text: '/travel', callback_data: '/travel' },
             { text: '/hotel', callback_data: '/hotel' },
+            { text: '/crew', callback_data: '/crew' },
           ],
         })
       } catch (err) {
