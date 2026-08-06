@@ -27,11 +27,13 @@ import { DateMoveNotice } from '@/components/schedule/date-move-notice'
 // Fields that warrant a crew notification when changed.
 // address: affects everyone, the venue has physically moved.
 //
-// Brief 36 step 3: load-in and curfew left this form with their columns. They are
-// day-sheet fields now, and the day sheet is edited from the day view's show
-// panel, so that is where their change alert belongs. Until it is wired there, a
-// load-in change does not offer to notify crew. Recorded rather than left to be
-// discovered.
+// address is the only one this form still owns. Load-in and curfew were show
+// columns until Brief 36 step 3 moved them onto the day, and Brief 42 made every
+// time a day_items row, so this form no longer touches either. Their change alert
+// moved with them: it is constructed in the day view's item panel
+// (components/schedule/panels/day-item-panel.tsx), which is where a load-in is
+// edited now. That is the "constructor" REE-31 was tracking; it ships there, not
+// here.
 type NotifyField = 'address'
 
 type NotifyState = {
@@ -53,12 +55,6 @@ function parseBool(val: string): boolean | null {
   if (val === 'yes') return true
   if (val === 'no') return false
   return null
-}
-
-// Formats a stored ISO timestamptz for a datetime-local input (YYYY-MM-DDTHH:MM).
-function toDatetimeLocal(iso: string | null | undefined): string {
-  if (!iso) return ''
-  return iso.slice(0, 16)
 }
 
 export function ShowForm({ tourId, showId, initialData, onSuccess, className }: ShowFormProps) {
