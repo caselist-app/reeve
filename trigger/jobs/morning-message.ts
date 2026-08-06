@@ -105,15 +105,23 @@ export const morningMessageSchedule = schedules.task({
 
     const daySheet = showBlockTimesFromItems(items, show.catering_type)
 
-    // Everyone on the tour with at least one usable address.
+    // Everyone on the tour with at least one usable address. Telegram counts:
+    // a Telegram-only contact has no whatsapp_number and no contact_email, so
+    // filtering on those two alone dropped them before notify() ever resolved
+    // their channels. This pre-filter only skips people with no address at all;
+    // resolveChannels still makes the real per-notification decision.
     const { data: peopleRows } = await admin
       .from('people')
-      .select('id, contacts(whatsapp_number, contact_email)')
+      .select('id, contacts(whatsapp_number, telegram_chat_id, contact_email)')
       .eq('tour_id', tourId)
 
     const people = (peopleRows ?? []).filter((r) => {
-      const c = r.contacts as { whatsapp_number: string | null; contact_email: string | null } | null
-      return !!(c?.whatsapp_number || c?.contact_email)
+      const c = r.contacts as {
+        whatsapp_number: string | null
+        telegram_chat_id: number | null
+        contact_email: string | null
+      } | null
+      return !!(c?.whatsapp_number || c?.telegram_chat_id || c?.contact_email)
     })
 
     if (people.length === 0) {

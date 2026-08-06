@@ -195,6 +195,19 @@ async function handleLinking(
     return
   }
 
+  // Linking a Telegram chat is only half the model: a contact with no
+  // operational_channel gets no operational messages at all, so a fresh link
+  // that left the channel unset would connect the chat and then send nothing to
+  // it. Default the operational channel to Telegram, but only when the TM has
+  // not already chosen one: an explicit WhatsApp choice is not overwritten by a
+  // later Telegram link. The `.is('operational_channel', null)` guard makes this
+  // an atomic set-if-unset rather than a read-then-write race.
+  await admin
+    .from('contacts')
+    .update({ operational_channel: 'telegram' })
+    .eq('id', linkToken.contact_id)
+    .is('operational_channel', null)
+
   await admin
     .from('telegram_link_tokens')
     .update({ used_at: new Date().toISOString() })

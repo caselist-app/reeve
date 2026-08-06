@@ -365,6 +365,15 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
                 </SelectItem>
               </SelectContent>
             </Select>
+            {/* No operational channel is a valid state (a brand-new contact),
+                but it silently means no day sheets, travel or alerts reach this
+                person. State it so a TM does not save it by accident. */}
+            {operationalChannel === '' && (
+              <p className="text-xs text-amber-600 dark:text-amber-500">
+                No operational channel: this person won&apos;t receive day sheets, travel or alerts.
+                {emailEnabled ? ' Only formal emails will be sent.' : ''}
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor={`${formId}-whatsapp_number`}>
