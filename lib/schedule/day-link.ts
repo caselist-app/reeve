@@ -68,9 +68,11 @@ export async function resolveTourDateId(
     .insert({
       tour_id: tourId,
       date,
-      // No dayType means the table default, 'day_off'. A hotel or a flight does
-      // not tell us what kind of day this is, and guessing 'travel' would put a
-      // chip in the sidebar the TM never chose.
+      // No dayType means the table default, 'day_off'. A caller that cannot say
+      // what kind of day a new date is (a hotel check-in) leaves it there rather
+      // than guessing and putting a chip in the sidebar the TM never chose.
+      // Transport passes 'travel', because a day that exists only because a
+      // departure landed on it is a travel day.
       ...(options.dayType ? { day_type: options.dayType } : {}),
     })
     .select('id')

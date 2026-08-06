@@ -201,7 +201,12 @@ export async function createTransportSegment(
       .single()
 
     const localDate = localDateInZone(data.depart_at, tourRow?.timezone ?? 'UTC')
-    const resolved = await resolveTourDateId(supabase, tourId, localDate)
+    // A day that exists only because a departure landed on it is a travel day,
+    // not a day off. dayType only labels a newly created row, so a segment
+    // moving onto an existing show or off day leaves that day's type alone.
+    const resolved = await resolveTourDateId(supabase, tourId, localDate, {
+      dayType: 'travel',
+    })
     if (resolved.id === null) return { error: resolved.error }
     tourDateId = resolved.id
     dayCreated = resolved.created
@@ -313,7 +318,12 @@ export async function updateTransportSegment(
 
       const timezone = tourRow?.timezone ?? 'UTC'
       const localDate = localDateInZone(data.depart_at, timezone)
-      const resolved = await resolveTourDateId(supabase, existing.tour_id, localDate)
+      // Same rule as the create path: a day this edit brings into existence is a
+      // travel day. dayType only touches a freshly inserted row, so moving a
+      // segment onto an existing day does not relabel it.
+      const resolved = await resolveTourDateId(supabase, existing.tour_id, localDate, {
+        dayType: 'travel',
+      })
       if (resolved.id === null) return { error: resolved.error }
       update.tour_date_id = resolved.id
       dayCreated = resolved.created
