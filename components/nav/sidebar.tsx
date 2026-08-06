@@ -195,6 +195,7 @@ export function Sidebar({
             </p>
           )}
           <nav className="space-y-0.5">
+            {/* Control branch for PR #53: unchanged behaviour, CI baseline only. */}
             {TOUR_NAV.map(({ section, label, icon: Icon }) => {
               const active = isActive(section)
               const link = (
