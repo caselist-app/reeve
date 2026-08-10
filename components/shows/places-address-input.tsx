@@ -24,6 +24,9 @@ declare global {
             options?: { types?: string[]; fields?: string[] }
           ) => GoogleAutocomplete
         }
+        event: {
+          clearInstanceListeners(instance: object): void
+        }
       }
     }
     __googleMapsPlacesLoaded?: boolean
@@ -38,6 +41,11 @@ interface PlacesAddressInputProps {
   onPlaceSelect?: (address: string, venueName: string | undefined) => void
   placeholder?: string
   className?: string
+  // Autocomplete result types. Defaults to street addresses and establishments.
+  // Pass ['(cities)'] for city-only results (home city, departure city).
+  types?: string[]
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void
+  onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void
 }
 
 // Loads the Google Maps Places API script once per page and attaches an
@@ -51,12 +59,24 @@ export function PlacesAddressInput({
   onPlaceSelect,
   placeholder,
   className,
+  types = ['establishment', 'geocode'],
+  onKeyDown,
+  onBlur,
 }: PlacesAddressInputProps) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
   const inputRef = useRef<HTMLInputElement>(null)
   const [scriptReady, setScriptReady] = useState(
     typeof window !== 'undefined' && !!window.__googleMapsPlacesLoaded
   )
+
+  // The Autocomplete listener is attached once, so it would otherwise capture
+  // the callbacks from that single render. Keep the latest ones in refs so the
+  // listener always calls through to the current closures (e.g. so consumers
+  // reading fresh state like a user-typed name see the up-to-date value).
+  const onChangeRef = useRef(onChange)
+  const onPlaceSelectRef = useRef(onPlaceSelect)
+  onChangeRef.current = onChange
+  onPlaceSelectRef.current = onPlaceSelect
 
   // Load the Places API script once.
   useEffect(() => {
@@ -94,19 +114,43 @@ export function PlacesAddressInput({
   useEffect(() => {
     if (!scriptReady || !inputRef.current || !window.google) return
 
+    // Google appends this widget's suggestion dropdown to document.body and
+    // gives no API to take it away again. Snapshot what is already there, so
+    // the cleanup below removes only the node this instance caused. A blunt
+    // "remove every .pac-container" would delete the sibling's dropdown:
+    // transport, rail and drive each mount two of these at once (origin and
+    // destination).
+    const preexisting = new Set(document.querySelectorAll('.pac-container'))
+
     const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
-      types: ['establishment', 'geocode'],
+      types,
       fields: ['formatted_address', 'name'],
     })
+
+    // Empty if Google builds the dropdown lazily on first keystroke rather than
+    // in the constructor. That case simply leaves the node alone, which is what
+    // already happened before this cleanup existed, so it is never worse.
+    const ownDropdowns = Array.from(document.querySelectorAll('.pac-container')).filter(
+      (el) => !preexisting.has(el)
+    )
 
     autocomplete.addListener('place_changed', () => {
       const place = autocomplete.getPlace()
       const address = place.formatted_address ?? ''
-      onChange(address)
-      if (onPlaceSelect) {
-        onPlaceSelect(address, place.name)
+      onChangeRef.current(address)
+      if (onPlaceSelectRef.current) {
+        onPlaceSelectRef.current(address, place.name)
       }
     })
+
+    // Without this, every open of a panel or add form leaves a listener holding
+    // this render's onChange, plus a dropdown node on body, for the life of the
+    // tab. One venue field never showed it. Twelve fields on the day view, which
+    // a TM opens and closes all day, is what makes it matter.
+    return () => {
+      window.google?.maps.event.clearInstanceListeners(autocomplete)
+      ownDropdowns.forEach((el) => el.remove())
+    }
     // Intentional: only run once after script loads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scriptReady])
@@ -119,6 +163,8 @@ export function PlacesAddressInput({
         name={name}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={onKeyDown}
+        onBlur={onBlur}
         placeholder={placeholder}
         className={className}
       />
@@ -132,6 +178,8 @@ export function PlacesAddressInput({
       name={name}
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      onKeyDown={onKeyDown}
+      onBlur={onBlur}
       placeholder={placeholder}
       className={className}
       autoComplete="off"

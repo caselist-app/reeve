@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import { PlacesAddressInput } from '@/components/shows/places-address-input'
 import { createTransportSegment } from '@/lib/actions/transport'
 import { fromDatetimeLocal } from '@/lib/schedule/datetime'
 import { useEntityForm } from '@/hooks/use-entity-form'
@@ -24,6 +25,9 @@ export function AddRailForm({ tourId, tourDateId, date, timezone, onBack, onSucc
   // then lets the TM edit it, so the segment can leave the day it was added from
   // before it ever exists.
   const [departLocal, setDepartLocal] = useState(`${date}T09:00`)
+  // Controlled so the Places widget can write the selected station back in.
+  const [origin, setOrigin] = useState('')
+  const [destination, setDestination] = useState('')
 
   const { submit, pending, error } = useEntityForm({
     refreshOnSuccess: true,
@@ -55,11 +59,23 @@ export function AddRailForm({ tourId, tourDateId, date, timezone, onBack, onSucc
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">From station</Label>
-          <Input name="origin" placeholder="London St Pancras" className="h-7 text-xs" />
+          <PlacesAddressInput
+            name="origin"
+            value={origin}
+            onChange={setOrigin}
+            placeholder="London St Pancras"
+            className="h-7 text-xs"
+          />
         </div>
         <div className="space-y-1">
           <Label className="text-xs">To station</Label>
-          <Input name="destination" placeholder="Paris Gare du Nord" className="h-7 text-xs" />
+          <PlacesAddressInput
+            name="destination"
+            value={destination}
+            onChange={setDestination}
+            placeholder="Paris Gare du Nord"
+            className="h-7 text-xs"
+          />
         </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

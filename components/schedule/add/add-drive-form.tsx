@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import { PlacesAddressInput } from '@/components/shows/places-address-input'
 import { createTransportSegment } from '@/lib/actions/transport'
 import { getDriveTime } from '@/lib/actions/drive-time'
 import { fromDatetimeLocal } from '@/lib/schedule/datetime'
@@ -24,6 +25,11 @@ export function AddDriveForm({ tourId, tourDateId, date, timezone, onBack, onSuc
   const [computedArrival, setComputedArrival] = useState<string>('')
   const [computing, setComputing] = useState(false)
   const [departLocal, setDepartLocal] = useState(`${date}T09:00`)
+  // Controlled so the Places widget can write the selected place back in. The
+  // rendered inputs still carry name/value, so the onBlur handlers below can keep
+  // reading the sibling fields off the form.
+  const [origin, setOrigin] = useState('')
+  const [destination, setDestination] = useState('')
 
   async function computeArrival(origin: string, destination: string, departAt: string) {
     if (!origin || !destination || !departAt) return
@@ -72,8 +78,10 @@ export function AddDriveForm({ tourId, tourDateId, date, timezone, onBack, onSuc
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">From</Label>
-          <Input
+          <PlacesAddressInput
             name="origin"
+            value={origin}
+            onChange={setOrigin}
             placeholder="Paris"
             className="h-7 text-xs"
             onBlur={(e) => {
@@ -86,8 +94,10 @@ export function AddDriveForm({ tourId, tourDateId, date, timezone, onBack, onSuc
         </div>
         <div className="space-y-1">
           <Label className="text-xs">To</Label>
-          <Input
+          <PlacesAddressInput
             name="destination"
+            value={destination}
+            onChange={setDestination}
             placeholder="Brussels"
             className="h-7 text-xs"
             onBlur={(e) => {

@@ -9,6 +9,7 @@ import { placeName } from '@/lib/utils/place-name'
 import { PanelShell } from '@/components/layout/panel-shell'
 import { AirlineLogo } from '@/components/schedule/airline-logo'
 import { Input } from '@/components/ui/input'
+import { PlacesAddressInput } from '@/components/shows/places-address-input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { StatusBadge, TRANSPORT_VARIANT } from '@/components/ui/status-badge'
@@ -285,6 +286,9 @@ function EditableSegmentForm({ segment, timezone }: { segment: Segment; timezone
   // not on UTC.
   const currentLocalDate = toDatetimeLocal(segment.depart_at, timezone).slice(0, 10)
   const [departLocal, setDepartLocal] = useState(toDatetimeLocal(segment.depart_at, timezone))
+  // Controlled so the Places widget can write the selected place back in.
+  const [origin, setOrigin] = useState(segment.origin ?? '')
+  const [destination, setDestination] = useState(segment.destination ?? '')
 
   const { submit, pending, error, saved } = useEntityForm({
     action: (fd) => {
@@ -314,11 +318,21 @@ function EditableSegmentForm({ segment, timezone }: { segment: Segment; timezone
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">From</Label>
-          <Input name="origin" defaultValue={segment.origin ?? ''} className="h-7 text-xs" />
+          <PlacesAddressInput
+            name="origin"
+            value={origin}
+            onChange={setOrigin}
+            className="h-7 text-xs"
+          />
         </div>
         <div className="space-y-1">
           <Label className="text-xs">To</Label>
-          <Input name="destination" defaultValue={segment.destination ?? ''} className="h-7 text-xs" />
+          <PlacesAddressInput
+            name="destination"
+            value={destination}
+            onChange={setDestination}
+            className="h-7 text-xs"
+          />
         </div>
       </div>
 

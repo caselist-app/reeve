@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { updateRehearsal, deleteRehearsal } from '@/lib/actions/rehearsals'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { PlacesAddressInput } from '@/components/shows/places-address-input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import {
@@ -48,6 +49,8 @@ export function RehearsalForm({ tourId, rehearsalId, initialData, className }: R
   const [saved, setSaved] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  // Controlled so the Places widget can write the selected address back in.
+  const [address, setAddress] = useState(initialData.address ?? '')
 
   async function handleDelete() {
     setDeleting(true)
@@ -97,10 +100,11 @@ export function RehearsalForm({ tourId, rehearsalId, initialData, className }: R
 
       <div className="space-y-2">
         <Label htmlFor={`${formId}-address`}>Address</Label>
-        <Input
+        <PlacesAddressInput
           id={`${formId}-address`}
           name="address"
-          defaultValue={initialData.address ?? ''}
+          value={address}
+          onChange={setAddress}
           placeholder="70 Chiswick High Rd, London W4 1SY"
         />
       </div>

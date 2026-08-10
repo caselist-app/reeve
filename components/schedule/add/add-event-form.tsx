@@ -1,9 +1,11 @@
 'use client'
 
+import { useState } from 'react'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
+import { PlacesAddressInput } from '@/components/shows/places-address-input'
 import { createDayItem } from '@/lib/actions/day-items'
 import { useEntityForm } from '@/hooks/use-entity-form'
 import { readForm } from '@/lib/forms/read-form'
@@ -38,6 +40,7 @@ interface AddEventFormProps {
 // here now. The conversion happens server-side, where the day's other items are,
 // rather than in a component that can only see this one.
 export function AddEventForm({ tourId, tourDateId, onBack, onSuccess }: AddEventFormProps) {
+  const [location, setLocation] = useState('')
   const { submit, pending, error } = useEntityForm({
     refreshOnSuccess: true,
     onSuccess,
@@ -83,7 +86,13 @@ export function AddEventForm({ tourId, tourDateId, onBack, onSuccess }: AddEvent
       </div>
       <div className="space-y-1">
         <Label className="text-xs">Location</Label>
-        <Input name="location" placeholder="Optional" className="h-7 text-xs" />
+        <PlacesAddressInput
+          name="location"
+          value={location}
+          onChange={setLocation}
+          placeholder="Optional"
+          className="h-7 text-xs"
+        />
       </div>
       <div className="space-y-1">
         <Label className="text-xs">Notes</Label>
