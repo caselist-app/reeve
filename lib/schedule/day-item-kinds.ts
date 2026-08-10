@@ -54,10 +54,11 @@ export interface DayItemKind {
   // TM does not talk in ranges. The carve-out is catering, where a window that
   // does not say when it shuts is worse than useless.
   surfaceEndInComms: boolean
-  // Lucide component name, PascalCase. Nothing reads this yet: TimelineCard has
-  // no icon prop today. It is here because Brief 43's grid blocks need it and
-  // because defining it once is the whole point of this file. Every name below
-  // was checked against the installed lucide-react.
+  // Lucide component name, PascalCase. The calendar adapter copies this onto
+  // every event and DayItemChip (components/schedule/day-calendar.tsx) renders
+  // it, resolving the name through an explicit icon map. Defining it once here
+  // is the whole point of this file. Every name below was checked against the
+  // installed lucide-react.
   icon: string
 }
 
