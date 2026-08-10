@@ -76,6 +76,17 @@ export async function createShow(
 
   void bustTourContextCache(tourId)
 
+  // A new show is a new day in the Dates sidebar (create_show_with_dependents
+  // creates the tour_dates row the show hangs off). That sidebar is a layout in
+  // the @secondaryPanel slot, so a soft navigation does not re-resolve it: the
+  // add-day panel's router.refresh() happens to cover it today, but this is the
+  // only add-day path with no server-side revalidate to back that up, unlike
+  // createTourDate and createRehearsal. Revalidate so the new day does not sit
+  // out of the sidebar until a hard reload. check:conventions Rule 2 does not
+  // catch the omission here because the write goes through an RPC, not a
+  // .from('shows').insert() it can see. REE-66.
+  revalidatePath(`/tours/${tourId}/schedule`)
+
   return { error: null, showId }
 }
 
