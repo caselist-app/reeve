@@ -1,8 +1,9 @@
 'use client'
 
-import { useActionState, useState, useId, useRef, useTransition, useEffect } from 'react'
+import { useState, useId, useTransition, useEffect } from 'react'
 import { useTheme } from 'next-themes'
 import { updateTourAction, archiveTourAction } from '@/lib/actions/tours'
+import { useEntityForm } from '@/hooks/use-entity-form'
 import { TOUR_TIMEZONES } from '@/lib/validators/tour'
 import type { Tables } from '@/lib/types/database'
 import { Button } from '@/components/ui/button'
@@ -37,10 +38,18 @@ interface Props {
 
 export function TourSettingsForm({ tour }: Props) {
   const formId = useId()
-  const attempted = useRef(false)
 
-  const boundUpdate = updateTourAction.bind(null, tour.id)
-  const [state, formAction, pending] = useActionState(boundUpdate, { error: null })
+  // Same pattern every in-place edit form uses (hooks/use-entity-form.ts): an
+  // onSubmit handler that preventDefaults and drives its own startTransition,
+  // refreshing the client on success. This deliberately avoids React 19's native
+  // <form action> automatic form reset. That reset, entangled with the layout
+  // revalidation this action fires, is what left a rename stuck on "Saving..."
+  // with the sidebar showing the old name about one save in five (REE-65). No
+  // native reset means no snap-back either: the field keeps what the TM typed.
+  const { submit, pending, error, saved } = useEntityForm({
+    action: (fd) => updateTourAction(tour.id, fd),
+    refreshOnSuccess: true,
+  })
 
   const [currency, setCurrency] = useState(tour.base_currency)
   const [timezone, setTimezone] = useState(tour.timezone ?? '')
@@ -54,9 +63,6 @@ export function TourSettingsForm({ tour }: Props) {
   const [mounted, setMounted] = useState(false)
   useEffect(() => setMounted(true), [])
 
-  // Derived: true only after a successful save (not on initial render).
-  const saved = attempted.current && !pending && !state.error
-
   async function handleArchive() {
     startArchive(async () => {
       const result = await archiveTourAction(tour.id)
@@ -67,13 +73,7 @@ export function TourSettingsForm({ tour }: Props) {
 
   return (
     <div className="space-y-8">
-      <form
-        action={(data) => {
-          attempted.current = true
-          formAction(data)
-        }}
-        className="space-y-5"
-      >
+      <form onSubmit={submit} className="space-y-5">
         <div className="space-y-2">
           <Label htmlFor={`${formId}-name`}>Tour name</Label>
           <Input
@@ -188,7 +188,7 @@ export function TourSettingsForm({ tour }: Props) {
             {pending ? 'Saving...' : 'Save changes'}
           </Button>
           {saved && <p className="text-sm text-muted-foreground">Saved.</p>}
-          {state.error && <p className="text-sm text-destructive">{state.error}</p>}
+          {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
       </form>
 

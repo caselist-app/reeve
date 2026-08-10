@@ -1,7 +1,6 @@
 'use server'
 
 import { redirect } from 'next/navigation'
-import { revalidatePath } from 'next/cache'
 import { schedules } from '@trigger.dev/sdk/v3'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
@@ -80,10 +79,11 @@ export async function createTourAction(
   redirect(`/tours/${data!.id}/people`)
 }
 
-// tourId is pre-bound via .bind(null, tourId) in the settings page component.
+// Called from the settings form through useEntityForm, which invokes it inside a
+// transition and calls router.refresh() on success. It is not a useActionState
+// form action, so it takes no previous-state argument.
 export async function updateTourAction(
   tourId: string,
-  _prev: TourActionState,
   formData: FormData
 ): Promise<TourActionState> {
   const user = await requireUser()
@@ -132,17 +132,16 @@ export async function updateTourAction(
     }
   }
 
-  // Required, not a nicety. React 19 resets an uncontrolled form to its
-  // defaultValue after a form action succeeds, on the assumption that
-  // defaultValue is the canonical value the server just sent back. Without a
-  // revalidate the server component still holds the old tour, so the reset puts
-  // the previous name back in the input and the save looks like it failed until
-  // the page is reloaded. Revalidating makes that assumption true.
+  // No revalidatePath here, deliberately. The caller refreshes the client on
+  // success (useEntityForm with refreshOnSuccess), which re-resolves the whole
+  // current route including the app layout, so the tour name updates both in
+  // this form and in components/nav/tour-selector.tsx above it. Mixing a
+  // server-side revalidate with the client refresh would render the tree twice.
   //
-  // Scoped to the layout, not the page: the tour name also renders in
-  // components/nav/tour-selector.tsx, which sits above this route.
-  revalidatePath(`/tours/${tourId}`, 'layout')
-
+  // This replaced a revalidatePath(..., 'layout') that relied on React 19's
+  // native <form action> auto-reset to push the new name into the field. That
+  // combination stalled the client transition intermittently (REE-65): the save
+  // stuck on "Saving..." with the old name until a reload, roughly one in five.
   return { error: null }
 }
 
