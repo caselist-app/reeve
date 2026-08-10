@@ -15,6 +15,11 @@ import { DAY_ITEM_KINDS, dayItemLabel } from '@/lib/schedule/day-item-kinds'
 interface DayFormProps {
   tourId: string
   tourDateId: string
+  // Pre-filled line, set when the form opens from a click on empty grid space
+  // (REE-56): the snapped wall-clock time. The TM types the label after it. The
+  // parser reads it exactly as if it had been typed, so nothing special happens
+  // downstream; this only seeds the input.
+  initialInput?: string
 }
 
 // One resolved option in the combo box: a known kind, a remembered custom title,
@@ -50,11 +55,11 @@ function timeLabel(option: DayFormOption): string {
 // It commits a day_items row and nothing else. A flight, drive, rail or hotel
 // has structure beyond a time and stays behind the '+' picker's own forms: if
 // this input ever tries to swallow one, it has gone wrong.
-export function DayForm({ tourId, tourDateId }: DayFormProps) {
+export function DayForm({ tourId, tourDateId, initialInput }: DayFormProps) {
   const { close } = useSidePanel()
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const [input, setInput] = useState('')
+  const [input, setInput] = useState(initialInput ?? '')
   const [selected, setSelected] = useState(0)
   const [customTitles, setCustomTitles] = useState<string[]>([])
   const [, startLoad] = useTransition()
