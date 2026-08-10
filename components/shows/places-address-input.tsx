@@ -69,6 +69,15 @@ export function PlacesAddressInput({
     typeof window !== 'undefined' && !!window.__googleMapsPlacesLoaded
   )
 
+  // The Autocomplete listener is attached once, so it would otherwise capture
+  // the callbacks from that single render. Keep the latest ones in refs so the
+  // listener always calls through to the current closures (e.g. so consumers
+  // reading fresh state like a user-typed name see the up-to-date value).
+  const onChangeRef = useRef(onChange)
+  const onPlaceSelectRef = useRef(onPlaceSelect)
+  onChangeRef.current = onChange
+  onPlaceSelectRef.current = onPlaceSelect
+
   // Load the Places API script once.
   useEffect(() => {
     if (!apiKey || scriptReady) return
@@ -128,9 +137,9 @@ export function PlacesAddressInput({
     autocomplete.addListener('place_changed', () => {
       const place = autocomplete.getPlace()
       const address = place.formatted_address ?? ''
-      onChange(address)
-      if (onPlaceSelect) {
-        onPlaceSelect(address, place.name)
+      onChangeRef.current(address)
+      if (onPlaceSelectRef.current) {
+        onPlaceSelectRef.current(address, place.name)
       }
     })
 
