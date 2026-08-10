@@ -13,7 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.mts",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test tests/e2e/revalidate.spec.ts --repeat-each=20",
     "types:gen": "supabase gen types typescript --linked > lib/types/database.ts"
   },
   "dependencies": {
