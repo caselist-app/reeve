@@ -59,5 +59,25 @@ export function createZonedLocalizer(timezone: string): DateLocalizer {
   ZonedDateTime.local = ((...args: unknown[]) =>
     (DateTime.local as (...a: unknown[]) => DateTime)(...args).setZone(timezone)) as typeof DateTime.local
 
-  return luxonLocalizer(ZonedDateTime)
+  const localizer = luxonLocalizer(ZonedDateTime)
+
+  // Patching DateTime is not enough on its own, because one method never
+  // reaches it. `luxonLocalizer` does not supply a `getDstOffset`, so RBC's
+  // DateLocalizer falls back to its own, which is
+  // `start.getTimezoneOffset() - end.getTimezoneOffset()`: raw JS Date, and
+  // therefore the browser's zone whatever the calendar's zone is. TimeSlots
+  // adds that value to a block's vertical position, so on a DST transition day
+  // a block lands an hour away from its own label. Both directions are wrong,
+  // and both were reproduced before this line existed: a London browser gave an
+  // Auckland calendar a 60 minute shift on London's transition day, when
+  // Auckland had not changed at all, and then gave it nothing on Auckland's own
+  // transition day a week later, when it should have been -60.
+  //
+  // Luxon's `offset` is minutes ahead of UTC and getTimezoneOffset is minutes
+  // behind it, so the sign flips: end minus start here is start minus end there.
+  localizer.getDstOffset = (start: Date, end: Date) =>
+    DateTime.fromJSDate(end, { zone: timezone }).offset -
+    DateTime.fromJSDate(start, { zone: timezone }).offset
+
+  return localizer
 }

@@ -75,3 +75,81 @@ describe('createZonedLocalizer', () => {
     expect(london.format(JUNE_EVENING_UTC, 'HH:mm', 'en')).toBe('23:00')
   })
 })
+
+// The three tests above all go through `format`, which is the hour gutter down
+// the side of the calendar. Brief 43 asked for three things to agree, and the
+// other two are where a block sits vertically and what instant you get when you
+// drag it. Those run through different localizer methods, so a zone patch that
+// covered only `format` would pass everything above and still stack every block
+// at the browser's offset.
+//
+// These are the methods react-big-calendar's TimeSlots actually calls to place
+// a block (see getSlotMetrics: getTotalMin, getMinutesFromMidnight, getSlotDate,
+// getDstOffset). Asserting on them directly is the closest the unit layer gets
+// to asserting on pixels, and it is what stops a later "simplification" of the
+// localizer from silently breaking layout while the gutter still reads right.
+describe('createZonedLocalizer: the block positioning path', () => {
+  const auckland = createZonedLocalizer('Pacific/Auckland')
+
+  // Vertical position is a fraction of the day, so it is minutes-from-midnight
+  // that decides it. 22:00Z on 14 June is 10:00 on the 15th in Auckland, which
+  // is 600 minutes down a day starting at midnight. Under the browser's London
+  // zone it would be 23:00 and 1380, near the bottom of the wrong day.
+  it('measures minutes from midnight in the tour zone', () => {
+    expect(auckland.getMinutesFromMidnight(JUNE_EVENING_UTC)).toBe(600)
+  })
+
+  // The top of the column. Auckland midnight on 15 June is 12:00Z on the 14th.
+  it('starts the day at the tour zone midnight', () => {
+    expect(auckland.startOf(JUNE_EVENING_UTC, 'day').toISOString()).toBe('2026-06-14T12:00:00.000Z')
+  })
+
+  // The drag result. Dropping a block 600 minutes down the column has to produce
+  // the instant that 10:00 Auckland actually is, because that instant is what
+  // gets written to the row.
+  it('turns a slot position back into the right instant', () => {
+    const aucklandMidnight = new Date('2026-06-14T12:00:00.000Z')
+    expect(auckland.getSlotDate(aucklandMidnight, 0, 600).toISOString()).toBe(
+      '2026-06-14T22:00:00.000Z'
+    )
+  })
+
+  // A spring-forward day is 23 real hours but still has to be drawn as a 24 hour
+  // grid, or every block below 01:00 sits an hour high. RBC handles that by
+  // adding getDstOffset back onto the elapsed minutes, so both halves have to be
+  // right: 1380 real minutes, 60 minutes of correction.
+  it('keeps a DST day a full grid', () => {
+    const london = createZonedLocalizer('Europe/London')
+    const dayStart = new Date('2026-03-29T00:00:00.000Z')
+    const dayEnd = new Date('2026-03-29T23:00:00.000Z')
+
+    expect(london.getTotalMin(dayStart, dayEnd)).toBe(1380)
+    expect(london.getDstOffset(dayStart, dayEnd)).toBe(60)
+  })
+
+  // The two below are the reason createZonedLocalizer overrides getDstOffset at
+  // all. luxonLocalizer does not provide one, so RBC falls back to a raw JS Date
+  // implementation that reads the browser's zone. Patching DateTime cannot reach
+  // it. Both of these failed before that override existed, in opposite
+  // directions, and neither is visible from a machine sitting in the tour's own
+  // zone: that is what makes it worth pinning down here rather than in a browser.
+
+  // London springs forward on 29 March 2026. Auckland does not: its own change
+  // is a week later. So an Auckland calendar must report no correction that day,
+  // no matter what the machine underneath it is doing.
+  it('ignores a DST change that belongs to the browser, not the tour', () => {
+    const aucklandMidnight = new Date('2026-03-28T11:00:00.000Z')
+    const aucklandAfternoon = new Date('2026-03-29T02:00:00.000Z')
+
+    expect(auckland.getDstOffset(aucklandMidnight, aucklandAfternoon)).toBe(0)
+  })
+
+  // And the mirror: Auckland's own change, on 5 April 2026, has to register even
+  // though no browser outside New Zealand notices anything that day.
+  it('applies a DST change that belongs to the tour, not the browser', () => {
+    const aucklandMidnight = new Date('2026-04-04T11:00:00.000Z')
+    const aucklandEvening = new Date('2026-04-04T20:00:00.000Z')
+
+    expect(auckland.getDstOffset(aucklandMidnight, aucklandEvening)).toBe(-60)
+  })
+})
