@@ -2,7 +2,8 @@ import { createClient } from '@/lib/supabase/server'
 import { fetchDayRecords } from '@/lib/schedule/day-records'
 import { fetchDayRoster } from '@/lib/schedule/day-roster'
 import { DayViewClient } from '@/components/schedule/day-view-client'
-import { DayTimeline } from '@/components/schedule/day-timeline'
+import { DayCalendar } from '@/components/schedule/day-calendar'
+import { DayHeader } from '@/components/schedule/day-header'
 import { DayInfoPanel } from '@/components/schedule/day-info-panel'
 import { DayInfoDock } from '@/components/schedule/day-info-dock'
 import { DateStrip } from '@/components/schedule/date-strip'
@@ -71,16 +72,23 @@ export async function DayContent({ tourId, tourName, timezone, selectedDate, tou
       } : null}
       timeline={
         tourDate ? (
-          <DayTimeline
+          <DayCalendar
             records={records}
             tourId={tourId}
-            tourDateId={tourDate.id}
-            date={selectedDate}
             timezone={timezone}
-            dayType={tourDate.day_type}
-            tourName={tourName}
-            notes={tourDate.notes}
-            customTitle={tourDate.custom_title}
+            date={selectedDate}
+            header={
+              <DayHeader
+                tourId={tourId}
+                tourDateId={tourDate.id}
+                date={selectedDate}
+                dayType={tourDate.day_type}
+                tourName={tourName}
+                timezone={timezone}
+                notes={tourDate.notes}
+                customTitle={tourDate.custom_title}
+              />
+            }
           />
         ) : (
           <div className="flex flex-1 items-center justify-center px-6 py-10">
