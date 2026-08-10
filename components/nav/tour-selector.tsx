@@ -10,6 +10,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { useTourNameStore } from '@/stores/tour-name-store'
 import { cn } from '@/lib/utils'
 
 interface Tour {
@@ -29,6 +30,12 @@ export function TourSelector({ tours, activeTourId, collapsed = false }: TourSel
   const router = useRouter()
   const pathname = usePathname()
   const activeTour = tours.find((t) => t.id === activeTourId)
+
+  // Prefer an optimistic rename over the server-provided name. See
+  // stores/tour-name-store.ts: renaming updates this instead of relying on a
+  // flaky app-layout revalidation to repaint the sidebar (REE-65).
+  const overrides = useTourNameStore((s) => s.overrides)
+  const nameFor = (tour: Tour) => overrides[tour.id] ?? tour.name
 
   function switchTour(tourId: string) {
     const sectionMatch = pathname.match(/\/tours\/[^/]+\/([^/]+)/)
@@ -69,7 +76,7 @@ export function TourSelector({ tours, activeTourId, collapsed = false }: TourSel
               {activeTour.artist_name}
             </p>
             <p className="truncate text-xs" style={{ color: 'var(--sidebar-muted-foreground)' }}>
-              {activeTour.name}
+              {nameFor(activeTour)}
             </p>
           </>
         ) : (
@@ -86,7 +93,7 @@ export function TourSelector({ tours, activeTourId, collapsed = false }: TourSel
     <button
       className="mx-auto flex h-8 w-8 items-center justify-center rounded-lg text-xs font-semibold transition-colors hover:bg-sidebar-accent/60"
       style={{ color: 'var(--sidebar-foreground)', backgroundColor: 'var(--sidebar-accent)' }}
-      aria-label={activeTour ? `${activeTour.artist_name}: ${activeTour.name}` : 'Select tour'}
+      aria-label={activeTour ? `${activeTour.artist_name}: ${nameFor(activeTour)}` : 'Select tour'}
     >
       {initial}
     </button>
@@ -100,7 +107,7 @@ export function TourSelector({ tours, activeTourId, collapsed = false }: TourSel
             <DropdownMenuTrigger asChild>{collapsedTrigger}</DropdownMenuTrigger>
           </TooltipTrigger>
           <TooltipContent side="right">
-            {activeTour ? `${activeTour.artist_name}: ${activeTour.name}` : 'Select tour'}
+            {activeTour ? `${activeTour.artist_name}: ${nameFor(activeTour)}` : 'Select tour'}
           </TooltipContent>
         </Tooltip>
       ) : (
@@ -136,7 +143,7 @@ export function TourSelector({ tours, activeTourId, collapsed = false }: TourSel
                     tour.id === activeTourId ? 'opacity-100' : 'opacity-0',
                   )}
                 />
-                <span className="truncate text-xs">{tour.name}</span>
+                <span className="truncate text-xs">{nameFor(tour)}</span>
               </DropdownMenuItem>
             ))}
           </div>
