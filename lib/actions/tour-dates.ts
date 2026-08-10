@@ -54,12 +54,13 @@ export async function createTourDate(
     return { error: error.message }
   }
 
-  // A new day is a new row in the Dates sidebar, which is a layout in the
-  // @secondaryPanel slot and therefore unreachable from the client: neither
-  // router.push nor router.refresh re-resolves it. This was correct today only
-  // by accident, because one of its callers happens to call router.refresh(),
-  // which re-renders main and leaves the sidebar exactly as stale as before.
-  revalidatePath(`/tours/${tourId}/schedule`)
+  // REE-66 EXPERIMENT (throwaway): revalidatePath deliberately removed so the
+  // day-off add path becomes a faithful proxy for the show add path, which has
+  // no server-side revalidate and relies solely on the client router.refresh()
+  // in add-day-panel.tsx. If the day-off repro flakes now while the rehearsal
+  // control (createRehearsal still revalidates) stays green, refresh-only is the
+  // mechanism behind the stale sidebar. RESTORE before merge.
+  // revalidatePath(`/tours/${tourId}/schedule`)
 
   return { error: null, tourDateId: row.id }
 }
