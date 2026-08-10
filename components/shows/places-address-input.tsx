@@ -24,6 +24,9 @@ declare global {
             options?: { types?: string[]; fields?: string[] }
           ) => GoogleAutocomplete
         }
+        event: {
+          clearInstanceListeners(instance: object): void
+        }
       }
     }
     __googleMapsPlacesLoaded?: boolean
@@ -102,10 +105,25 @@ export function PlacesAddressInput({
   useEffect(() => {
     if (!scriptReady || !inputRef.current || !window.google) return
 
+    // Google appends this widget's suggestion dropdown to document.body and
+    // gives no API to take it away again. Snapshot what is already there, so
+    // the cleanup below removes only the node this instance caused. A blunt
+    // "remove every .pac-container" would delete the sibling's dropdown:
+    // transport, rail and drive each mount two of these at once (origin and
+    // destination).
+    const preexisting = new Set(document.querySelectorAll('.pac-container'))
+
     const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
       types,
       fields: ['formatted_address', 'name'],
     })
+
+    // Empty if Google builds the dropdown lazily on first keystroke rather than
+    // in the constructor. That case simply leaves the node alone, which is what
+    // already happened before this cleanup existed, so it is never worse.
+    const ownDropdowns = Array.from(document.querySelectorAll('.pac-container')).filter(
+      (el) => !preexisting.has(el)
+    )
 
     autocomplete.addListener('place_changed', () => {
       const place = autocomplete.getPlace()
@@ -115,6 +133,15 @@ export function PlacesAddressInput({
         onPlaceSelect(address, place.name)
       }
     })
+
+    // Without this, every open of a panel or add form leaves a listener holding
+    // this render's onChange, plus a dropdown node on body, for the life of the
+    // tab. One venue field never showed it. Twelve fields on the day view, which
+    // a TM opens and closes all day, is what makes it matter.
+    return () => {
+      window.google?.maps.event.clearInstanceListeners(autocomplete)
+      ownDropdowns.forEach((el) => el.remove())
+    }
     // Intentional: only run once after script loads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scriptReady])
