@@ -124,7 +124,7 @@ export type PanelDescriptor =
       onSuccess: () => void
     }
   // Brief 33: schedule day view detail panels. Each carries a stable key so
-  // timeline-card.tsx can compare active state without JSON.stringify, which
+  // day-calendar.tsx can compare active state without JSON.stringify, which
   // Brief 26 flagged as sensitive to key ordering.
   | {
       type: 'transport'
@@ -176,7 +176,7 @@ export type PanelDescriptor =
       initialInput?: string
     }
 
-// The subset of PanelDescriptor that timeline-card.tsx can open: the variants
+// The subset of PanelDescriptor that day-calendar.tsx can open: the variants
 // that carry a stable key, used for active-state comparison instead of
 // JSON.stringify.
 export type SchedulePanelDescriptor = Extract<

@@ -15,7 +15,7 @@ interface VenueBlockProps {
 // A thin client component rather than making day-info-panel one: the pattern in
 // the day view is that the surface stays a Server Component and the clickable
 // pieces are small clients that call useSidePanel themselves, the same way
-// timeline-card.tsx does.
+// day-calendar.tsx does.
 export function VenueBlock({ tourId, show }: VenueBlockProps) {
   const { open } = useSidePanel()
 
