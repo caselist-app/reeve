@@ -15,6 +15,11 @@ import { DAY_ITEM_KINDS, dayItemLabel } from '@/lib/schedule/day-item-kinds'
 interface DayFormProps {
   tourId: string
   tourDateId: string
+  // Pre-filled line, set when the form opens from a click on empty grid space
+  // (REE-56): the snapped wall-clock time. The TM types the label after it. The
+  // parser reads it exactly as if it had been typed, so nothing special happens
+  // downstream; this only seeds the input.
+  initialInput?: string
 }
 
 // One resolved option in the combo box: a known kind, a remembered custom title,
@@ -50,11 +55,11 @@ function timeLabel(option: DayFormOption): string {
 // It commits a day_items row and nothing else. A flight, drive, rail or hotel
 // has structure beyond a time and stays behind the '+' picker's own forms: if
 // this input ever tries to swallow one, it has gone wrong.
-export function DayForm({ tourId, tourDateId }: DayFormProps) {
+export function DayForm({ tourId, tourDateId, initialInput }: DayFormProps) {
   const { close } = useSidePanel()
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const [input, setInput] = useState('')
+  const [input, setInput] = useState(initialInput ?? '')
   const [selected, setSelected] = useState(0)
   const [customTitles, setCustomTitles] = useState<string[]>([])
   const [, startLoad] = useTransition()
@@ -98,6 +103,25 @@ export function DayForm({ tourId, tourDateId }: DayFormProps) {
     // text and the time, which the remembered and generic rows reuse.
     const other = parsed.find((candidate) => candidate.kind === 'other') ?? null
     const residual = other?.title ?? null
+    const hasKindMatch = parsed.some((candidate) => candidate.kind !== 'other')
+
+    // A line that is only a time, with no kind word and no residual text, is what
+    // clicking empty grid space produces (REE-56 pre-fills the snapped clock),
+    // and what typing a bare '15:15' produces too. Collapsing it to Custom would
+    // make every click-to-add a custom item; instead offer the whole kind list at
+    // that time, exactly like the empty state but timed, so the TM picks Load-in
+    // rather than defaulting to a custom block.
+    if (!hasKindMatch && other?.startClock && !residual) {
+      for (const kind of DAY_ITEM_KINDS) {
+        if (kind.kind === 'other') continue
+        list.push({ kind: kind.kind, label: kind.label, title: null, startClock: other.startClock, endClock: other.endClock, isGenericCustom: false })
+      }
+      for (const title of customTitles) {
+        list.push({ kind: 'other', label: title, title, startClock: other.startClock, endClock: other.endClock, isGenericCustom: false })
+      }
+      list.push({ kind: 'other', label: 'Custom', title: null, startClock: other.startClock, endClock: other.endClock, isGenericCustom: true })
+      return list
+    }
 
     for (const candidate of parsed) {
       if (candidate.kind === 'other') continue

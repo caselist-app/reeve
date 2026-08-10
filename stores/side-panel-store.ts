@@ -169,6 +169,11 @@ export type PanelDescriptor =
       type: 'day-form'
       tourId: string
       tourDateId: string
+      // Pre-filled input, set when the form is opened by clicking empty grid
+      // space (REE-56): the snapped wall-clock time, which the TM types the rest
+      // of the line after. Absent when opened from the '+' picker or the '/'
+      // shortcut, where the input starts empty.
+      initialInput?: string
     }
 
 // The subset of PanelDescriptor that timeline-card.tsx can open: the variants

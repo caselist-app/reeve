@@ -1,13 +1,18 @@
 'use client'
 
-import { useMemo, type ReactNode } from 'react'
+import { useMemo, useOptimistic, useTransition, type ReactNode } from 'react'
 import { Calendar, Views } from 'react-big-calendar'
+import withDragAndDrop, {
+  type EventInteractionArgs,
+} from 'react-big-calendar/lib/addons/dragAndDrop'
 // The grid has no layout without this: blocks will not position and the gutter
-// does not render. This is the CLAUDE.md "no .css files" exception, imported
-// deliberately here (Brief 43, REE-55). The visual pass that makes it not look
-// like a default install is REE-59, not this step; getting a correct, ugly grid
-// reviewed on its own is the point.
+// does not render. The drag addon ships a second stylesheet on top of it. Both
+// are the CLAUDE.md "no .css files" exception, imported deliberately here (Brief
+// 43). The visual pass that makes it not look like a default install is REE-59;
+// getting a correct grid with the gestures working, reviewed on its own, is the
+// point of this step.
 import 'react-big-calendar/lib/css/react-big-calendar.css'
+import 'react-big-calendar/lib/addons/dragAndDrop/styles.css'
 import {
   BellRing,
   Coffee,
@@ -33,11 +38,18 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSidePanel } from '@/stores/side-panel-store'
+import { useIsMobile } from '@/hooks/use-is-mobile'
 import { createZonedLocalizer } from '@/lib/schedule/calendar-localizer'
 import { localTimeInZone, localDayWindowUtc } from '@/lib/schedule/datetime'
 import { buildDayCalendarView } from '@/lib/schedule/day-calendar-view'
-import type { CalendarEvent, EventSource } from '@/lib/schedule/calendar-adapter'
+import { fromDropOrResize, type CalendarEvent, type EventSource } from '@/lib/schedule/calendar-adapter'
+import { moveScheduleItem } from '@/lib/actions/move-schedule-item'
 import type { DayRecords, DaySegment } from '@/lib/schedule/day-records'
+
+// The drag-and-drop wrapper is built once, at module scope, around the base
+// Calendar. Typed to our own event so the drop and resize callbacks carry
+// CalendarEvent rather than RBC's loose base Event.
+const DnDCalendar = withDragAndDrop<CalendarEvent>(Calendar)
 
 interface DayCalendarProps {
   // The day's records, fetched by a Server Component and passed in. The grid
@@ -45,6 +57,9 @@ interface DayCalendarProps {
   // detail panel on click.
   records: DayRecords
   tourId: string
+  // The day being viewed. Present because the calendar only renders for a real
+  // tour date, and click-empty-to-add opens the day form against it.
+  tourDateId: string
   // IANA name from tours.timezone, never the browser. Drives the localizer and
   // the min/max/date bounds, all rebuilt together when it changes.
   timezone: string
@@ -89,6 +104,19 @@ function eventIcon(name: string): LucideIcon {
   return EVENT_ICONS[name] ?? CircleDashed
 }
 
+// A 24-hour "HH:MM" as a 12-hour clock with an explicit meridiem ("07:30" to
+// "7:30am", "19:30" to "7:30pm"). The click-to-add time is pre-filled into the
+// day form's free-text input, which runs through parseDayItem, and that parser
+// reads a bare hour of 1 to 11 as ambiguous and applies a kind's default
+// meridiem: "07:30" would come back as 19:30. A dragged time is exact and must
+// not be re-guessed, so it is handed over with the meridiem already stated.
+function to12HourClock(hhmm: string): string {
+  const [hour, minute] = hhmm.split(':').map(Number)
+  const meridiem = hour < 12 ? 'am' : 'pm'
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12
+  return `${hour12}:${String(minute).padStart(2, '0')}${meridiem}`
+}
+
 // The accent colour per event. Source decides first: transport is teal and a
 // hotel is blue wherever they appear, exactly as the old timeline had them. A
 // day_item then maps its semantic accent to a colour, because the colour
@@ -110,19 +138,47 @@ function accentClassName(source: EventSource, accent: CalendarEvent['accent']): 
 /**
  * The schedule day rendered as a calendar grid.
  *
- * Read only in the sense that drag, edge-resize and click-empty-to-add are off:
- * those arrive in REE-56. Clicking an event still opens its existing detail
- * panel, exactly as the old timeline card did, which is the flow a TM uses to
- * edit a time and the flow the revalidate e2e depends on.
+ * Drag to move, drag an edge to resize, and click empty space to add (REE-56),
+ * all desktop only: RBC's drag addon is mouse-oriented and mobile drag is out of
+ * scope for this brief. Clicking an event still opens its existing detail panel.
+ *
+ * Two containment rules run through every gesture. Nothing here asks RBC or
+ * Luxon which day the dropped item lands on: the callback proposes an instant and
+ * moveScheduleItem derives the day server-side, which is what makes RBC's weak
+ * timezone story survivable. And a drop is never handed to the action raw: it
+ * goes through fromDropOrResize first, so the fake end the adapter invented is
+ * not written as a stated one on a move the TM thinks is only a move.
  *
  * Server fetches, client renders: the records arrive already fetched and this
  * component maps them to events (Dates cross the boundary intact) and lays them
  * out.
  */
-export function DayCalendar({ records, tourId, timezone, date, header }: DayCalendarProps) {
+export function DayCalendar({ records, tourId, tourDateId, timezone, date, header }: DayCalendarProps) {
   const { open: openSidePanel } = useSidePanel()
+  const isMobile = useIsMobile()
+  const [, startTransition] = useTransition()
 
   const view = useMemo(() => buildDayCalendarView(records, timezone), [records, timezone])
+
+  // The gesture is desktop only. On mobile the grid still renders and events
+  // still open their panels; only drag, resize and click-to-add are off.
+  const gesturesEnabled = !isMobile
+
+  // Optimistic positions, so a dropped block lands at its new time immediately
+  // and does not snap back to the server's old position and then forward again
+  // once the revalidate lands. The base is the server-derived events; when the
+  // action revalidates, `view.events` updates and this rebases onto it. A move
+  // that errors never revalidates, so the base is unchanged and the optimistic
+  // position falls away on its own when the transition ends.
+  const [displayEvents, applyOptimistic] = useOptimistic(
+    view.events,
+    (events: CalendarEvent[], patch: { id: string; start: Date; end: Date; endStated: boolean }) =>
+      events.map((event) =>
+        event.id === patch.id
+          ? { ...event, start: patch.start, end: patch.end, syntheticEnd: patch.endStated ? false : event.syntheticEnd }
+          : event,
+      ),
+  )
 
   // Lookups from a clicked event back to its record, so a click can open the
   // right detail panel. Segments include the late-night tail, which is
@@ -201,6 +257,44 @@ export function DayCalendar({ records, tourId, timezone, date, header }: DayCale
     return { event: EventChip }
   }, [openEvent, timezone])
 
+  // A move (onEventDrop) and a resize (onEventResize) share one write path. The
+  // difference lives entirely in fromDropOrResize: a move whose duration is
+  // unchanged preserves a synthesised end as null, while a resize necessarily
+  // changes the duration and so writes a real end. `endStated` mirrors that for
+  // the optimistic patch, so a just-resized block does not flicker back to a
+  // soft edge before the revalidate.
+  function commitMove(args: EventInteractionArgs<CalendarEvent>) {
+    const event = args.event
+    const start = new Date(args.start)
+    const end = new Date(args.end)
+    const target = fromDropOrResize({ event, start, end }, event)
+    startTransition(async () => {
+      applyOptimistic({ id: event.id, start, end, endStated: target.endsAt !== null })
+      await moveScheduleItem(tourId, target)
+    })
+  }
+
+  // Click-empty-to-add. The click is a shortcut for typing the time, nothing
+  // more: it opens Brief 42's day form with the time pre-filled, snapped to 15
+  // minutes, and the TM types the rest. Which day the time falls on is the day
+  // being viewed; the form resolves the instant server-side like every other
+  // day_item write, so nothing here derives a day.
+  function handleSelectSlot(slot: { start: Date | string }) {
+    if (!gesturesEnabled) return
+    const fifteenMin = 15 * 60 * 1000
+    // Snapping the instant is snapping the wall clock: every timezone this
+    // product cares about is a whole number of 15-minute steps off UTC.
+    const snapped = new Date(Math.round(new Date(slot.start).getTime() / fifteenMin) * fifteenMin)
+    // Stated meridiem so the parser reads the exact time back, rather than
+    // guessing pm on a morning hour and turning 07:30 into 19:30.
+    openSidePanel({
+      type: 'day-form',
+      tourId,
+      tourDateId,
+      initialInput: to12HourClock(localTimeInZone(snapped.toISOString(), timezone)),
+    })
+  }
+
   return (
     <div className="flex h-full flex-col">
       {header}
@@ -239,9 +333,9 @@ export function DayCalendar({ records, tourId, timezone, date, header }: DayCale
           container, which is the most common first-time failure, so this box is
           flex-1 over a min-h-0 chain. */}
       <div className="min-h-0 flex-1 px-2 pb-2 lg:px-6">
-        <Calendar
+        <DnDCalendar
           localizer={localizer}
-          events={view.events}
+          events={displayEvents}
           date={calendarDate}
           view={Views.DAY}
           views={[Views.DAY]}
@@ -254,10 +348,20 @@ export function DayCalendar({ records, tourId, timezone, date, header }: DayCale
           eventPropGetter={(event: CalendarEvent) => ({
             className: accentClassName(event.source, event.accent),
           })}
-          // Controlled and read only: RBC still calls these, so they are supplied
-          // as no-ops rather than left to warn. Navigation and view switching are
-          // off by construction (one view, fixed date); drag, resize and
-          // click-empty-to-add land in REE-56.
+          // Desktop only. RBC's drag addon is mouse-oriented; on mobile every
+          // gesture is off and the grid is display plus tap-to-open.
+          draggableAccessor={() => gesturesEnabled}
+          resizable={gesturesEnabled}
+          // 'ignoreEvents', not true: a click that lands on an event opens that
+          // event's panel and must not also fire onSelectSlot underneath it,
+          // which would open the add form at the same time.
+          selectable={gesturesEnabled ? 'ignoreEvents' : false}
+          onEventDrop={commitMove}
+          onEventResize={commitMove}
+          onSelectSlot={handleSelectSlot}
+          // Controlled: RBC still calls these, so they are supplied as no-ops
+          // rather than left to warn. Navigation and view switching are off by
+          // construction (one view, fixed date).
           onNavigate={() => {}}
           onView={() => {}}
           style={{ height: '100%' }}

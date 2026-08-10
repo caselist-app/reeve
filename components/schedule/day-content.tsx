@@ -75,6 +75,7 @@ export async function DayContent({ tourId, tourName, timezone, selectedDate, tou
           <DayCalendar
             records={records}
             tourId={tourId}
+            tourDateId={tourDate.id}
             timezone={timezone}
             date={selectedDate}
             header={

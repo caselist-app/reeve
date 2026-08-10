@@ -128,7 +128,7 @@ export function ActivePanel() {
       )
     case 'day-form':
       return (
-        <DayForm tourId={panel.tourId} tourDateId={panel.tourDateId} />
+        <DayForm tourId={panel.tourId} tourDateId={panel.tourDateId} initialInput={panel.initialInput} />
       )
     default:
       return null
