@@ -15,6 +15,7 @@ import { TourSelector } from '@/components/nav/tour-selector'
 import { TourSettingsPanel } from '@/components/nav/tour-settings-panel'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useCommandPalette } from '@/stores/command-palette-store'
+import { useTourNameStore } from '@/stores/tour-name-store'
 
 interface Tour {
   id: string
@@ -85,6 +86,13 @@ export function Sidebar({
   }, [pathTourId, rememberedTourId])
 
   const activeTourId = pathTourId ?? rememberedTourId
+
+  // Prefer an optimistic rename, same as the tour selector. See
+  // stores/tour-name-store.ts (REE-65).
+  const tourNameOverrides = useTourNameStore((s) => s.overrides)
+  const activeTourName = activeTourId
+    ? tourNameOverrides[activeTourId] ?? tours.find((t) => t.id === activeTourId)?.name ?? 'Tour'
+    : 'Tour'
 
   function navHref(section: string): string {
     if (!activeTourId) return '/tours/new'
@@ -191,7 +199,7 @@ export function Sidebar({
               className="mb-1 px-2 text-[10px] font-medium uppercase tracking-wider truncate"
               style={{ color: 'var(--sidebar-muted-foreground)' }}
             >
-              {tours.find(t => t.id === activeTourId)?.name ?? 'Tour'}
+              {activeTourName}
             </p>
           )}
           <nav className="space-y-0.5">

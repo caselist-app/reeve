@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useId, useTransition, useEffect } from 'react'
+import { useState, useId, useRef, useTransition, useEffect } from 'react'
 import { useTheme } from 'next-themes'
 import { updateTourAction, archiveTourAction } from '@/lib/actions/tours'
 import { useEntityForm } from '@/hooks/use-entity-form'
+import { useTourNameStore } from '@/stores/tour-name-store'
 import { TOUR_TIMEZONES } from '@/lib/validators/tour'
 import type { Tables } from '@/lib/types/database'
 import { Button } from '@/components/ui/button'
@@ -39,16 +40,26 @@ interface Props {
 export function TourSettingsForm({ tour }: Props) {
   const formId = useId()
 
-  // Same pattern every in-place edit form uses (hooks/use-entity-form.ts): an
-  // onSubmit handler that preventDefaults and drives its own startTransition,
-  // refreshing the client on success. This deliberately avoids React 19's native
-  // <form action> automatic form reset. That reset, entangled with the layout
-  // revalidation this action fires, is what left a rename stuck on "Saving..."
-  // with the sidebar showing the old name about one save in five (REE-65). No
-  // native reset means no snap-back either: the field keeps what the TM typed.
+  // The rename has to appear in the sidebar (components/nav/tour-selector.tsx),
+  // which lives in the app layout above this route. Doing that through a server
+  // round-trip (revalidatePath('layout') or router.refresh()) intermittently
+  // received the new data and never repainted, leaving the save stuck on
+  // "Saving..." with the old name until a reload, about one in five (REE-65).
+  //
+  // So the round-trip is gone from the save path. On success we write the new
+  // name to a client store the sidebar reads (stores/tour-name-store.ts): a
+  // plain state change that cannot hang. No native <form action> reset means the
+  // field keeps what the TM typed, so nothing snaps back either. The server data
+  // catches up on the next navigation, when the app layout re-renders.
+  const setTourName = useTourNameStore((s) => s.setName)
+  const submittedName = useRef(tour.name)
+
   const { submit, pending, error, saved } = useEntityForm({
-    action: (fd) => updateTourAction(tour.id, fd),
-    refreshOnSuccess: true,
+    action: (fd) => {
+      submittedName.current = String(fd.get('name') ?? tour.name)
+      return updateTourAction(tour.id, fd)
+    },
+    onSuccess: () => setTourName(tour.id, submittedName.current),
   })
 
   const [currency, setCurrency] = useState(tour.base_currency)
