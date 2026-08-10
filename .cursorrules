@@ -123,7 +123,7 @@ Commit all three together (migration, code using it, regenerated types) in one c
 - TypeScript strict mode. No any. Use unknown and narrow.
 - Named exports for components. Default exports only for Next.js page/layout/route files.
 - Functional components and hooks only. No class components.
-- Tailwind utility classes only. No .css files unless unavoidable. Merge classes with cn() from @/lib/utils.
+- Tailwind utility classes only. No .css files unless unavoidable. Merge classes with cn() from @/lib/utils. The one sanctioned .css file is components/schedule/day-calendar.css (Brief 43, REE-59): the react-big-calendar override layer. RBC's stylesheet is unlayered and Tailwind v4 utilities are layered, so unlayered RBC always beats a Tailwind class from eventPropGetter; only an unlayered .css loaded after RBC's re-tokenises it. No hardcoded hex in it. Do not delete it or add a second .css on its precedent.
 - Use shadcn components from components/ui/. Lucide icons via import { IconName } from 'lucide-react'.
 - Comments explain WHY when non-obvious, never WHAT.
 
@@ -180,6 +180,6 @@ Commit all three together (migration, code using it, regenerated types) in one c
 - Do not add an AI provider other than Anthropic.
 - Do not add a dependency not in package.json without instruction.
 - Do not switch to npm or yarn. pnpm only.
-- Do not write .css files. Tailwind utilities only.
+- Do not write .css files. Tailwind utilities only. (Sole exception: components/schedule/day-calendar.css, the RBC override layer, see above.)
 - Do not use Pages Router patterns. App Router only.
 - Do not use em-dashes in copy, code, or comments. Ever.
