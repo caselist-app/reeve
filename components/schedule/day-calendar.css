@@ -1,0 +1,191 @@
+/*
+ * The override layer that stops the schedule grid looking like a default
+ * react-big-calendar install (Brief 43, REE-59).
+ *
+ * WHY THIS FILE EXISTS AND WHY IT MUST NOT BE DELETED
+ * ---------------------------------------------------
+ * CLAUDE.md says "Tailwind utility classes only. No .css files unless
+ * unavoidable." This is the named unavoidable case. RBC ships its own
+ * stylesheet (imported in day-calendar.tsx) and that stylesheet is UNLAYERED.
+ * Tailwind v4 compiles its utilities into `@layer utilities`, and in the CSS
+ * cascade an unlayered rule beats a layered one no matter the specificity. So a
+ * Tailwind class handed to RBC through eventPropGetter loses to RBC's own
+ * `.rbc-event` every time: the accent would simply not paint. The only reliable
+ * way to re-tokenise RBC is a stylesheet that sits in the same (unlayered) tier
+ * and loads after RBC's, which is exactly this file. Delete it and the grid
+ * reverts to flat blue blocks and chunky 2015 borders.
+ *
+ * NO HARDCODED HEX. Every colour here is a theme variable. Neutral chrome uses
+ * Reeve's own tokens (--border, --muted-foreground, --background, --ring,
+ * --destructive). Kind accents use Tailwind v4's exposed palette variables
+ * (--color-purple-500 and friends), which the app already relies on through the
+ * date sidebar chips, and tints are mixed against --background so light and dark
+ * are one definition rather than two. Accents match the date sidebar: purple
+ * show, teal transport, blue hotel, emerald catering, amber other.
+ */
+
+/* Outer chrome. The grid sits inside <main>, which already carries the card
+   token, so RBC's own outer border and radius are removed rather than
+   re-coloured. */
+.rbc-time-view {
+  border: none;
+  background-color: transparent;
+}
+
+/* We render the day header ourselves (the `header` prop above the grid), so
+   RBC's built-in header row and its empty all-day strip are pure duplication. */
+.rbc-time-view .rbc-time-header {
+  display: none;
+}
+
+/* The scroll area. RBC puts a heavy 2px top border here to divide it from the
+   header we just hid; drop it. Scrollbar hidden (moved here from globals.css,
+   REE-55): a TM does not need the bar and RBC hides its own elsewhere. */
+.rbc-time-content {
+  border-top: none;
+  scrollbar-width: none; /* Firefox */
+}
+.rbc-time-content::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, Opera */
+}
+
+/* The gutter/day divider and the day column: hairlines on --border, never the
+   default grey. */
+.rbc-time-content > * + * {
+  border-left: 1px solid var(--border);
+}
+.rbc-day-slot,
+.rbc-time-gutter {
+  border-color: var(--border);
+}
+
+/* Hour rows. One hairline per hour on the group; the half-hour slot line inside
+   it is suppressed so the grid reads as hours, not a ledger. Taller rows than
+   the RBC default give the chips room to breathe. */
+.rbc-timeslot-group {
+  border-bottom: 1px solid var(--border);
+  min-height: 3.5rem;
+}
+.rbc-time-slot {
+  border-top: none;
+}
+
+/* The gutter: small, muted, tabular numerals, right-aligned with a little air. */
+.rbc-time-gutter {
+  background-color: transparent;
+}
+.rbc-time-gutter .rbc-timeslot-group {
+  border-bottom: none;
+}
+.rbc-time-gutter .rbc-label {
+  padding: 0 0.5rem;
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+}
+
+/* RBC tints "today" a pale yellow. Neutralise it: the day being viewed is
+   already the only column, so the tint is noise. */
+.rbc-day-slot.rbc-today,
+.rbc-today {
+  background-color: transparent;
+}
+
+/* The now line. RBC's default is a green hairline; re-home it to the alert
+   token so it reads as "now" and carries a dot at the gutter edge. Only renders
+   when the viewed day is today, which RBC decides. */
+.rbc-current-time-indicator {
+  height: 1px;
+  background-color: var(--destructive);
+}
+.rbc-current-time-indicator::before {
+  content: "";
+  position: absolute;
+  left: -3px;
+  top: -2.5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background-color: var(--destructive);
+}
+
+/*
+ * The event chip. Strip RBC's flat blue fill, 1px all-round border and rounded
+ * corners back to a single-sided accent: a thick left border in the kind's
+ * colour, a tinted background from the same hue, and a bottom edge that is solid
+ * when the TM has stated an end and dashed when the end is synthetic. The accent
+ * hue arrives as a marker class (.evt-*) from eventPropGetter, which sets the
+ * two custom properties this rule reads.
+ */
+.rbc-event,
+.rbc-day-slot .rbc-event {
+  padding: 1px 6px;
+  background-color: var(--evt-tint);
+  border: 0 solid var(--evt-accent);
+  border-left-width: 3px;
+  border-bottom-width: 1.5px;
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--foreground);
+  font-size: 0.75rem;
+  line-height: 1.2;
+}
+.rbc-event:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+/* RBC darkens a selected event; keep our tint and let focus-visible carry the
+   selection instead. */
+.rbc-event.rbc-selected,
+.rbc-day-slot .rbc-event.rbc-selected {
+  background-color: var(--evt-tint);
+}
+/* The custom event component already renders the time, so RBC's own label would
+   duplicate it. */
+.rbc-event .rbc-event-label {
+  display: none;
+}
+
+/* Solid where the end is stated, dashed where it was synthesised by the
+   adapter. This is the visible tell that "nobody has said how long this takes".*/
+.rbc-event.evt-firm-end {
+  border-bottom-style: solid;
+}
+.rbc-event.evt-soft-end {
+  border-bottom-style: dashed;
+}
+
+/* Kind accent ramp. Hue from Tailwind's palette variables; tint mixed against
+   the current --background so one rule covers light and dark. */
+.evt-show {
+  --evt-accent: var(--color-purple-500);
+  --evt-tint: color-mix(in oklab, var(--color-purple-500) 14%, var(--background));
+}
+.evt-transport {
+  --evt-accent: var(--color-teal-500);
+  --evt-tint: color-mix(in oklab, var(--color-teal-500) 14%, var(--background));
+}
+.evt-hotel {
+  --evt-accent: var(--color-blue-500);
+  --evt-tint: color-mix(in oklab, var(--color-blue-500) 14%, var(--background));
+}
+.evt-catering {
+  --evt-accent: var(--color-emerald-500);
+  --evt-tint: color-mix(in oklab, var(--color-emerald-500) 14%, var(--background));
+}
+.evt-other {
+  --evt-accent: var(--color-amber-500);
+  --evt-tint: color-mix(in oklab, var(--color-amber-500) 14%, var(--background));
+}
+
+/* Drag addon chrome. The resize anchors ship visible; keep them grabbable but
+   invisible until hover so a resting grid is clean. */
+.rbc-addons-dnd .rbc-addons-dnd-resize-ns-anchor {
+  opacity: 0;
+}
+.rbc-addons-dnd .rbc-event:hover .rbc-addons-dnd-resize-ns-anchor {
+  opacity: 1;
+}
+.rbc-addons-dnd .rbc-addons-dnd-resize-ns-icon {
+  border-color: var(--evt-accent);
+}

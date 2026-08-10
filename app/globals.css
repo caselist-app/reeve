@@ -134,14 +134,8 @@
   }
 }
 
-/* The schedule day grid (react-big-calendar) scrolls its 24 hours vertically.
-   Keep the scroll, hide the bar: a TM does not need to see it, and RBC already
-   treats its own month-row scroll container this way. Brief 43 (REE-55). Not in
-   @layer base, because the selector belongs to the imported RBC stylesheet, not
-   to our own base styles. */
-.rbc-time-content {
-  scrollbar-width: none; /* Firefox */
-}
-.rbc-time-content::-webkit-scrollbar {
-  display: none; /* Chrome, Safari, Opera */
-}
+/* react-big-calendar's visual overrides, including the vertical-scroll hide that
+   used to live here (REE-55), now live with the grid component in
+   components/schedule/day-calendar.css (Brief 43, REE-59). They are kept there so
+   the override stylesheet loads after RBC's own, which is what lets it win the
+   cascade against RBC's unlayered rules. */

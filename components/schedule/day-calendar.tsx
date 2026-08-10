@@ -13,6 +13,11 @@ import withDragAndDrop, {
 // point of this step.
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 import 'react-big-calendar/lib/addons/dragAndDrop/styles.css'
+// The visual pass that makes the grid not look like a default RBC install
+// (REE-59). Imported last, on purpose: it is unlayered CSS that must load after
+// RBC's two unlayered stylesheets to win the cascade. See the header of that
+// file for why a .css file is the CLAUDE.md-sanctioned exception here.
+import './day-calendar.css'
 import {
   BellRing,
   Coffee,
@@ -117,21 +122,24 @@ function to12HourClock(hhmm: string): string {
   return `${hour12}:${String(minute).padStart(2, '0')}${meridiem}`
 }
 
-// The accent colour per event. Source decides first: transport is teal and a
-// hotel is blue wherever they appear, exactly as the old timeline had them. A
-// day_item then maps its semantic accent to a colour, because the colour
-// language belongs to the component and not to lib/. This is REE-55's "correct
-// but ugly": REE-59 owns making the grid look like anything.
+// The accent marker class per event. Source decides first: transport is teal and
+// a hotel is blue wherever they appear, exactly as the old timeline had them. A
+// day_item then maps its semantic accent to a hue. The colour language belongs
+// to the component, not to lib/, so this returns a semantic marker class
+// (.evt-*) and day-calendar.css turns it into the actual accent + tint. It is a
+// marker class rather than a Tailwind utility deliberately: RBC's stylesheet is
+// unlayered and would beat any Tailwind class handed to eventPropGetter, so the
+// accent has to live in the same unlayered override file.
 function accentClassName(source: EventSource, accent: CalendarEvent['accent']): string {
-  if (source === 'segment') return 'border-l-4 border-teal-500'
-  if (source === 'hotel') return 'border-l-4 border-blue-500'
+  if (source === 'segment') return 'evt-transport'
+  if (source === 'hotel') return 'evt-hotel'
   switch (accent) {
     case 'show':
-      return 'border-l-4 border-purple-500'
+      return 'evt-show'
     case 'catering':
-      return 'border-l-4 border-emerald-500'
+      return 'evt-catering'
     default:
-      return 'border-l-4 border-amber-500'
+      return 'evt-other'
   }
 }
 
@@ -240,6 +248,14 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
   const components = useMemo(() => {
     function EventChip({ event }: { event: CalendarEvent }) {
       const Icon = eventIcon(event.icon)
+      // Time range only when the end is real. A synthesised end is not a claim
+      // about duration (see the adapter), so surfacing it as "10:00 to 10:30"
+      // would invent a window the TM never set; the start alone is shown, and the
+      // dashed bottom edge already says the end is open.
+      const startLabel = localTimeInZone(event.start.toISOString(), timezone)
+      const timeLabel = event.syntheticEnd
+        ? startLabel
+        : `${startLabel}–${localTimeInZone(event.end.toISOString(), timezone)}`
       return (
         <button
           type="button"
@@ -247,10 +263,8 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
           className="flex h-full w-full items-center gap-1 overflow-hidden text-left"
         >
           <Icon className="h-3 w-3 shrink-0" aria-hidden />
-          <span className="shrink-0 tabular-nums">
-            {localTimeInZone(event.start.toISOString(), timezone)}
-          </span>
-          <span className="truncate">{event.title}</span>
+          <span className="shrink-0 tabular-nums">{timeLabel}</span>
+          <span className="truncate font-medium">{event.title}</span>
         </button>
       )
     }
@@ -345,8 +359,15 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
           timeslots={2}
           toolbar={false}
           components={components}
+          // Overlapping items sit side by side rather than stacked with an
+          // offset, which is RBC's default and reads as a pile.
+          dayLayoutAlgorithm="no-overlap"
           eventPropGetter={(event: CalendarEvent) => ({
-            className: accentClassName(event.source, event.accent),
+            className: cn(
+              accentClassName(event.source, event.accent),
+              // Solid bottom edge for a stated end, dashed for a synthesised one.
+              event.syntheticEnd ? 'evt-soft-end' : 'evt-firm-end',
+            ),
           })}
           // Desktop only. RBC's drag addon is mouse-oriented; on mobile every
           // gesture is off and the grid is display plus tap-to-open.
