@@ -132,16 +132,25 @@ export async function updateTourAction(
     }
   }
 
-  // No revalidatePath here, deliberately. The caller refreshes the client on
-  // success (useEntityForm with refreshOnSuccess), which re-resolves the whole
-  // current route including the app layout, so the tour name updates both in
-  // this form and in components/nav/tour-selector.tsx above it. Mixing a
-  // server-side revalidate with the client refresh would render the tree twice.
+  // No revalidatePath here, and no client refresh either. Both are deliberate,
+  // and this is the one action in the repo where adding either is a regression.
   //
-  // This replaced a revalidatePath(..., 'layout') that relied on React 19's
-  // native <form action> auto-reset to push the new name into the field. That
-  // combination stalled the client transition intermittently (REE-65): the save
-  // stuck on "Saving..." with the old name until a reload, roughly one in five.
+  // The tour name renders in components/nav/tour-selector.tsx and sidebar.tsx,
+  // which sit in the app layout above this route. Repainting them from down here
+  // is what broke: revalidatePath(..., 'layout') and router.refresh() both had
+  // the client receive a correct payload and never commit it, leaving the save
+  // stuck on "Saving..." with the old name until a reload, about one save in
+  // five (REE-65). The server was right in every failing run, which is why it
+  // took three sessions to find.
+  //
+  // So the visible rename does not travel through the server at all. The form
+  // writes the new name to stores/tour-name-store.ts on success and the nav
+  // reads it. components/tours/settings-form.tsx therefore does NOT pass
+  // refreshOnSuccess to useEntityForm, and must not: that is the round-trip this
+  // removed. Server data catches up on the next navigation, since everything
+  // under app/(app) is a dynamic render.
+  //
+  // Verified over 20 consecutive runs of tests/e2e/revalidate.spec.ts:104.
   return { error: null }
 }
 
