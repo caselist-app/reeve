@@ -247,8 +247,13 @@ jobs:
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: pnpm exec playwright install --only-shell chromium
 
+      # THROWAWAY (repro/ree-66): run only the REE-66 reproduction spec, 25 times
+      # each, to surface the intermittent stale-sidebar bug. Restore to
+      # `pnpm test:e2e` before this branch could ever merge. The setup project
+      # (auth.setup.ts) is a dependency of chromium and still runs under a file
+      # filter, so the session and seed are minted as normal.
       - name: End-to-end tests
-        run: pnpm test:e2e
+        run: pnpm exec playwright test tests/e2e/ree-66-repro.spec.ts --repeat-each=25
         env:
           NEXT_PUBLIC_APP_URL: http://127.0.0.1:3000
           # Absent secret means the dev login route returns 404 and no spec can
