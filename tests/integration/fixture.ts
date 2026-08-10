@@ -153,6 +153,12 @@ export interface E2eSeed {
     hotelStayId: string
     rehearsalId: string
     rehearsalDate: string
+    // A second tour on the SAME account, in Pacific/Auckland, with one positioned
+    // day_item. This is what tests/e2e/timezone.spec.ts opens from a Europe/London
+    // browser to prove the calendar renders in the tour zone, not the browser's.
+    // On the same account so the signed-in browser can open it; RLS would hide a
+    // separate account's tour.
+    zoned: ZonedShowDay
   }
   // A second ACCOUNT, not a second tour. createSecondTour puts both tours on
   // one account, which is right for cross-tour id checks and proves nothing
@@ -172,6 +178,18 @@ export interface E2eSeed {
 export async function createE2eSeed(): Promise<E2eSeed> {
   const a = await createFixture({ tourName: E2E_TOUR_A_NAME, artistName: 'Seeded Artist' })
   const b = await createFixture({ tourName: E2E_TOUR_B_NAME, artistName: 'Other Artist' })
+
+  // A Pacific/Auckland tour on account A, for the timezone regression. June, so
+  // Auckland holds UTC+12 with no DST in play: 09:00 local is a clean morning
+  // hour whose UTC instant (21:00Z the day before) reads as a very different hour
+  // in any browser zone, which is the whole point.
+  const zoned = await createZonedShowDay(a.userId, {
+    timezone: 'Pacific/Auckland',
+    date: '2026-06-14',
+    dayItemLocalTime: '09:00',
+    tourName: 'Aurora Australis Tour',
+    artistName: 'Southern Cross',
+  })
 
   // A day_items row since Brief 42, not a fixed day-sheet column. Inserted directly
   // rather than through createDayItem because this runs in Playwright's global
@@ -232,9 +250,93 @@ export async function createE2eSeed(): Promise<E2eSeed> {
   }
 
   return {
-    a: { ...a, hotelStayId: stay.id, rehearsalId: rehearsal.id, rehearsalDate },
+    a: { ...a, hotelStayId: stay.id, rehearsalId: rehearsal.id, rehearsalDate, zoned },
     b,
   }
+}
+
+// A show day plus one positioned day_item, on a given account and in a given
+// timezone. Returned ids let the timezone spec open it and know exactly which
+// wall-clock time to expect.
+export interface ZonedShowDay {
+  tourId: string
+  tourDateId: string
+  date: string
+  timezone: string
+  // The day_item's wall-clock time in `timezone`, and the UTC instant it maps to.
+  dayItemLocalTime: string
+  dayItemStartUtc: string
+}
+
+export async function createZonedShowDay(
+  userId: string,
+  opts: {
+    timezone: string
+    date: string
+    dayItemLocalTime: string
+    tourName: string
+    artistName: string
+  },
+): Promise<ZonedShowDay> {
+  const { data: artist, error: artistError } = await testDb
+    .from('artists')
+    .insert({ account_id: userId, name: opts.artistName })
+    .select('id')
+    .single()
+  if (artistError || !artist) throw new Error(`seed: could not create zoned artist: ${artistError?.message}`)
+
+  const { data: tour, error: tourError } = await testDb
+    .from('tours')
+    .insert({ account_id: userId, artist_id: artist.id, name: opts.tourName, timezone: opts.timezone })
+    .select('id')
+    .single()
+  if (tourError || !tour) throw new Error(`seed: could not create zoned tour: ${tourError?.message}`)
+
+  const { data: tourDate, error: tourDateError } = await testDb
+    .from('tour_dates')
+    .insert({ tour_id: tour.id, date: opts.date, day_type: 'show' })
+    .select('id')
+    .single()
+  if (tourDateError || !tourDate) throw new Error(`seed: could not create zoned tour_date: ${tourDateError?.message}`)
+
+  const { data: show, error: showError } = await testDb
+    .from('shows')
+    .insert({ tour_id: tour.id, tour_date_id: tourDate.id, date: opts.date, venue_name: 'Zoned Venue' })
+    .select('id')
+    .single()
+  if (showError || !show) throw new Error(`seed: could not create zoned show: ${showError?.message}`)
+
+  const dayItemStartUtc = zonedWallClockToUtc(`${opts.date}T${opts.dayItemLocalTime}`, opts.timezone)
+  const { error: itemError } = await testDb.from('day_items').insert({
+    tour_id: tour.id,
+    tour_date_id: tourDate.id,
+    show_id: show.id,
+    kind: 'load_in',
+    starts_at: dayItemStartUtc,
+  })
+  if (itemError) throw new Error(`seed: could not create zoned day_item: ${itemError.message}`)
+
+  return {
+    tourId: tour.id,
+    tourDateId: tourDate.id,
+    date: opts.date,
+    timezone: opts.timezone,
+    dayItemLocalTime: opts.dayItemLocalTime,
+    dayItemStartUtc,
+  }
+}
+
+// `YYYY-MM-DDTHH:MM` read as wall-clock time in `tz`, returned as a UTC ISO
+// string. A local copy of lib/schedule/datetime.ts's wallClockToUtc, kept here
+// so this fixture needs no path-aliased import: it is run by both vitest and
+// Playwright's plain-node globalSetup, and only the relative-import form is safe
+// across both.
+function zonedWallClockToUtc(local: string, tz: string): string {
+  const ref = new Date(`${local}:00.000Z`)
+  const localStr = ref.toLocaleString('sv-SE', { timeZone: tz }).slice(0, 19)
+  const localAsUtc = new Date(`${localStr.replace(' ', 'T')}.000Z`)
+  const offsetMs = ref.getTime() - localAsUtc.getTime()
+  return new Date(ref.getTime() + offsetMs).toISOString()
 }
 
 // Two deletes, and the cascade does the rest, same as destroyFixture.

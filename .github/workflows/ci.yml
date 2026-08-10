@@ -59,8 +59,19 @@ jobs:
       - name: Check conventions
         run: pnpm check:conventions
 
+      # Pinned to a non-UTC zone on purpose. GitHub runners all run on UTC, and
+      # a timezone bug is invisible there: the daylight-saving regression fixed
+      # in REE-52 left tests/unit/calendar-zone.test.ts's "ignores a DST change
+      # that belongs to the browser" assertion passing even with the getDstOffset
+      # override removed, because under UTC the browser fallback is always zero.
+      # Europe/London is the zone that makes it bite: London springs forward
+      # between that test's two Auckland instants, so a removed override fails it.
+      # Without a fixed TZ here the calendar's timezone protection only exists on
+      # whichever laptop happens to be in the right zone.
       - name: Unit tests
         run: pnpm test
+        env:
+          TZ: Europe/London
 
       - name: Build
         run: pnpm build

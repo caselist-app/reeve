@@ -588,6 +588,43 @@ if (existsSync(KIND_LIST_PATH) && existsSync(MIGRATIONS_DIR)) {
   }
 }
 
+// ---- Rule 11: luxon is confined to the calendar localizer ----
+// date-fns is not used, and luxon is present for one reason only: react-big-
+// calendar's named-timezone support runs through luxonLocalizer, which needs a
+// luxon DateTime. That is the whole justification for the dependency, so a luxon
+// import anywhere else is a new authority on wall-clock time competing with the
+// two the app already has (resolveTourDateId and localDateInZone), and it is
+// exactly the class of stray `DateTime.fromJSDate(...).startOf('day')` in a
+// server action that would reintroduce the timezone bug this containment exists
+// to prevent. RBC's own per-zone support is an unmerged PR open since 2022
+// (jquense/react-big-calendar#2293), which is why the containment is a rule
+// rather than a temporary workaround: it is not going away.
+//
+// Allowed in exactly two places: the localizer that owns the RBC integration,
+// and the calendar component it is built for. Everywhere else, derive the day
+// through lib/schedule/day-link.ts and lib/schedule/datetime.ts instead.
+const LUXON_ALLOWED = new Set([
+  'lib/schedule/calendar-localizer.ts',
+  'components/schedule/day-calendar.tsx',
+])
+const LUXON_IMPORT = /(?:from\s+['"]luxon['"]|require\(\s*['"]luxon['"]\s*\)|import\s+['"]luxon['"])/
+for (const file of sourceFiles) {
+  if (LUXON_ALLOWED.has(rel(file))) continue
+  const src = readFileSync(file, 'utf8')
+  const m = LUXON_IMPORT.exec(src)
+  if (m) {
+    report(
+      'luxon-containment',
+      rel(file),
+      lineOf(src, m.index),
+      'Imports luxon outside the calendar localizer. luxon exists only for ' +
+        "react-big-calendar's localizer; derive the day through resolveTourDateId() " +
+        'and localDateInZone() instead.',
+      `luxon-containment|${rel(file)}`
+    )
+  }
+}
+
 // ---- Compare against the baseline ----
 const baseline = existsSync(BASELINE_PATH)
   ? JSON.parse(readFileSync(BASELINE_PATH, 'utf8'))
