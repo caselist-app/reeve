@@ -104,6 +104,19 @@ function eventIcon(name: string): LucideIcon {
   return EVENT_ICONS[name] ?? CircleDashed
 }
 
+// A 24-hour "HH:MM" as a 12-hour clock with an explicit meridiem ("07:30" to
+// "7:30am", "19:30" to "7:30pm"). The click-to-add time is pre-filled into the
+// day form's free-text input, which runs through parseDayItem, and that parser
+// reads a bare hour of 1 to 11 as ambiguous and applies a kind's default
+// meridiem: "07:30" would come back as 19:30. A dragged time is exact and must
+// not be re-guessed, so it is handed over with the meridiem already stated.
+function to12HourClock(hhmm: string): string {
+  const [hour, minute] = hhmm.split(':').map(Number)
+  const meridiem = hour < 12 ? 'am' : 'pm'
+  const hour12 = hour % 12 === 0 ? 12 : hour % 12
+  return `${hour12}:${String(minute).padStart(2, '0')}${meridiem}`
+}
+
 // The accent colour per event. Source decides first: transport is teal and a
 // hotel is blue wherever they appear, exactly as the old timeline had them. A
 // day_item then maps its semantic accent to a colour, because the colour
@@ -272,11 +285,13 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
     // Snapping the instant is snapping the wall clock: every timezone this
     // product cares about is a whole number of 15-minute steps off UTC.
     const snapped = new Date(Math.round(new Date(slot.start).getTime() / fifteenMin) * fifteenMin)
+    // Stated meridiem so the parser reads the exact time back, rather than
+    // guessing pm on a morning hour and turning 07:30 into 19:30.
     openSidePanel({
       type: 'day-form',
       tourId,
       tourDateId,
-      initialInput: localTimeInZone(snapped.toISOString(), timezone),
+      initialInput: to12HourClock(localTimeInZone(snapped.toISOString(), timezone)),
     })
   }
 
