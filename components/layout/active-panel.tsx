@@ -93,6 +93,7 @@ export function ActivePanel() {
           initialDayType={panel.dayType}
           initialDate={panel.date}
           initialNotes={panel.notes}
+          hasShow={panel.hasShow}
         />
       )
     case 'contact-view':

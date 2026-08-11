@@ -110,6 +110,11 @@ export type PanelDescriptor =
       date: string
       dayType: 'show' | 'rehearsal' | 'travel' | 'press' | 'day_off'
       notes: string | null
+      // Whether the day already has a show row. With Show gone from the add
+      // list (REE-90), setting an existing day's type to 'show' is how a venue
+      // is added: false here means the panel hands off to ShowForm rather than
+      // writing the type straight through, the same as add mode.
+      hasShow: boolean
     }
   | {
       type: 'contact-view'
