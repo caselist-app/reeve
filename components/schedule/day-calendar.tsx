@@ -304,8 +304,9 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
   }, [depthById])
 
   // Lookups from a clicked event back to its record, so a click can open the
-  // right detail panel. Segments include the late-night tail, which is
-  // clickable too.
+  // right detail panel. `records.segments` already reaches into the next
+  // morning's small hours (the broadcast window), so an "Outside this day"
+  // segment is clickable through the same map.
   const itemsById = useMemo(
     () => new Map(records.items.map((item) => [item.id, item])),
     [records.items],
@@ -313,9 +314,8 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
   const segmentsById = useMemo(() => {
     const map = new Map<string, DaySegment>()
     for (const seg of records.segments) map.set(seg.id, seg)
-    for (const seg of records.lateNight.segments) map.set(seg.id, seg)
     return map
-  }, [records.segments, records.lateNight.segments])
+  }, [records.segments])
   const hotelsById = useMemo(
     () => new Map(records.hotels.map((hotel) => [hotel.id, hotel])),
     [records.hotels],

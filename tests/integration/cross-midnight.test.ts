@@ -269,11 +269,11 @@ describe('day item times that cross midnight', () => {
     expect(localTimeInZone(await storedTime('load_in'), TZ)).toBe('11:00')
   })
 
-  it('shows a small-hours departure as the tail of the previous day', async () => {
+  it('sources a small-hours departure onto the previous broadcast day', async () => {
     // The case Matt described: adding travel to a show day. A red-eye at 01:30
     // on the 15th is stored on the 15th, correctly, and the TM planning the
-    // 14th still needs to see it. It appears in both places on purpose, because
-    // it genuinely is the end of one day and the start of the next.
+    // 14th still needs to see it. The broadcast window pulls it into the 14th's
+    // records, and the DAY_START_HOUR grid shift renders it on the 14th's night.
     const { data: segment } = await testDb
       .from('transport_segments')
       .insert({
@@ -297,21 +297,20 @@ describe('day item times that cross midnight', () => {
       timezone: TZ,
     })
 
-    expect(showDay.lateNight.segments.map((s) => s.id)).toContain(segment.id)
-    // REE-113: it is now also in the day's own records, so the step-3 broadcast
-    // grid can render it on the night it follows. No double on screen in this
-    // step: the grid is still calendar-bounded, so RBC filters it off the 14th's
-    // column and it shows only in the tail.
+    // It is in the day's own records now, sourced by the broadcast window, so the
+    // grid renders it on the night it follows via the DAY_START_HOUR shift. There
+    // is no separate tail any more.
     expect(showDay.segments.map((s) => s.id)).toContain(segment.id)
     // The roster still does not count it: those people are travelling on the
     // 15th, whatever day the card is shown on. segmentIds stays on the calendar
-    // day even though segments now reaches into the next morning.
+    // day even though segments reaches into the next morning.
     expect(showDay.segmentIds).not.toContain(segment.id)
   })
 
-  it('leaves a normal morning departure out of the previous day', async () => {
-    // The other side of the boundary. 08:00 is simply the next day's morning
-    // and has nothing to do with the night before.
+  it('leaves a normal morning departure off the previous broadcast day', async () => {
+    // The other side of the boundary. 08:00 is past the 04:00 broadcast end, so
+    // it is simply the next day's morning and has nothing to do with the night
+    // before.
     const { data: segment } = await testDb
       .from('transport_segments')
       .insert({
@@ -334,13 +333,14 @@ describe('day item times that cross midnight', () => {
       timezone: TZ,
     })
 
-    expect(showDay.lateNight.segments).toHaveLength(0)
+    expect(showDay.segments.map((s) => s.id)).not.toContain(segment.id)
   })
 
-  it('does not put a late departure on the day it actually departs into its own tail', async () => {
-    // A 01:30 departure on the 14th belongs to the 13th's tail, not the 14th's.
-    // Without this the tail would pick up the day's own small hours and render
-    // every red-eye twice on one screen.
+  it('keeps the day own small-hours departure in its records for the grid to rail', async () => {
+    // A 01:30 departure on the 14th belongs to the 13th's broadcast night. The
+    // 14th's broadcast window still starts at 14th 00:00, so it is fetched into
+    // the 14th's records, and buildDayCalendarView shifts it before 00:00 and
+    // rails it under "Outside this day" rather than dropping it.
     const { data: segment } = await testDb
       .from('transport_segments')
       .insert({
@@ -363,7 +363,6 @@ describe('day item times that cross midnight', () => {
       timezone: TZ,
     })
 
-    expect(showDay.lateNight.segments).toHaveLength(0)
     expect(showDay.segments.map((s) => s.id)).toContain(segment.id)
   })
 
