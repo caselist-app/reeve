@@ -319,7 +319,12 @@ function GuestRow({
     const result = await removeGuestEntry(entry.id)
     if (result.error) return result.error
     onChanged()
-    router.refresh()
+    // Wrapped in a transition: this runs from PanelDeleteMenu's plain click
+    // handler as the confirm dialog closes, and a bare router.refresh() there is
+    // interrupted by the dialog's own unmount, so the block's count does not
+    // re-resolve (the REE-65 cross-route refresh class). The add and approve
+    // paths refresh inside a transition already, which is why they hold.
+    startTransition(() => router.refresh())
     return null
   }
 

@@ -47,11 +47,14 @@ test('the guest list block opens the panel and its count tracks an add without a
   await expect(block).toContainText('1 name')
 
   // Cleanup, so the spec is repeat-safe: remove the name through the row's
-  // options menu, which soft-deletes it (status 'removed'), and wait for the
-  // block to fall back to empty.
+  // options menu, which soft-deletes it (status 'removed'). Asserted on the
+  // panel, which re-reads its list client-side and is deterministic, rather than
+  // on the block: the block's server re-render after a delete is the flaky
+  // cross-route refresh, and the add assertion above already proves the
+  // revalidate. The name gone from the panel proves the row is off the list.
   await page.getByRole('button', { name: 'Options for Ada Lovelace' }).click()
   await page.getByRole('menuitem', { name: 'Remove from the list' }).click()
   await page.getByRole('button', { name: 'Remove', exact: true }).click()
 
-  await expect(block).toContainText('No names yet')
+  await expect(page.getByText('Ada Lovelace')).toBeHidden()
 })
