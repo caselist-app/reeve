@@ -25,7 +25,14 @@ test('an Auckland day is drawn in Auckland time from a London browser', async ({
   // renders on the grid; the chip's own time label is derived from the tour zone
   // (localTimeInZone in day-calendar.tsx), so it reads 09:00 and not the London
   // wall clock of the same instant, which is 10:00 PM.
-  const block = page.locator('.rbc-event', { hasText: 'Load-in' })
+  //
+  // .first() because RBC briefly double-mounts an event node on first paint,
+  // before its own gutter-measure re-render settles the grid to one. A bare
+  // .rbc-event filter throws a strict-mode violation on that transient instead of
+  // waiting it out. revalidate.spec.ts locates the same Load-in block the same
+  // way for the same reason; this spec only avoided it because the 30-minute step
+  // it was written against did not line the transient up with the first query.
+  const block = page.locator('.rbc-event', { hasText: 'Load-in' }).first()
   await expect(block).toBeVisible()
   await expect(block).toContainText('09:00')
 

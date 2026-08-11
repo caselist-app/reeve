@@ -355,8 +355,8 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
           views={[Views.DAY]}
           min={min}
           max={max}
-          step={30}
-          timeslots={2}
+          step={15}
+          timeslots={4}
           toolbar={false}
           components={components}
           // Overlapping items sit side by side rather than stacked with an
