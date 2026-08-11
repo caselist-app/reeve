@@ -105,11 +105,27 @@ export function ActivePanel() {
       )
     case 'day-item':
       return (
-        <DayItemPanel item={panel.item} tourId={panel.tourId} timezone={panel.timezone} />
+        // Keyed on the times so a grid resize that rewrites them in the store
+        // (REE-85) remounts the form and its uncontrolled defaultValue time
+        // inputs pick the new end up. The panel's own save does not touch the
+        // store snapshot, so this key is stable across a save and its "Saved."
+        // and notify flow survive.
+        <DayItemPanel
+          key={`${panel.item.starts_at ?? ''}|${panel.item.ends_at ?? ''}`}
+          item={panel.item}
+          tourId={panel.tourId}
+          timezone={panel.timezone}
+        />
       )
     case 'transport':
       return (
-        <TransportPanel segment={panel.segment} timezone={panel.timezone} />
+        // Same remount-on-resize reasoning as day-item above (REE-85): the
+        // depart/arrive inputs are uncontrolled defaultValues.
+        <TransportPanel
+          key={`${panel.segment.depart_at ?? ''}|${panel.segment.arrive_at ?? ''}`}
+          segment={panel.segment}
+          timezone={panel.timezone}
+        />
       )
     case 'hotel':
       return (
