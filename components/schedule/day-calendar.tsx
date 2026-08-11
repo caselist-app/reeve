@@ -300,7 +300,7 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
           className="flex h-full w-full items-center gap-1 overflow-hidden text-left"
         >
           <Icon className="h-3 w-3 shrink-0" aria-hidden />
-          <span className="shrink-0 tabular-nums">{timeLabel}</span>
+          <span className="shrink-0 tabular-nums text-[color:var(--evt-meta)]">{timeLabel}</span>
           <span className="truncate font-medium">{event.title}</span>
         </button>
       )
