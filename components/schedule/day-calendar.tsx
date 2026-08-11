@@ -293,15 +293,23 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
       const timeLabel = event.syntheticEnd
         ? startLabel
         : `${startLabel}–${localTimeInZone(event.end.toISOString(), timezone)}`
+      // Title first, then time. On a tall block the body flips to a column (the
+      // @container branch in day-calendar.css) so the title sits above the time;
+      // on a short block it stays this single row. The time is shrink-0 and the
+      // title truncates, so the collapsed row drops title characters before it
+      // ever drops the time. That ordering is load-bearing: the seeded load-in is
+      // a short block and the e2e specs read its time off it.
       return (
         <button
           type="button"
           onClick={() => openEvent(event)}
-          className="flex h-full w-full items-center gap-1 overflow-hidden text-left"
+          className="flex h-full w-full items-start gap-1 overflow-hidden text-left"
         >
-          <Icon className="h-3 w-3 shrink-0" aria-hidden />
-          <span className="shrink-0 tabular-nums text-[color:var(--evt-meta)]">{timeLabel}</span>
-          <span className="truncate font-medium">{event.title}</span>
+          <Icon className="mt-px h-3 w-3 shrink-0" aria-hidden />
+          <span className="evt-chip-body flex min-w-0 flex-1 flex-row items-baseline gap-1.5">
+            <span className="min-w-0 truncate font-medium">{event.title}</span>
+            <span className="shrink-0 tabular-nums text-[color:var(--evt-meta)]">{timeLabel}</span>
+          </span>
         </button>
       )
     }
