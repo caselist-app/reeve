@@ -147,6 +147,10 @@ function accentClassName(source: EventSource, accent: CalendarEvent['accent']): 
       return 'evt-show'
     case 'catering':
       return 'evt-catering'
+    case 'headliner':
+      return 'evt-headliner'
+    case 'support':
+      return 'evt-support'
     default:
       return 'evt-other'
   }

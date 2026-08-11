@@ -83,6 +83,20 @@ describe('the day item kind list', () => {
     expect(catering.sort()).toEqual(['catering_breakfast', 'catering_dinner', 'catering_lunch'])
   })
 
+  it('gives the two performance sets their own accent, unshared (REE-122)', () => {
+    // Support and the headliner each carry a hue no other kind uses, so the acts
+    // stand out on the day. Asserting exclusivity here is what stops a later kind
+    // quietly reusing one of the two standout colours.
+    expect(dayItemKind('headliner')?.accent).toBe('headliner')
+    expect(dayItemKind('support')?.accent).toBe('support')
+    expect(DAY_ITEM_KINDS.filter((k) => k.accent === 'headliner').map((k) => k.kind)).toEqual([
+      'headliner',
+    ])
+    expect(DAY_ITEM_KINDS.filter((k) => k.accent === 'support').map((k) => k.kind)).toEqual([
+      'support',
+    ])
+  })
+
   it('puts the custom kind last and gives it no aliases', () => {
     // The combo box offers kinds in array order and the custom option must never
     // be the highlighted default: one typo otherwise creates a permanent second
