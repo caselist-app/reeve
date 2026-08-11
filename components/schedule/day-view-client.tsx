@@ -180,8 +180,11 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
   return (
     <>
       <div className="flex flex-col lg:flex-row flex-1 min-w-0 min-h-0">
-        {/* Timeline: flex-1 */}
-        <div className="relative flex flex-col flex-1 min-w-0">
+        {/* Timeline: flex-1. min-h-0 so this column can shrink below its content
+            and hand a bounded height down to the calendar's own scroll area,
+            rather than growing to the full grid height (REE-125). Inert on
+            desktop, where the parent row stretches this column's height anyway. */}
+        <div className="relative flex flex-col flex-1 min-w-0 min-h-0">
           {dateStrip}
           <div className="flex-1 overflow-y-auto">
             {timeline}
