@@ -152,6 +152,8 @@ export function ActivePanel() {
           key={panel.initialInput ?? ''}
           tourId={panel.tourId}
           tourDateId={panel.tourDateId}
+          date={panel.date}
+          timezone={panel.timezone}
           initialInput={panel.initialInput}
         />
       )

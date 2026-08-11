@@ -160,19 +160,25 @@ export type PanelDescriptor =
       category: ScheduleAddCategory
       onBack: () => void
     }
-  // REE-22: the typed fast path for a day item. One text input, a preview of
-  // what was understood, enter commits. Sits beside the add-to-day picker above,
-  // not in place of it: typing is for anything where the time is the point (a
-  // load-in, a soundcheck, a curfew), the picker is for a flight, drive, rail or
-  // hotel. It only ever writes a day_items row, never a transport or hotel one.
+  // REE-22, REE-88: the one door into a day. One text input over buildAddOptions,
+  // a preview of what Enter will do, enter commits. It commits a day_items row
+  // directly for anything where the time is the point (a load-in, a soundcheck, a
+  // curfew), and hands a flight/drive/rail/hotel off to the add-to-day form,
+  // which has structure beyond a time. `date` and `timezone` are here so it can
+  // open that form (the add-to-day descriptor needs both) and so its Back path
+  // can reopen this one.
   | {
       type: 'day-form'
       tourId: string
       tourDateId: string
+      date: string
+      timezone: string
       // Pre-filled input, set when the form is opened by clicking empty grid
       // space (REE-56): the snapped wall-clock time, which the TM types the rest
-      // of the line after. Absent when opened from the '+' picker or the '/'
-      // shortcut, where the input starts empty.
+      // of the line after. Also carried across the open-a-form-and-come-back trip
+      // (REE-88), so the typed line survives a detour into the flight form.
+      // Absent when opened from the '+' picker or the '/' shortcut, where the
+      // input starts empty.
       initialInput?: string
     }
 
