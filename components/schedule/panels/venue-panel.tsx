@@ -5,17 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { AlertCircle, ChevronRight } from 'lucide-react'
 import { PanelShell } from '@/components/layout/panel-shell'
-import { Button } from '@/components/ui/button'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+import { PanelDeleteMenu } from '@/components/schedule/panels/panel-delete-menu'
 import { ShowForm } from '@/components/shows/show-form'
 import { getShowVenueDetail, deleteShow, type ShowVenueDetail } from '@/lib/actions/shows'
 import { useSidePanel } from '@/stores/side-panel-store'
@@ -51,21 +41,12 @@ export function VenuePanel({ tourId, showId, venueName }: VenuePanelProps) {
   const [detail, setDetail] = useState<ShowVenueDetail | null>(null)
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
-  const [deleteOpen, setDeleteOpen] = useState(false)
-  const [deleting, setDeleting] = useState(false)
-  const [deleteError, setDeleteError] = useState<string | null>(null)
-
-  async function handleDelete() {
-    setDeleting(true)
+  async function handleDelete(): Promise<string | null> {
     const result = await deleteShow(showId)
-    setDeleting(false)
-    if (result.error) {
-      setDeleteError(result.error)
-      return
-    }
-    setDeleteOpen(false)
+    if (result.error) return result.error
     close()
     router.refresh()
+    return null
   }
 
   useEffect(() => {
@@ -93,7 +74,23 @@ export function VenuePanel({ tourId, showId, venueName }: VenuePanelProps) {
   }, [showId])
 
   return (
-    <PanelShell title={venueName} description="Venue">
+    <PanelShell
+      title={venueName}
+      description="Venue"
+      headerAction={
+        detail ? (
+          <PanelDeleteMenu
+            triggerLabel="Show options"
+            menuLabel="Delete show"
+            confirmLabel="Delete show"
+            pendingLabel="Deleting..."
+            dialogTitle="Delete this show?"
+            dialogDescription={`This removes ${venueName}, its running order and its advance status from the tour. The day reverts to travel or day off. This cannot be undone.`}
+            onConfirm={handleDelete}
+          />
+        ) : undefined
+      }
+    >
       {loading && <p className="text-xs text-muted-foreground">Loading...</p>}
 
       {fetchError && <p className="text-xs text-destructive">{fetchError}</p>}
@@ -148,41 +145,6 @@ export function VenuePanel({ tourId, showId, venueName }: VenuePanelProps) {
               <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
             </Link>
           </div>
-
-          <div className="mt-5 border-t border-border pt-4">
-            {deleteError && <p className="mb-2 text-xs text-destructive">{deleteError}</p>}
-            <Button
-              type="button"
-              variant="destructive"
-              size="sm"
-              className="w-full"
-              onClick={() => setDeleteOpen(true)}
-            >
-              Delete show
-            </Button>
-          </div>
-
-          <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete this show?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This removes {venueName}, its running order and its advance status from the
-                  tour. The day reverts to travel or day off. This cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleDelete}
-                  disabled={deleting}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                >
-                  {deleting ? 'Deleting...' : 'Delete show'}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
         </>
       )}
     </PanelShell>

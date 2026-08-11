@@ -8,16 +8,7 @@ import { PlacesAddressInput } from '@/components/shows/places-address-input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Button } from '@/components/ui/button'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+import { PanelDeleteMenu } from '@/components/schedule/panels/panel-delete-menu'
 import { updateDayItem, deleteDayItem } from '@/lib/actions/day-items'
 import { dayItemLabel } from '@/lib/schedule/day-item-kinds'
 import { localTimeInZone } from '@/lib/schedule/datetime'
@@ -72,9 +63,6 @@ function toClock(iso: string | null, tz: string): string {
 export function DayItemPanel({ item, tourId, timezone }: DayItemPanelProps) {
   const router = useRouter()
   const { close } = useSidePanel()
-  const [deleteOpen, setDeleteOpen] = useState(false)
-  const [deleting, setDeleting] = useState(false)
-  const [deleteError, setDeleteError] = useState<string | null>(null)
   const [notify, setNotify] = useState<NotifyState | null>(null)
 
   const label = dayItemLabel(item.kind)
@@ -93,17 +81,12 @@ export function DayItemPanel({ item, tourId, timezone }: DayItemPanelProps) {
   // Controlled so the Places widget can write the selected location back in.
   const [location, setLocation] = useState(item.location ?? '')
 
-  async function handleDelete() {
-    setDeleting(true)
+  async function handleDelete(): Promise<string | null> {
     const result = await deleteDayItem(item.id)
-    setDeleting(false)
-    if (result.error) {
-      setDeleteError(result.error)
-      return
-    }
-    setDeleteOpen(false)
+    if (result.error) return result.error
     close()
     router.refresh()
+    return null
   }
 
   // Set by action() before the server action runs, read by onSuccess after it
@@ -150,7 +133,21 @@ export function DayItemPanel({ item, tourId, timezone }: DayItemPanelProps) {
   })
 
   return (
-    <PanelShell title={item.title || label} description={item.title ? label : 'On this day'}>
+    <PanelShell
+      title={item.title || label}
+      description={item.title ? label : 'On this day'}
+      headerAction={
+        <PanelDeleteMenu
+          triggerLabel="Item options"
+          menuLabel="Remove from the day"
+          confirmLabel="Remove"
+          pendingLabel="Removing..."
+          dialogTitle={`Remove ${item.title || label.toLowerCase()}?`}
+          dialogDescription="This takes it off the day. Nothing else on the day changes. This cannot be undone."
+          onConfirm={handleDelete}
+        />
+      }
+    >
       <form onSubmit={submit} className="space-y-3">
         <div className="space-y-1">
           <Label className="text-xs">{isCustom ? 'Name' : 'Name (optional)'}</Label>
@@ -203,9 +200,7 @@ export function DayItemPanel({ item, tourId, timezone }: DayItemPanelProps) {
           <Textarea name="notes" defaultValue={item.notes ?? ''} rows={3} className="text-xs" />
         </div>
 
-        {(error || deleteError) && (
-          <p className="text-xs text-destructive">{error || deleteError}</p>
-        )}
+        {error && <p className="text-xs text-destructive">{error}</p>}
         <Button type="submit" size="sm" disabled={pending} className="w-full">
           {pending ? 'Saving...' : 'Save'}
         </Button>
@@ -219,39 +214,6 @@ export function DayItemPanel({ item, tourId, timezone }: DayItemPanelProps) {
           <NotifyPanel tourId={tourId} change={notify.change} previousValue={notify.previousValue} />
         )}
       </form>
-
-      <div className="mt-5 border-t border-border pt-4">
-        <Button
-          type="button"
-          variant="destructive"
-          size="sm"
-          className="w-full"
-          onClick={() => setDeleteOpen(true)}
-        >
-          Remove from the day
-        </Button>
-      </div>
-
-      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove {item.title || label.toLowerCase()}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This takes it off the day. Nothing else on the day changes. This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              disabled={deleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {deleting ? 'Removing...' : 'Remove'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </PanelShell>
   )
 }
