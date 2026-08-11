@@ -191,15 +191,17 @@
   }
 }
 
-/* A stacked pair (REE-81): two items whose times overlap, which RBC lays side by
-   side. evt-stacked is set in day-calendar.tsx on any event that overlaps
-   another. A depth shadow lifts them apart so the pair reads as two blocks, not
-   one wide panel. The accent bar is re-declared inset because a box-shadow
-   replaces, it does not merge. */
+/* A stacked block steps in from the left over the one it overlaps and sits on
+   top (REE-77 cascade). It keeps full width, so without a lift its left accent
+   bar would read as if it belonged to the block underneath. A soft shadow down
+   the left and top edges separates the two. The accent bar is re-declared inset
+   because a box-shadow replaces, it does not merge (REE-81). Token-based (no
+   hex): mixed from --foreground against transparent so it tracks light and
+   dark. */
 .rbc-event.evt-stacked {
   box-shadow:
     inset 3px 0 0 0 var(--evt-accent),
-    0 1px 4px color-mix(in oklab, var(--foreground) 14%, transparent);
+    -2px -1px 4px color-mix(in oklab, var(--foreground) 14%, transparent);
 }
 
 /* Kind accent ramp. Hue from Tailwind's palette variables; tint mixed against

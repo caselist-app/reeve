@@ -48,6 +48,7 @@ import { createZonedLocalizer } from '@/lib/schedule/calendar-localizer'
 import { localTimeInZone, localDayWindowUtc } from '@/lib/schedule/datetime'
 import { slotToDayFormInput } from '@/lib/schedule/day-form-prefill'
 import { buildDayCalendarView } from '@/lib/schedule/day-calendar-view'
+import { assignOverlapDepths } from '@/lib/schedule/overlap-layout'
 import { fromDropOrResize, type CalendarEvent, type EventSource } from '@/lib/schedule/calendar-adapter'
 import { moveScheduleItem } from '@/lib/actions/move-schedule-item'
 import type { DayRecords, DaySegment } from '@/lib/schedule/day-records'
@@ -200,28 +201,60 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
       ),
   )
 
-  // Which events overlap another and so get drawn side by side by RBC's
-  // no-overlap algorithm (REE-81). They are marked evt-stacked and lifted apart
-  // with a depth shadow in day-calendar.css, because two adjacent tinted blocks
-  // otherwise read as one panel. The test is the same interval intersection RBC
-  // uses to decide the side-by-side layout (start before the other's end, and
-  // the other's start before this end), run over the positioned events with the
-  // ends they were drawn with, so the marker matches exactly what the grid laid
-  // out. eventPropGetter cannot see layout, hence the flag is computed here.
-  const stackedIds = useMemo(() => {
-    const ids = new Set<string>()
-    for (let i = 0; i < displayEvents.length; i++) {
-      for (let j = i + 1; j < displayEvents.length; j++) {
-        const a = displayEvents[i]
-        const b = displayEvents[j]
-        if (a.start < b.end && b.start < a.end) {
-          ids.add(a.id)
-          ids.add(b.id)
-        }
-      }
+  // The cascade indent per event, keyed by id (REE-77). assignOverlapDepths is
+  // the pure function from REE-76: it gives each block a depth one past the
+  // deepest block it overlaps, and the pixel indent for that depth. The layout
+  // callback and eventPropGetter both read this one map so a block's offset and
+  // its "stacked" marker never disagree. Rebuilt whenever the optimistic events
+  // move, so a drag that changes an overlap re-indents immediately.
+  const depthById = useMemo(() => {
+    const map = new Map<string, { depth: number; indentPx: number }>()
+    for (const laid of assignOverlapDepths(displayEvents)) {
+      map.set(laid.id, { depth: laid.depth, indentPx: laid.indentPx })
     }
-    return ids
+    return map
   }, [displayEvents])
+
+  // The custom day layout, replacing RBC's "no-overlap". no-overlap splits the
+  // column between concurrent blocks, so titles vanish once three or four things
+  // share a slot. Instead every block keeps full width and a later, overlapping
+  // block steps in from the left by its indent, so both titles stay readable, the
+  // later block sits on top, and the earlier block's exposed left strip is still
+  // grabbable to drag or resize. top and height are left exactly as getRange
+  // gives them (the real time position); only the horizontal placement changes.
+  // The returned entries carry the original event object, not a copy, so RBC's
+  // keys and the drag addon still recognise them. Sorted by depth so a deeper
+  // block paints after (on top of) the ones it steps behind.
+  const cascadeLayout = useMemo(() => {
+    return ({
+      events,
+      slotMetrics,
+      accessors,
+    }: {
+      events: CalendarEvent[]
+      slotMetrics: { getRange: (start: Date, end: Date) => { top: number; height: number } }
+      accessors: { start: (event: CalendarEvent) => Date; end: (event: CalendarEvent) => Date }
+    }) => {
+      return events
+        .map((event) => {
+          const { top, height } = slotMetrics.getRange(accessors.start(event), accessors.end(event))
+          const info = depthById.get(event.id)
+          const indentPx = info?.indentPx ?? 0
+          return {
+            event,
+            depth: info?.depth ?? 0,
+            style: {
+              top,
+              height,
+              width: `calc(100% - ${indentPx}px)`,
+              xOffset: `${indentPx}px`,
+            },
+          }
+        })
+        .sort((a, b) => a.depth - b.depth)
+        .map(({ event, style }) => ({ event, style }))
+    }
+  }, [depthById])
 
   // Lookups from a clicked event back to its record, so a click can open the
   // right detail panel. Segments include the late-night tail, which is
@@ -431,20 +464,23 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
           timeslots={4}
           toolbar={false}
           components={components}
-          // Overlapping items sit side by side rather than stacked with an
-          // offset, which is RBC's default and reads as a pile.
-          dayLayoutAlgorithm="no-overlap"
+          // Overlapping items cascade: full-width blocks indented from the left
+          // by depth, later ones on top, instead of RBC's side-by-side split
+          // that shrinks every block to nothing once a slot gets busy (REE-77).
+          dayLayoutAlgorithm={cascadeLayout}
           eventPropGetter={(event: CalendarEvent) => {
             // The pending-selection highlight gets its own class, not a kind
             // accent (REE-68): it is not one of the coloured record blocks.
             if (event.id === PENDING_SELECTION_ID) {
               return { className: 'evt-selection' }
             }
+            // Stacked when it steps behind another block: a shadow lifts it off
+            // the one underneath so the cascade reads as depth, not a smudge.
+            const stacked = (depthById.get(event.id)?.depth ?? 0) > 0
             return {
               className: cn(
                 accentClassName(event.source, event.accent),
-                // Depth shadow when this block shares its time with another.
-                stackedIds.has(event.id) && 'evt-stacked',
+                stacked && 'evt-stacked',
               ),
             }
           }}
