@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useId, useTransition } from 'react'
+import { useEffect, useState, useId, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { createTourAction } from '@/lib/actions/tours'
 import { createArtistAction } from '@/lib/actions/artists'
 import { TOUR_TIMEZONES } from '@/lib/validators/tour'
+import { detectBrowserTourTimezone } from '@/lib/schedule/detect-timezone'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -47,6 +48,16 @@ export function NewTourForm({ artists }: Props) {
   const [newArtistSlug, setNewArtistSlug] = useState('')
   const [currency, setCurrency] = useState('GBP')
   const [timezone, setTimezone] = useState('')
+
+  // Pre-fill the timezone with the TM's own zone so the tour is never silently
+  // left on the 'UTC' fallback, which put the day calendar's now-marker an hour
+  // behind for a BST user (REE-119). Detected in an effect, not as the initial
+  // state: on the server Intl reports UTC, which would both be wrong and mismatch
+  // hydration. The TM can still change it before creating the tour.
+  useEffect(() => {
+    const detected = detectBrowserTourTimezone()
+    if (detected) setTimezone((current) => current || detected)
+  }, [])
 
   const isNewArtist = artistId === NEW_ARTIST
 
