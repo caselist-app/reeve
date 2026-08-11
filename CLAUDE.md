@@ -336,6 +336,20 @@ The day view is the surface a TM hits hundreds of times a day, so latency there 
 - **Renaming a secret is a two-step deploy, in this order.** Add the new variable in Vercel and confirm it is live, then ship the code that reads it, then remove the old variable. Shipping the rename first takes the endpoint down the moment it deploys, and for the WhatsApp webhook that means every inbound crew message is rejected.
 - **`NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` is browser-exposed by design** (Places autocomplete in `components/shows/places-address-input.tsx`). It must be a separate key from the server-side `GOOGLE_MAPS_API_KEY` and must be HTTP-referrer restricted in Google Cloud. Never reuse the server key with a `NEXT_PUBLIC_` prefix.
 
+## Feature flags
+
+Merging to `main` deploys to production. It does not mean a TM can see the feature. Those are two different moments, and code that isn't finished the moment it's reviewable has to keep them separate on purpose, the same way `inbound_qa_enabled` and `morning_message_enabled` already keep "the code can send" separate from "the TM turned it on".
+
+A brief that ships across more than one merge, or that isn't ready for a real TM the moment it's green, ships behind a flag. The code lands on `main` and deploys whenever CI passes it. Whether anyone can reach it is a separate switch, flipped when the feature is actually done, not when the last commit merges.
+
+**`lib/flags.ts` is the one place a flag is checked.** `isFeatureEnabled(flagEnvVar, accountId)` returns true if the named env var is `'true'`, or if `accountId` is in the internal-reviewer allowlist (`INTERNAL_REVIEW_ACCOUNT_IDS`), regardless of the flag's own state. Never read a flag's env var directly at a call site: route every check through this helper, the same reason `resolveTourDateId()` and `localDateInZone()` are the only authorities on their questions.
+
+- **Naming.** `FF_<NAME>`, unset (falsy) by default. Add it to `.env.example` the moment you introduce it, `[BOTH]` marked if any code path under `trigger/jobs/` can reach the check. The env-in-example rule in `check:conventions` cannot see a flag name passed as a string into `isFeatureEnabled()`, it only greps literal `process.env.NAME`. Declaring it is on you, not the check.
+- **Reviewing before release.** Add your own account id to `INTERNAL_REVIEW_ACCOUNT_IDS` and a flagged feature is live for that account on real production data while every other TM sees nothing. This is what Linear's `In Review` state is for on a flagged step: review it live, on your own account, before flipping the flag for everyone.
+- **UI gating.** A flagged feature's nav entry, route, or panel does not exist while the flag is off for the caller. It doesn't render, disabled or otherwise. Dark launch, not half launch.
+- **Retiring a flag.** Once it's flipped on for everyone and stays on, delete the flag, the `isFeatureEnabled()` call, and the branch it used to guard. A flag left in the code after rollout is a permanent conditional nobody remembers the reason for, the same failure mode as a stale `conventions-baseline.json` entry.
+- **Not the same thing as a tour-level opt-in.** `inbound_qa_enabled` and `morning_message_enabled` are TM choices, stored per tour, defaulting false because non-negotiable #5 says nothing sends without the TM's own action. A feature flag is a build-readiness gate, not a TM's decision, and it defaults off because the code isn't finished, not out of caution on the TM's behalf. Don't reach for a DB column when an env var already says everything a build-readiness gate needs to say. Reach for one only if a finished feature genuinely needs gradual per-tour rollout afterwards, which is a different problem.
+
 ## Brand and copy
 
 Short sentences. Plain English. No corporate language. No em-dashes. Use industry terms the way a TM uses them: tour, show, advance, day sheet, load-in, crew, party. Product copy should sound like a professional wrote it, not a SaaS founder.
@@ -364,6 +378,7 @@ Short sentences. Plain English. No corporate language. No em-dashes. Use industr
 - Do not issue a Supabase `.in()` with an empty array. Guard it.
 - Do not import a Radix dialog or other heavy client component into the app shell. Lazy-load it.
 - Do not read an env var the code depends on without adding it to `.env.example`.
+- Do not read a feature flag's env var directly, or gate a feature any way other than `isFeatureEnabled()` in `lib/flags.ts`.
 - Do not verify a webhook signature against an empty string or a missing env var. Return 401 when the secret is absent.
 - Do not enqueue an inbound webhook message without first deduplicating on the message ID via Redis SET NX.
 - Do not send proactive WhatsApp messages (outside a 24-hour reply window) as free-form messages. Use approved templates.
