@@ -90,6 +90,15 @@ export type PanelDescriptor =
       venueName: string
     }
   | {
+      // A show's guest list. Same reasoning as 'venue': the panel loads its own
+      // list on open (getGuestList), so this carries only what the header needs.
+      // Brief 52, step 4 (REE-131). Types inlined, same as 'venue'.
+      type: 'guest-list'
+      tourId: string
+      showId: string
+      venueName: string
+    }
+  | {
       type: 'send-rider'
       tourId: string
       showId: string

@@ -13,6 +13,7 @@ const ContactPanel = dynamic(() => import('@/components/roster/contact-panel').t
 const SendRiderSheet = dynamic(() => import('@/components/shows/send-rider-sheet').then((m) => m.SendRiderSheet), { ssr: false })
 const VenuePanel = dynamic(() => import('@/components/schedule/panels/venue-panel').then((m) => m.VenuePanel), { ssr: false })
 const AdvancePanel = dynamic(() => import('@/components/schedule/panels/advance-panel').then((m) => m.AdvancePanel), { ssr: false })
+const GuestListPanel = dynamic(() => import('@/components/schedule/panels/guest-list-panel').then((m) => m.GuestListPanel), { ssr: false })
 const AddDayPanel = dynamic(() => import('@/components/schedule/add-day-panel').then((m) => m.AddDayPanel), { ssr: false })
 // Brief 33: schedule day view detail and add panels.
 // Brief 42: the show panel and the event panel are one day-item panel now.
@@ -65,6 +66,14 @@ export function ActivePanel() {
     case 'advance':
       return (
         <AdvancePanel
+          tourId={panel.tourId}
+          showId={panel.showId}
+          venueName={panel.venueName}
+        />
+      )
+    case 'guest-list':
+      return (
+        <GuestListPanel
           tourId={panel.tourId}
           showId={panel.showId}
           venueName={panel.venueName}
