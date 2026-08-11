@@ -141,6 +141,7 @@ describe('a failed read is a message, not a blank grid', () => {
       itemsError: 'relation "day_items" does not exist',
       segments: [],
       hotels: [],
+      continuedFromPrev: { items: [], segments: [] },
       segmentIds: [],
       hotelStayIds: [],
     }
@@ -160,6 +161,7 @@ describe('a failed read is a message, not a blank grid', () => {
       itemsError: null,
       segments: [],
       hotels: [],
+      continuedFromPrev: { items: [], segments: [] },
       segmentIds: [],
       hotelStayIds: [],
     }

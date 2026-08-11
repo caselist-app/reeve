@@ -94,6 +94,13 @@ function toGridEvent(event: CalendarEvent, timezone: string): CalendarEvent {
  * than being dropped. An untimed record from any source is set aside in
  * `unpositioned` by the adapter's own rule.
  *
+ * A block that breaks over the 04:00 boundary is drawn on both days (REE-124).
+ * On the day it starts it is tagged `continuesAfter` (RBC clamps its height to
+ * the grid bottom); on the day it continues into it arrives via
+ * `records.continuedFromPrev`, is clamped to the grid top and tagged
+ * `continuesBefore` as a read-only second view of the same row. Hotels are out
+ * of scope: a stay stays discrete check-in/check-out point events.
+ *
  * @param date the viewed day, YYYY-MM-DD. The on-grid window is derived for this
  *   day in the tour timezone; the shift itself is intrinsic to each instant.
  */
@@ -120,10 +127,48 @@ export function buildDayCalendarView(
     const grid = toGridEvent(real, timezone)
     const startMs = grid.start.getTime()
     if (startMs >= gridStart && startMs < gridEnd) {
+      // A block whose shifted end runs past the grid bottom breaks over the
+      // 04:00 boundary into the next broadcast day (REE-124). RBC already clamps
+      // its drawn height to the grid; tag it so the component can add the
+      // "continues" tell and so it can also render on the next day's grid.
+      if (grid.end.getTime() > gridEnd) grid.continuesAfter = true
       events.push(grid)
     } else {
       outsideDay.push(grid)
     }
+  }
+
+  // Blocks filed on a PREVIOUS broadcast day that break over the boundary into
+  // this one (REE-124). Fetched separately (records.continuedFromPrev) so they
+  // never move which day the row belongs to; here they are a read-only second
+  // view, clamped to the grid top and tagged `continuesBefore`. Hotels are out
+  // of scope by design, so only items and segments arrive in this field.
+  const seen = new Set(events.map((e) => e.id))
+  for (const outside of outsideDay) seen.add(outside.id)
+  const { events: continuationReal } = toCalendarEvents(
+    {
+      items: records.continuedFromPrev.items,
+      segments: records.continuedFromPrev.segments,
+      hotels: [],
+    },
+    { timezone },
+  )
+  for (const real of continuationReal) {
+    const grid = toGridEvent(real, timezone)
+    // A row already on this grid (its own placement or the "Outside this day"
+    // rail) must not also draw as a continuation of itself. The fetch dedupes
+    // segments by id; this guards the rest.
+    if (seen.has(grid.id)) continue
+    seen.add(grid.id)
+    // The real start is before this day's broadcast start, so the shifted start
+    // lands above the grid; clamp it to the top and mark that it began earlier.
+    // realStart/realEnd keep the true instants for the label and click-through.
+    grid.start = new Date(gridStart)
+    grid.continuesBefore = true
+    // A block long enough to also run off the bottom (rare: it spans the whole
+    // day and out the far side) continues in both directions.
+    if (grid.end.getTime() > gridEnd) grid.continuesAfter = true
+    events.push(grid)
   }
 
   return {
