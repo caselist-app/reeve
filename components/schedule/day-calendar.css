@@ -178,6 +178,28 @@
   --evt-tint: color-mix(in oklab, var(--color-amber-500) 14%, var(--background));
 }
 
+/*
+ * The persisted drag-to-add highlight (REE-68). RBC clears its own slot
+ * selection the instant the drag gesture ends, so the range the TM just drew
+ * would vanish the moment the add form opened over it. We redraw that range as
+ * a background event and keep it alive while the form is open. It reads as a
+ * selection, not a record: a dashed ring outline over a faint ring tint, with
+ * none of the left-accent-bar chrome the real chips carry. pointer-events are
+ * off so it never intercepts a fresh drag started on top of it.
+ */
+.rbc-background-event.evt-selection {
+  background-color: color-mix(in oklab, var(--ring) 16%, var(--background));
+  border: 1px dashed var(--ring);
+  border-radius: 0.375rem;
+  opacity: 1;
+  pointer-events: none;
+}
+/* The chip renders nothing for the selection, but RBC still emits its own time
+   label above it; suppress it so the highlight stays blank. */
+.rbc-background-event.evt-selection .rbc-event-label {
+  display: none;
+}
+
 /* Drag addon chrome. The resize anchors ship visible; keep them grabbable but
    invisible until hover so a resting grid is clean. */
 .rbc-addons-dnd .rbc-addons-dnd-resize-ns-anchor {
