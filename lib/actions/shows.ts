@@ -230,7 +230,96 @@ export async function updateShow(
   }
 }
 
-export async function deleteShow(showId: string): Promise<ShowActionState> {
+// What the removal dialog reads to state, in counted facts, exactly what goes
+// when a show is deleted. It replaces copy that guessed: "its running order"
+// overstated the cascade (a hand-added item with no show_id survives), and
+// "reverts to travel or day off" made the TM pick between two outcomes the code
+// already knows which of.
+export type ShowRemovalPreview = {
+  venueName: string
+  date: string
+  // day_items that carry THIS show's show_id, which is what cascade-deletes with
+  // it. Deliberately not every item on the day: an item a TM hand-added to the
+  // running order with no show_id stays, and counting it here would tell them
+  // more is lost than is. The test asserts 2, not 4, on exactly this point.
+  cascadingItemCount: number
+  // What the day reverts to once the show is gone, computed the way
+  // revertDayTypeIfOrphaned computes it: travel if transport is already linked to
+  // the day, otherwise a day off.
+  fallbackDayType: 'travel' | 'day_off'
+  // Who would be re-sent the day. Populated once Brief 48 (Send The Day Again)
+  // lands the callable day send and its recipient logic; null until then, and
+  // the "send the day again" checkbox that would consume it is not rendered.
+  recipientCount: number | null
+  // A failed read must never render as an empty result: a broken count that came
+  // back as 0 would tell the TM nothing goes with the show when things do.
+  error: string | null
+}
+
+export async function previewShowRemoval(showId: string): Promise<ShowRemovalPreview> {
+  await requireUser()
+
+  const supabase = await createClient()
+
+  // RLS scopes shows by owns_tour, so a show on another tour reads as not found.
+  const { data: show, error: showError } = await supabase
+    .from('shows')
+    .select('venue_name, date, tour_date_id')
+    .eq('id', showId)
+    .maybeSingle()
+
+  const failed = (message: string): ShowRemovalPreview => ({
+    venueName: show?.venue_name ?? '',
+    date: show?.date ?? '',
+    cascadingItemCount: 0,
+    fallbackDayType: 'day_off',
+    recipientCount: null,
+    error: message,
+  })
+
+  if (showError) {
+    console.error('[previewShowRemoval] show read failed:', showError.message)
+    return failed('Could not check what would be removed.')
+  }
+  if (!show) {
+    return failed('Show not found.')
+  }
+
+  // Independent reads, run together: the cascade count, and whether transport is
+  // already linked to the day (which is what decides the fallback type).
+  const tourDateId = show.tour_date_id
+  const [itemsRes, segmentRes] = await Promise.all([
+    supabase.from('day_items').select('id', { count: 'exact', head: true }).eq('show_id', showId),
+    tourDateId
+      ? supabase
+          .from('transport_segments')
+          .select('id')
+          .eq('tour_date_id', tourDateId)
+          .limit(1)
+          .maybeSingle()
+      : null,
+  ])
+
+  const failure = itemsRes.error ?? segmentRes?.error ?? null
+  if (failure) {
+    console.error('[previewShowRemoval] read failed:', failure.message)
+    return failed('Could not check what would be removed.')
+  }
+
+  return {
+    venueName: show.venue_name ?? '',
+    date: show.date,
+    cascadingItemCount: itemsRes.count ?? 0,
+    fallbackDayType: segmentRes?.data ? 'travel' : 'day_off',
+    recipientCount: null,
+    error: null,
+  }
+}
+
+export async function deleteShowAndResend(
+  showId: string,
+  opts: { resend: boolean }
+): Promise<ShowActionState> {
   await requireUser()
 
   const supabase = await createClient()
@@ -258,6 +347,18 @@ export async function deleteShow(showId: string): Promise<ShowActionState> {
   // stay stuck labelled "Show day" with no show behind it.
   if (show.tour_date_id) {
     await revertDayTypeIfOrphaned(supabase, show.tour_date_id, 'show')
+  }
+
+  // Re-send the day to crew, but only once the delete has succeeded and only if
+  // the TM asked. The order is the whole point: the send reads the day live, so
+  // it runs AFTER the delete, or it would post the show that was just removed
+  // straight back out. This is deliberately the opposite of sendBroadcast, which
+  // resolves recipients and message first; that ordering would reintroduce the
+  // deleted show here.
+  if (opts.resend) {
+    // The callable day send is Brief 48 (Send The Day Again). Until it lands, the
+    // "send the day again" checkbox is not rendered, so nothing sets resend, and
+    // this is the seam it wires into rather than a working path.
   }
 
   void bustTourContextCache(show.tour_id)

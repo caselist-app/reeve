@@ -7,7 +7,13 @@ import { AlertCircle, ChevronRight } from 'lucide-react'
 import { PanelShell } from '@/components/layout/panel-shell'
 import { PanelDeleteMenu } from '@/components/schedule/panels/panel-delete-menu'
 import { ShowForm } from '@/components/shows/show-form'
-import { getShowVenueDetail, deleteShow, type ShowVenueDetail } from '@/lib/actions/shows'
+import {
+  getShowVenueDetail,
+  previewShowRemoval,
+  deleteShowAndResend,
+  type ShowVenueDetail,
+  type ShowRemovalPreview,
+} from '@/lib/actions/shows'
 import { useSidePanel } from '@/stores/side-panel-store'
 import type { Show } from '@/lib/validators/show'
 
@@ -39,10 +45,15 @@ export function VenuePanel({ tourId, showId, venueName }: VenuePanelProps) {
   const router = useRouter()
   const { open, close } = useSidePanel()
   const [detail, setDetail] = useState<ShowVenueDetail | null>(null)
+  const [removal, setRemoval] = useState<ShowRemovalPreview | null>(null)
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
   async function handleDelete(): Promise<string | null> {
-    const result = await deleteShow(showId)
+    // resend is false because the "send the day again" checkbox is not rendered:
+    // its callable day send is Brief 48 (Send The Day Again), which has not
+    // landed. A disabled checkbox would teach a TM the feature is broken rather
+    // than coming, so it is left out until then, and this passes false.
+    const result = await deleteShowAndResend(showId, { resend: false })
     if (result.error) return result.error
     close()
     router.refresh()
@@ -52,6 +63,9 @@ export function VenuePanel({ tourId, showId, venueName }: VenuePanelProps) {
   useEffect(() => {
     let cancelled = false
 
+    // Two independent reads on open: the venue form's data, and the counted facts
+    // the removal dialog states. Fetched together so the dialog has its counts
+    // ready by the time the TM reaches for the options menu.
     getShowVenueDetail(showId)
       .then(({ data, error }) => {
         if (cancelled) return
@@ -68,10 +82,42 @@ export function VenuePanel({ tourId, showId, venueName }: VenuePanelProps) {
         if (!cancelled) setLoading(false)
       })
 
+    previewShowRemoval(showId)
+      .then((preview) => {
+        if (!cancelled) setRemoval(preview)
+      })
+      .catch(() => {
+        // Leave removal null: the dialog falls back to copy that is true without
+        // the counts, so the delete still works.
+      })
+
     return () => {
       cancelled = true
     }
   }, [showId])
+
+  // The removal dialog's copy, in counted facts. Line 1 names what goes; line 2
+  // states what the day becomes. If the preview is missing (still loading, or a
+  // failed read), fall back to copy that is true without the counts: the counts
+  // are a nicety, the delete is not, and a TM must never be blocked from removing
+  // a show because a count query failed.
+  function removalDescription(): React.ReactNode {
+    const removes = `This removes ${venueName} and its advance status.`
+
+    if (!removal || removal.error) {
+      return `${removes} The day reverts to a travel day or day off. This cannot be undone.`
+    }
+
+    const n = removal.cascadingItemCount
+    const cascade =
+      n > 0 ? ` ${n} ${n === 1 ? 'item' : 'items'} on this day ${n === 1 ? 'goes' : 'go'} with it.` : ''
+    const becomes =
+      removal.fallbackDayType === 'travel'
+        ? 'The day becomes a travel day.'
+        : 'The day becomes a day off.'
+
+    return `${removes}${cascade} ${becomes}`
+  }
 
   return (
     <PanelShell
@@ -85,7 +131,7 @@ export function VenuePanel({ tourId, showId, venueName }: VenuePanelProps) {
             confirmLabel="Delete show"
             pendingLabel="Deleting..."
             dialogTitle="Delete this show?"
-            dialogDescription={`This removes ${venueName}, its running order and its advance status from the tour. The day reverts to travel or day off. This cannot be undone.`}
+            dialogDescription={removalDescription()}
             onConfirm={handleDelete}
           />
         ) : undefined
