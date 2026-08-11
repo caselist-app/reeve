@@ -72,6 +72,11 @@ export interface UnpositionedRecord {
   source: EventSource
   id: string
   title: string
+  // The same colour language the grid blocks carry, so the "No time set" rail
+  // is not flat grey (REE-82). Read from day-item-kinds for a day_item, a
+  // source-level default otherwise, exactly as CalendarEvent above.
+  accent: DayItemKind['accent']
+  icon: string
 }
 
 export interface CalendarInput {
@@ -184,14 +189,20 @@ export function toCalendarEvents(
   const unpositioned: UnpositionedRecord[] = []
 
   for (const item of input.items) {
+    const kind = dayItemKind(item.kind)
     if (!item.starts_at) {
-      unpositioned.push({ source: 'day_item', id: item.id, title: dayItemTitle(item) })
+      unpositioned.push({
+        source: 'day_item',
+        id: item.id,
+        title: dayItemTitle(item),
+        accent: kind?.accent ?? 'other',
+        icon: kind?.icon ?? 'CircleDashed',
+      })
       continue
     }
     const start = new Date(item.starts_at)
     const syntheticEnd = !item.ends_at
     const end = syntheticEnd ? synthesiseEnd(start) : new Date(item.ends_at as string)
-    const kind = dayItemKind(item.kind)
     events.push({
       id: `day_item:${item.id}`,
       recordId: item.id,
@@ -207,7 +218,13 @@ export function toCalendarEvents(
 
   for (const seg of input.segments) {
     if (!seg.depart_at) {
-      unpositioned.push({ source: 'segment', id: seg.id, title: segmentTitle(seg) })
+      unpositioned.push({
+        source: 'segment',
+        id: seg.id,
+        title: segmentTitle(seg),
+        accent: 'other',
+        icon: segmentIcon(seg.mode),
+      })
       continue
     }
     const start = new Date(seg.depart_at)
@@ -232,7 +249,13 @@ export function toCalendarEvents(
     const date = hotel.isCheckout ? hotel.check_out_date : hotel.check_in_date
     const time = hotel.isCheckout ? hotel.check_out_time : hotel.check_in_time
     if (!date || !time) {
-      unpositioned.push({ source: 'hotel', id: hotel.id, title: hotelTitle(hotel) })
+      unpositioned.push({
+        source: 'hotel',
+        id: hotel.id,
+        title: hotelTitle(hotel),
+        accent: 'other',
+        icon: 'BedDouble',
+      })
       continue
     }
     // Compose the instant this wall clock names in the tour zone. This is the one

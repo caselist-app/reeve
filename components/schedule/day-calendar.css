@@ -20,8 +20,10 @@
  * --destructive). Kind accents use Tailwind v4's exposed palette variables
  * (--color-purple-500 and friends), which the app already relies on through the
  * date sidebar chips, and tints are mixed against --background so light and dark
- * are one definition rather than two. Accents match the date sidebar: purple
- * show, teal transport, blue hotel, emerald catering, amber other.
+ * are one definition rather than two. The calendar shares the sidebar's palette
+ * variables but not its mapping: the sidebar colours day types (amber = press),
+ * the calendar colours item kinds (purple = show, teal = transport, blue = hotel,
+ * emerald = catering, amber = other), so amber means different things in each.
  */
 
 /* Outer chrome. The grid sits inside <main>, which already carries the card
@@ -129,25 +131,40 @@
 }
 
 /*
- * The event chip. Strip RBC's flat blue fill, 1px all-round border and rounded
- * corners back to a single-sided accent: a thick left border in the kind's
- * colour, a tinted background from the same hue, and a bottom edge that is solid
- * when the TM has stated an end and dashed when the end is synthetic. The accent
- * hue arrives as a marker class (.evt-*) from eventPropGetter, which sets the
- * two custom properties this rule reads.
+ * The event chip. Strip RBC's flat blue fill, 1px all-round border and default
+ * blue back to a rounded card carrying the kind's own hue: a tinted background
+ * from the hue, a 3px accent bar down the left drawn as an inset box-shadow (so
+ * it sits inside the corner radius and rounds with the chip, where a left border
+ * would square the corners off), and text in the hue rather than flat grey. The
+ * accent hue arrives as a marker class (.evt-*) from eventPropGetter and sets
+ * --evt-accent/--evt-tint; the two text tokens are derived from it once here.
+ * Each is a single color-mix toward --foreground, so the same definition reads
+ * in both light and dark: --evt-text pulls hardest toward the mode's foreground
+ * for the title, --evt-meta stays closer to the raw hue for the quieter time
+ * label. No .dark override is needed.
  */
 .rbc-event,
 .rbc-day-slot .rbc-event {
-  padding: 1px 6px;
+  --evt-text: color-mix(in oklab, var(--evt-accent) 55%, var(--foreground));
+  --evt-meta: color-mix(in oklab, var(--evt-accent) 78%, var(--foreground));
+  margin-right: 6px;
+  /* Extra left padding clears the inset accent bar, which unlike a border does
+     not push content in on its own. */
+  padding: 1px 6px 1px 10px;
   background-color: var(--evt-tint);
   border: 0 solid var(--evt-accent);
-  border-left-width: 3px;
   border-bottom-width: 1.5px;
-  border-radius: 0;
-  box-shadow: none;
-  color: var(--foreground);
+  border-radius: 0.375rem;
+  box-shadow: inset 3px 0 0 var(--evt-accent);
+  color: var(--evt-text);
   font-size: 0.75rem;
   line-height: 1.2;
+  /* REE-79: the chip is its own query container so its contents can react to the
+     block's own height, not the viewport. A block tall enough for two lines puts
+     the title above the time (the column branch below); a short block stays a
+     single row. `size` (not `inline-size`) because the query is on min-height.
+     RBC gives every event an explicit height, so size containment is safe here. */
+  container-type: size;
 }
 .rbc-event:focus-visible {
   outline: 2px solid var(--ring);
@@ -165,36 +182,79 @@
   display: none;
 }
 
-/* Solid where the end is stated, dashed where it was synthesised by the
-   adapter. This is the visible tell that "nobody has said how long this takes".*/
-.rbc-event.evt-firm-end {
-  border-bottom-style: solid;
+/* REE-79: two-line layout only when the block is tall enough to hold it. The
+   chip body is a row by default (title then time on one line, the collapsed
+   branch styled in day-calendar.tsx), and flips to a column here so the title
+   sits above the time. 2.5rem is just over the height of a 30-minute block, so
+   the shortest real blocks (an item with a synthesised end) stay one line and
+   never drop their time. The query container is `.rbc-event` above. */
+@container (min-height: 2.5rem) {
+  .rbc-event .evt-chip-body {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
 }
-.rbc-event.evt-soft-end {
-  border-bottom-style: dashed;
+
+/* Hover feedback (REE-81), pointer surfaces only. Pointing at a block deepens
+   its tint and floats it a little off the grid, so it reads as the thing you are
+   about to grab. Gated at the lg breakpoint: below it the grid is display plus
+   tap-to-open with no drag, resize or hover, so a hover affordance there would
+   be a lie. A box-shadow replaces rather than merges, so the accent bar is
+   re-declared as an inset shadow beside the lift rather than left to the border
+   alone. */
+@media (min-width: 64rem) {
+  .rbc-event:hover {
+    background-color: color-mix(in oklab, var(--evt-accent) 22%, var(--background));
+    box-shadow:
+      inset 3px 0 0 0 var(--evt-accent),
+      0 2px 6px color-mix(in oklab, var(--foreground) 18%, transparent);
+  }
+}
+
+/* A stacked block steps in from the left over the one it overlaps and sits on
+   top (REE-77 cascade). It keeps full width, so without a lift its left accent
+   bar would read as if it belonged to the block underneath. A soft shadow down
+   the left and top edges separates the two. The accent bar is re-declared inset
+   because a box-shadow replaces, it does not merge (REE-81). Token-based (no
+   hex): mixed from --foreground against transparent so it tracks light and
+   dark. */
+.rbc-event.evt-stacked {
+  box-shadow:
+    inset 3px 0 0 0 var(--evt-accent),
+    -2px -1px 4px color-mix(in oklab, var(--foreground) 14%, transparent);
 }
 
 /* Kind accent ramp. Hue from Tailwind's palette variables; tint mixed against
-   the current --background so one rule covers light and dark. */
+   the current --background so one rule covers light and dark. --evt-text is the
+   readable-on-tint version of the hue: the "No time set" rail pills and the
+   "After midnight" icon squares (REE-82) sit on --evt-tint and label with it,
+   mixed toward --foreground so it stays legible in both light and dark rather
+   than the medium palette shade washing out on a pale tint. */
 .evt-show {
   --evt-accent: var(--color-purple-500);
   --evt-tint: color-mix(in oklab, var(--color-purple-500) 14%, var(--background));
+  --evt-text: color-mix(in oklab, var(--color-purple-500) 55%, var(--foreground));
 }
 .evt-transport {
   --evt-accent: var(--color-teal-500);
   --evt-tint: color-mix(in oklab, var(--color-teal-500) 14%, var(--background));
+  --evt-text: color-mix(in oklab, var(--color-teal-500) 55%, var(--foreground));
 }
 .evt-hotel {
   --evt-accent: var(--color-blue-500);
   --evt-tint: color-mix(in oklab, var(--color-blue-500) 14%, var(--background));
+  --evt-text: color-mix(in oklab, var(--color-blue-500) 55%, var(--foreground));
 }
 .evt-catering {
   --evt-accent: var(--color-emerald-500);
   --evt-tint: color-mix(in oklab, var(--color-emerald-500) 14%, var(--background));
+  --evt-text: color-mix(in oklab, var(--color-emerald-500) 55%, var(--foreground));
 }
 .evt-other {
   --evt-accent: var(--color-amber-500);
   --evt-tint: color-mix(in oklab, var(--color-amber-500) 14%, var(--background));
+  --evt-text: color-mix(in oklab, var(--color-amber-500) 55%, var(--foreground));
 }
 
 /*
@@ -229,4 +289,17 @@
 }
 .rbc-addons-dnd .rbc-addons-dnd-resize-ns-icon {
   border-color: var(--evt-accent);
+}
+
+/* The block being dragged (REE-81). RBC clones the .rbc-event and adds this
+   class to the clone that tracks the cursor; a strong drop shadow, larger than
+   any resting or hover state, makes it read as lifted clear off the grid. Two
+   classes rather than the bare marker so it outweighs .rbc-event:hover, which
+   also matches the clone sitting under the pointer. The addon's own opacity
+   handling on the source event and its neighbours is left untouched. The accent
+   bar is re-declared inset for the same reason as above: box-shadow replaces. */
+.rbc-event.rbc-addons-dnd-drag-preview {
+  box-shadow:
+    inset 3px 0 0 0 var(--evt-accent),
+    0 8px 20px color-mix(in oklab, var(--foreground) 28%, transparent);
 }

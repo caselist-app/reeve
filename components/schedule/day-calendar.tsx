@@ -60,6 +60,7 @@ import { localTimeInZone, localDayWindowUtc } from '@/lib/schedule/datetime'
 import { slotToDayFormInput } from '@/lib/schedule/day-form-prefill'
 import { buildDayCalendarView } from '@/lib/schedule/day-calendar-view'
 import { nowMarker } from '@/lib/schedule/now-marker'
+import { assignOverlapDepths } from '@/lib/schedule/overlap-layout'
 import { fromDropOrResize, type CalendarEvent, type EventSource } from '@/lib/schedule/calendar-adapter'
 import { moveScheduleItem } from '@/lib/actions/move-schedule-item'
 import type { DayRecords, DaySegment } from '@/lib/schedule/day-records'
@@ -212,6 +213,61 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
       ),
   )
 
+  // The cascade indent per event, keyed by id (REE-77). assignOverlapDepths is
+  // the pure function from REE-76: it gives each block a depth one past the
+  // deepest block it overlaps, and the pixel indent for that depth. The layout
+  // callback and eventPropGetter both read this one map so a block's offset and
+  // its "stacked" marker never disagree. Rebuilt whenever the optimistic events
+  // move, so a drag that changes an overlap re-indents immediately.
+  const depthById = useMemo(() => {
+    const map = new Map<string, { depth: number; indentPx: number }>()
+    for (const laid of assignOverlapDepths(displayEvents)) {
+      map.set(laid.id, { depth: laid.depth, indentPx: laid.indentPx })
+    }
+    return map
+  }, [displayEvents])
+
+  // The custom day layout, replacing RBC's "no-overlap". no-overlap splits the
+  // column between concurrent blocks, so titles vanish once three or four things
+  // share a slot. Instead every block keeps full width and a later, overlapping
+  // block steps in from the left by its indent, so both titles stay readable, the
+  // later block sits on top, and the earlier block's exposed left strip is still
+  // grabbable to drag or resize. top and height are left exactly as getRange
+  // gives them (the real time position); only the horizontal placement changes.
+  // The returned entries carry the original event object, not a copy, so RBC's
+  // keys and the drag addon still recognise them. Sorted by depth so a deeper
+  // block paints after (on top of) the ones it steps behind.
+  const cascadeLayout = useMemo(() => {
+    return ({
+      events,
+      slotMetrics,
+      accessors,
+    }: {
+      events: CalendarEvent[]
+      slotMetrics: { getRange: (start: Date, end: Date) => { top: number; height: number } }
+      accessors: { start: (event: CalendarEvent) => Date; end: (event: CalendarEvent) => Date }
+    }) => {
+      return events
+        .map((event) => {
+          const { top, height } = slotMetrics.getRange(accessors.start(event), accessors.end(event))
+          const info = depthById.get(event.id)
+          const indentPx = info?.indentPx ?? 0
+          return {
+            event,
+            depth: info?.depth ?? 0,
+            style: {
+              top,
+              height,
+              width: `calc(100% - ${indentPx}px)`,
+              xOffset: `${indentPx}px`,
+            },
+          }
+        })
+        .sort((a, b) => a.depth - b.depth)
+        .map(({ event, style }) => ({ event, style }))
+    }
+  }, [depthById])
+
   // Lookups from a clicked event back to its record, so a click can open the
   // right detail panel. Segments include the late-night tail, which is
   // clickable too.
@@ -299,21 +355,29 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
       const Icon = eventIcon(event.icon)
       // Time range only when the end is real. A synthesised end is not a claim
       // about duration (see the adapter), so surfacing it as "10:00 to 10:30"
-      // would invent a window the TM never set; the start alone is shown, and the
-      // dashed bottom edge already says the end is open.
+      // would invent a window the TM never set; the start alone is shown, which
+      // already carries that the end is open.
       const startLabel = localTimeInZone(event.start.toISOString(), timezone)
       const timeLabel = event.syntheticEnd
         ? startLabel
         : `${startLabel}–${localTimeInZone(event.end.toISOString(), timezone)}`
+      // Title first, then time. On a tall block the body flips to a column (the
+      // @container branch in day-calendar.css) so the title sits above the time;
+      // on a short block it stays this single row. The time is shrink-0 and the
+      // title truncates, so the collapsed row drops title characters before it
+      // ever drops the time. That ordering is load-bearing: the seeded load-in is
+      // a short block and the e2e specs read its time off it.
       return (
         <button
           type="button"
           onClick={() => openEvent(event)}
-          className="flex h-full w-full items-center gap-1 overflow-hidden text-left"
+          className="flex h-full w-full items-start gap-1 overflow-hidden text-left"
         >
-          <Icon className="h-3 w-3 shrink-0" aria-hidden />
-          <span className="shrink-0 tabular-nums">{timeLabel}</span>
-          <span className="truncate font-medium">{event.title}</span>
+          <Icon className="mt-px h-3 w-3 shrink-0" aria-hidden />
+          <span className="evt-chip-body flex min-w-0 flex-1 flex-row items-baseline gap-1.5">
+            <span className="min-w-0 truncate font-medium">{event.title}</span>
+            <span className="shrink-0 tabular-nums text-[color:var(--evt-meta)]">{timeLabel}</span>
+          </span>
         </button>
       )
     }
@@ -411,14 +475,21 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
             No time set
           </p>
           <div className="flex flex-wrap gap-1.5">
-            {view.unpositioned.map((record) => (
-              <span
-                key={`${record.source}:${record.id}`}
-                className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs text-foreground"
-              >
-                {record.title}
-              </span>
-            ))}
+            {view.unpositioned.map((record) => {
+              const Icon = eventIcon(record.icon)
+              return (
+                <span
+                  key={`${record.source}:${record.id}`}
+                  className={cn(
+                    accentClassName(record.source, record.accent),
+                    'inline-flex items-center gap-1.5 rounded-md bg-[var(--evt-tint)] px-2 py-1 text-xs text-[var(--evt-text)]',
+                  )}
+                >
+                  <Icon className="h-3 w-3 shrink-0" aria-hidden />
+                  {record.title}
+                </span>
+              )
+            })}
           </div>
         </div>
       )}
@@ -443,20 +514,23 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
           timeslots={4}
           toolbar={false}
           components={components}
-          // Overlapping items sit side by side rather than stacked with an
-          // offset, which is RBC's default and reads as a pile.
-          dayLayoutAlgorithm="no-overlap"
+          // Overlapping items cascade: full-width blocks indented from the left
+          // by depth, later ones on top, instead of RBC's side-by-side split
+          // that shrinks every block to nothing once a slot gets busy (REE-77).
+          dayLayoutAlgorithm={cascadeLayout}
           eventPropGetter={(event: CalendarEvent) => {
             // The pending-selection highlight gets its own class, not a kind
             // accent (REE-68): it is not one of the coloured record blocks.
             if (event.id === PENDING_SELECTION_ID) {
               return { className: 'evt-selection' }
             }
+            // Stacked when it steps behind another block: a shadow lifts it off
+            // the one underneath so the cascade reads as depth, not a smudge.
+            const stacked = (depthById.get(event.id)?.depth ?? 0) > 0
             return {
               className: cn(
                 accentClassName(event.source, event.accent),
-                // Solid bottom edge for a stated end, dashed for a synthesised one.
-                event.syntheticEnd ? 'evt-soft-end' : 'evt-firm-end',
+                stacked && 'evt-stacked',
               ),
             }
           }}
@@ -498,7 +572,12 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
                     onClick={() => openEvent(event)}
                     className="flex w-full items-center gap-2 text-left text-sm"
                   >
-                    <span className={cn('flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted')}>
+                    <span
+                      className={cn(
+                        accentClassName(event.source, event.accent),
+                        'flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[var(--evt-tint)] text-[var(--evt-text)]',
+                      )}
+                    >
                       <Icon className="h-3.5 w-3.5" aria-hidden />
                     </span>
                     <span className="tabular-nums text-xs text-muted-foreground">
