@@ -39,9 +39,9 @@ export interface DayItemKind {
   // Semantic, not a colour. The render site maps it to a class, because the card
   // token and the timeline's accent classes live in components, not here.
   // 'headliner' and 'support' are the two performance sets (REE-122): they carry
-  // the bold accent so the acts stand out, while every other show item recedes to
-  // a neutral gray. Two accent values rather than one so either act can be
-  // recoloured independently later, even though they share a hue today.
+  // the purple accent so the acts stand out, while every other show item recedes
+  // to a neutral gray. The two are separate accent values, not one, so the
+  // headliner can take a bolder shade than the support act while both stay purple.
   accent: 'show' | 'catering' | 'headliner' | 'support' | 'other'
   // True means a time earlier than the day's latest daytime time has crossed
   // midnight and belongs to the following morning. resolveItemDayOffsets walks

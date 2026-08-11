@@ -294,16 +294,21 @@
   --evt-tint: color-mix(in oklab, var(--color-gray-500) 14%, var(--background));
   --evt-text: color-mix(in oklab, var(--color-gray-500) 55%, var(--foreground));
 }
-/* The two performance sets, the support act and the headliner (REE-122). They
-   share the bold purple so the acts stand out as the performance against the
-   gray running order, and purple is used by nothing else on the day now that the
-   show items are gray. Kept as two accent classes rather than one so either act
-   can be recoloured independently later. */
-.evt-headliner,
+/* The two performance sets, the support act and the headliner (REE-122). Both
+   are purple so the acts stand out as the performance against the gray running
+   order, and purple is used by nothing else on the day now that the show items
+   are gray. The headliner takes the deeper, bolder purple and the support act a
+   lighter one, so the headline set leads the day at a glance while the two still
+   read as the same family. */
+.evt-headliner {
+  --evt-accent: var(--color-purple-600);
+  --evt-tint: color-mix(in oklab, var(--color-purple-600) 18%, var(--background));
+  --evt-text: color-mix(in oklab, var(--color-purple-600) 55%, var(--foreground));
+}
 .evt-support {
-  --evt-accent: var(--color-purple-500);
-  --evt-tint: color-mix(in oklab, var(--color-purple-500) 14%, var(--background));
-  --evt-text: color-mix(in oklab, var(--color-purple-500) 55%, var(--foreground));
+  --evt-accent: var(--color-purple-400);
+  --evt-tint: color-mix(in oklab, var(--color-purple-400) 12%, var(--background));
+  --evt-text: color-mix(in oklab, var(--color-purple-400) 60%, var(--foreground));
 }
 .evt-transport {
   --evt-accent: var(--color-teal-500);
