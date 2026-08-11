@@ -204,7 +204,35 @@ for (const timezone of ZONES) {
       )
       expect(events).toHaveLength(0)
       expect(unpositioned).toHaveLength(1)
-      expect(unpositioned[0]).toMatchObject({ source: 'day_item', id: 'item-untimed' })
+      // The rail pill carries the kind's colour language, not flat grey: a
+      // load-in is a show-accented Truck (REE-82). Asserting the actual values,
+      // not just presence, so a hardcoded fallback cannot pass.
+      expect(unpositioned[0]).toMatchObject({
+        source: 'day_item',
+        id: 'item-untimed',
+        accent: 'show',
+        icon: 'Truck',
+      })
+    })
+
+    // 7b. A second kind with a different, non-default accent, so the fields
+    //     cannot be hardcoded to one kind's values or to the 'other' fallback.
+    it('carries a catering kind accent and icon on an unpositioned item', () => {
+      const item: CalendarDayItem = {
+        id: 'item-breakfast',
+        kind: 'catering_breakfast',
+        title: null,
+        starts_at: null,
+        ends_at: null,
+      }
+
+      const { unpositioned } = toCalendarEvents({ ...EMPTY, items: [item] }, { timezone })
+      expect(unpositioned[0]).toMatchObject({
+        source: 'day_item',
+        id: 'item-breakfast',
+        accent: 'catering',
+        icon: 'Coffee',
+      })
     })
   })
 }
