@@ -175,6 +175,33 @@
   }
 }
 
+/* Hover feedback (REE-81), pointer surfaces only. Pointing at a block deepens
+   its tint and floats it a little off the grid, so it reads as the thing you are
+   about to grab. Gated at the lg breakpoint: below it the grid is display plus
+   tap-to-open with no drag, resize or hover, so a hover affordance there would
+   be a lie. A box-shadow replaces rather than merges, so the accent bar is
+   re-declared as an inset shadow beside the lift rather than left to the border
+   alone. */
+@media (min-width: 64rem) {
+  .rbc-event:hover {
+    background-color: color-mix(in oklab, var(--evt-accent) 22%, var(--background));
+    box-shadow:
+      inset 3px 0 0 0 var(--evt-accent),
+      0 2px 6px color-mix(in oklab, var(--foreground) 18%, transparent);
+  }
+}
+
+/* A stacked pair (REE-81): two items whose times overlap, which RBC lays side by
+   side. evt-stacked is set in day-calendar.tsx on any event that overlaps
+   another. A depth shadow lifts them apart so the pair reads as two blocks, not
+   one wide panel. The accent bar is re-declared inset because a box-shadow
+   replaces, it does not merge. */
+.rbc-event.evt-stacked {
+  box-shadow:
+    inset 3px 0 0 0 var(--evt-accent),
+    0 1px 4px color-mix(in oklab, var(--foreground) 14%, transparent);
+}
+
 /* Kind accent ramp. Hue from Tailwind's palette variables; tint mixed against
    the current --background so one rule covers light and dark. */
 .evt-show {
@@ -230,4 +257,17 @@
 }
 .rbc-addons-dnd .rbc-addons-dnd-resize-ns-icon {
   border-color: var(--evt-accent);
+}
+
+/* The block being dragged (REE-81). RBC clones the .rbc-event and adds this
+   class to the clone that tracks the cursor; a strong drop shadow, larger than
+   any resting or hover state, makes it read as lifted clear off the grid. Two
+   classes rather than the bare marker so it outweighs .rbc-event:hover, which
+   also matches the clone sitting under the pointer. The addon's own opacity
+   handling on the source event and its neighbours is left untouched. The accent
+   bar is re-declared inset for the same reason as above: box-shadow replaces. */
+.rbc-event.rbc-addons-dnd-drag-preview {
+  box-shadow:
+    inset 3px 0 0 0 var(--evt-accent),
+    0 8px 20px color-mix(in oklab, var(--foreground) 28%, transparent);
 }
