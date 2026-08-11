@@ -20,8 +20,10 @@
  * --destructive). Kind accents use Tailwind v4's exposed palette variables
  * (--color-purple-500 and friends), which the app already relies on through the
  * date sidebar chips, and tints are mixed against --background so light and dark
- * are one definition rather than two. Accents match the date sidebar: purple
- * show, teal transport, blue hotel, emerald catering, amber other.
+ * are one definition rather than two. The calendar shares the sidebar's palette
+ * variables but not its mapping: the sidebar colours day types (amber = press),
+ * the calendar colours item kinds (purple = show, teal = transport, blue = hotel,
+ * emerald = catering, amber = other), so amber means different things in each.
  */
 
 /* Outer chrome. The grid sits inside <main>, which already carries the card
