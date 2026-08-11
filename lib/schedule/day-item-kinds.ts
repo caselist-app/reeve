@@ -11,8 +11,8 @@
 //   1. resolveItemDayOffsets walks the crossesMidnight kinds in order and treats
 //      the clock going backwards as evidence of midnight. That walk is only
 //      correct while those kinds are in the order they actually occur: the
-//      changeover finishes before the headliner goes on, which finishes before
-//      the curfew. Reordering them looks cosmetic and silently breaks Brief 40's
+//      headliner set ends before the curfew, which is before the load-out.
+//      Reordering them looks cosmetic and silently breaks Brief 40's
 //      rule, which is why tests/unit/day-item-kinds.test.ts pins the sequence.
 //   2. The combo box offers kinds in this order when the input is empty.
 //
@@ -201,20 +201,29 @@ export const DAY_ITEM_KINDS: readonly DayItemKind[] = [
     surfaceEndInComms: true,
     icon: 'Music',
   },
-
-  // ---- Everything below can cross midnight, in the order it occurs. ---------
-  // This run is genuinely chronological and resolveItemDayOffsets depends on it.
-
   {
     kind: 'changeover',
     label: 'Changeover',
     aliases: ['changeover', 'change over', 'turnaround'],
     accent: 'show',
-    crossesMidnight: true,
+    // NOT crossing (REE-120). A changeover is the evening turnaround between the
+    // support and the headliner, so it sits alongside them in the day rather
+    // than in the small hours. Flagging it crossesMidnight meant any changeover
+    // earlier than the day's latest daytime time was read as having crossed into
+    // the following morning and stored on the next calendar day, where it
+    // vanished from the day the TM added it to. A changeover after midnight is
+    // possible but rare, and gets the same treatment support and doors already
+    // do: its own late time stays on the show's own day. So it anchors the day
+    // like support does instead of joining the crossing walk.
+    crossesMidnight: false,
     defaultMeridiem: 'pm',
     surfaceEndInComms: false,
     icon: 'RefreshCw',
   },
+
+  // ---- Everything below can cross midnight, in the order it occurs. ---------
+  // This run is genuinely chronological and resolveItemDayOffsets depends on it.
+
   {
     kind: 'headliner',
     label: 'Headliner',

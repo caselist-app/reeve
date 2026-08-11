@@ -52,14 +52,14 @@ describe('the day item kind list', () => {
   })
 
   it('keeps the crossing kinds in the order they occur', () => {
-    // The sequence resolveItemDayOffsets walks. The changeover finishes before
-    // the headliner goes on, which finishes before the curfew. Support is a
-    // windowed daytime slot now (REE-100), so it anchors the day rather than
-    // joining this walk. This is the assertion that makes reordering the array a
-    // failing test rather than a silent bug.
+    // The sequence resolveItemDayOffsets walks. The headliner set ends before
+    // the curfew, which is before the load-out. Support and the changeover are
+    // evening daytime slots (REE-100, REE-120), so they anchor the day rather
+    // than joining this walk. This is the assertion that makes reordering the
+    // array a failing test rather than a silent bug.
     const crossing = DAY_ITEM_KINDS.filter((k) => k.crossesMidnight).map((k) => k.kind)
 
-    expect(crossing).toEqual(['changeover', 'headliner', 'curfew', 'load_out'])
+    expect(crossing).toEqual(['headliner', 'curfew', 'load_out'])
   })
 
   it('surfaces an end time in comms for catering and the two show windows', () => {
