@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { Lock } from 'lucide-react'
 import { PanelShell } from '@/components/layout/panel-shell'
 import { PanelDeleteMenu } from '@/components/schedule/panels/panel-delete-menu'
@@ -276,6 +277,7 @@ function GuestRow({
   tourId: string
   onChanged: () => void
 }) {
+  const router = useRouter()
   const [pending, startTransition] = useTransition()
 
   function approve() {
@@ -295,10 +297,17 @@ function GuestRow({
   // Removing a name is a soft delete: status becomes 'removed' via
   // removeGuestEntry, never a hard delete, so the record of who asked survives
   // for the promoter's question later.
+  //
+  // router.refresh() re-resolves the day-info block's server-rendered count, the
+  // same as the transport and venue delete menus: this runs from PanelDeleteMenu's
+  // plain click handler, not through a transition, so removeGuestEntry's
+  // revalidatePath does not auto-apply the way the add and approve paths' do.
+  // onChanged() separately re-reads the panel's own client-side list.
   async function remove(): Promise<string | null> {
     const result = await removeGuestEntry(entry.id)
     if (result.error) return result.error
     onChanged()
+    router.refresh()
     return null
   }
 
