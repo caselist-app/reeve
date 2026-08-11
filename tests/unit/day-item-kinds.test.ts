@@ -19,10 +19,11 @@ import {
 //      because it needs to read the migration.
 
 describe('the day item kind list', () => {
-  it('holds the eighteen kinds and nothing else', () => {
-    // The seventeen distinct times a day used to carry as fixed columns, plus
-    // 'other'. Written out rather than counted, so adding a speculative kind
-    // fails here and has to be argued for rather than slipped in.
+  it('holds the sixteen kinds and nothing else', () => {
+    // Brief 42's eighteen, minus the four on/off names, plus the two merged
+    // windows headliner and support (REE-100). Written out rather than counted,
+    // so adding a speculative kind fails here and has to be argued for rather
+    // than slipped in.
     expect(new Set(DAY_ITEM_KIND_NAMES)).toEqual(
       new Set([
         'lobby_call',
@@ -32,11 +33,9 @@ describe('the day item kind list', () => {
         'soundcheck',
         'vip',
         'doors',
-        'support_on',
-        'support_off',
+        'support',
         'changeover',
-        'headliner_on',
-        'headliner_off',
+        'headliner',
         'curfew',
         'load_out',
         'catering_breakfast',
@@ -45,7 +44,7 @@ describe('the day item kind list', () => {
         'other',
       ]),
     )
-    expect(DAY_ITEM_KINDS).toHaveLength(18)
+    expect(DAY_ITEM_KINDS).toHaveLength(16)
   })
 
   it('has no duplicate kind', () => {
@@ -53,29 +52,30 @@ describe('the day item kind list', () => {
   })
 
   it('keeps the crossing kinds in the order they occur', () => {
-    // The sequence resolveItemDayOffsets walks. A support act finishes before
-    // the changeover, which finishes before the headliner goes on. This is the
-    // assertion that makes reordering the array a failing test rather than a
-    // silent bug.
+    // The sequence resolveItemDayOffsets walks. The changeover finishes before
+    // the headliner goes on, which finishes before the curfew. Support is a
+    // windowed daytime slot now (REE-100), so it anchors the day rather than
+    // joining this walk. This is the assertion that makes reordering the array a
+    // failing test rather than a silent bug.
     const crossing = DAY_ITEM_KINDS.filter((k) => k.crossesMidnight).map((k) => k.kind)
 
-    expect(crossing).toEqual([
-      'support_off',
-      'changeover',
-      'headliner_on',
-      'headliner_off',
-      'curfew',
-      'load_out',
-    ])
+    expect(crossing).toEqual(['changeover', 'headliner', 'curfew', 'load_out'])
   })
 
-  it('surfaces an end time in comms for catering and nothing else', () => {
-    // Decision 3. Comms say 'Load-in 10:00', never a range, because a TM does
-    // not talk in ranges. A dinner window that does not say when it shuts is the
-    // one case where the end is the point.
+  it('surfaces an end time in comms for catering and the two show windows', () => {
+    // Decision 3, and its carve-out. Comms say 'Load-in 10:00', never a range,
+    // because a load-in end is a fifteen minute estimate. Catering, and now the
+    // headliner and support windows (REE-100), are the cases where the end is a
+    // stated time crew care about, so the range is the point.
     const withEnd = DAY_ITEM_KINDS.filter((k) => k.surfaceEndInComms).map((k) => k.kind)
 
-    expect(withEnd.sort()).toEqual(['catering_breakfast', 'catering_dinner', 'catering_lunch'])
+    expect(withEnd.sort()).toEqual([
+      'catering_breakfast',
+      'catering_dinner',
+      'catering_lunch',
+      'headliner',
+      'support',
+    ])
   })
 
   it('gives every catering kind the catering accent, and only those', () => {

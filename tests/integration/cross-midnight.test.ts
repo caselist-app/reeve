@@ -43,15 +43,18 @@ describe('day item times that cross midnight', () => {
     await destroyFixture(fixture)
   })
 
-  // Adds items in the order given, which is the order a TM builds a day in.
-  async function setTimes(times: [string, string][]) {
-    for (const [kind, clock] of times) {
+  // Adds items in the order given, which is the order a TM builds a day in. A
+  // third tuple element sets an end time, for the windowed kinds (headliner,
+  // support, catering).
+  async function setTimes(times: [string, string, string?][]) {
+    for (const [kind, clock, endClock] of times) {
       const result = await createDayItem({
         tour_id: fixture.tourId,
         tour_date_id: fixture.tourDateId,
         show_id: fixture.showId,
         kind,
         start_clock: clock,
+        end_clock: endClock,
       })
       // Thrown rather than asserted: a rejected write would leave every
       // assertion below reading null and passing for the wrong reason.
@@ -70,11 +73,22 @@ describe('day item times that cross midnight', () => {
     return data.starts_at
   }
 
+  async function storedEnd(kind: string): Promise<string> {
+    const { data } = await testDb
+      .from('day_items')
+      .select('ends_at')
+      .eq('show_id', fixture.showId)
+      .eq('kind', kind)
+      .single()
+    if (!data?.ends_at) throw new Error(`the day did not store an end for ${kind}`)
+    return data.ends_at
+  }
+
   it('stores a small-hours curfew on the morning after the show', async () => {
     await setTimes([
       ['load_in', '10:00'],
       ['doors', '19:00'],
-      ['headliner_off', '23:00'],
+      ['headliner', '21:00', '23:00'],
       ['curfew', '01:30'],
       ['load_out', '03:00'],
     ])
@@ -179,15 +193,32 @@ describe('day item times that cross midnight', () => {
     await setTimes([
       ['load_in', '06:00'],
       ['doors', '10:00'],
-      ['support_on', '11:00'],
-      ['support_off', '11:30'],
-      ['headliner_on', '12:00'],
-      ['headliner_off', '13:00'],
+      ['support', '11:00', '11:30'],
+      ['headliner', '12:00', '13:00'],
       ['curfew', '23:00'],
     ])
 
-    expect(localDateInZone(await storedTime('headliner_off'), TZ)).toBe('2026-06-14')
+    // The headliner window stays whole on the show's own date: start at 12:00,
+    // end at 13:00, neither rolled onto the next morning.
+    expect(localDateInZone(await storedTime('headliner'), TZ)).toBe('2026-06-14')
+    expect(localDateInZone(await storedEnd('headliner'), TZ)).toBe('2026-06-14')
     expect(localDateInZone(await storedTime('curfew'), TZ)).toBe('2026-06-14')
+  })
+
+  it('splits a headliner set whose end runs past midnight across the two days', async () => {
+    // The REE-100 case as a TM enters it: on stage at 23:00, off at 01:00. The
+    // start stores on the show's own date and the end on the morning after, the
+    // same split that used to need two separate rows.
+    await setTimes([
+      ['load_in', '10:00'],
+      ['doors', '19:00'],
+      ['headliner', '23:00', '01:00'],
+    ])
+
+    expect(localDateInZone(await storedTime('headliner'), TZ)).toBe('2026-06-14')
+    expect(localTimeInZone(await storedTime('headliner'), TZ)).toBe('23:00')
+    expect(localDateInZone(await storedEnd('headliner'), TZ)).toBe('2026-06-15')
+    expect(localTimeInZone(await storedEnd('headliner'), TZ)).toBe('01:00')
   })
 
   it('carries the roll-over when the show moves date', async () => {

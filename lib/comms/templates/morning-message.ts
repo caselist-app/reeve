@@ -90,7 +90,9 @@ export async function buildMorningMessageData(
     load_in: at('load_in'),
     soundcheck: at('soundcheck'),
     doors: at('doors'),
-    headliner_on: at('headliner_on'),
+    // The headliner set is one windowed item now (REE-100); its start is the
+    // on-stage time. See lib/comms/blocks/show-times.ts.
+    headliner_on: at('headliner'),
     curfew: at('curfew'),
     hotel_name: hotel?.name ?? null,
     hotel_checkout: hotelCheckout,

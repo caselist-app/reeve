@@ -47,12 +47,11 @@ describe('resolveItemDayOffsets carries Brief 40 across unchanged', () => {
     const offsets = offsetsByKind([
       item('load_in', '10:00'),
       item('doors', '19:00'),
-      item('headliner_on', '21:00'),
-      item('headliner_off', '23:00'),
+      item('headliner', '21:00', '23:00'),
       item('curfew', '01:30'),
     ])
 
-    expect(offsets.headliner_off).toBe(0)
+    expect(offsets.headliner).toBe(0)
     expect(offsets.curfew).toBe(1)
   })
 
@@ -72,14 +71,17 @@ describe('resolveItemDayOffsets carries Brief 40 across unchanged', () => {
   it('leaves an evening that never crosses midnight alone', () => {
     const offsets = offsetsByKind([
       item('doors', '19:00'),
-      item('support_off', '20:30'),
-      item('headliner_on', '21:00'),
-      item('headliner_off', '22:45'),
+      item('support', '20:00', '20:30'),
+      item('headliner', '21:00', '22:45'),
       item('curfew', '23:00'),
       item('load_out', '23:59'),
     ])
 
-    for (const kind of ['support_off', 'headliner_on', 'headliner_off', 'curfew', 'load_out']) {
+    // Support is a daytime window now, so it anchors the day rather than joining
+    // the crossing walk and is absent from the offsets (offset 0 implied). The
+    // crossing kinds are all still on the show's own date.
+    expect(offsets.support ?? 0).toBe(0)
+    for (const kind of ['headliner', 'curfew', 'load_out']) {
       expect(offsets[kind]).toBe(0)
     }
   })
@@ -114,15 +116,13 @@ describe('resolveItemDayOffsets carries Brief 40 across unchanged', () => {
     const offsets = offsetsByKind([
       item('load_in', '06:00'),
       item('doors', '10:00'),
-      item('support_on', '11:00'),
-      item('support_off', '11:30'),
+      item('support', '11:00', '11:30'),
       item('changeover', '11:45'),
-      item('headliner_on', '12:00'),
-      item('headliner_off', '13:00'),
+      item('headliner', '12:00', '13:00'),
       item('curfew', '23:00'),
     ])
 
-    for (const kind of ['support_off', 'changeover', 'headliner_on', 'headliner_off', 'curfew']) {
+    for (const kind of ['changeover', 'headliner', 'curfew']) {
       expect(offsets[kind]).toBe(0)
     }
   })
@@ -353,6 +353,23 @@ describe('resolveItemInstants builds the stored instant', () => {
     expect(new Date(endsAt as string).getTime()).toBeGreaterThan(
       new Date(startsAt as string).getTime(),
     )
+  })
+
+  it('stores a headliner set whose end runs past midnight, start and end on different days', () => {
+    // The real REE-100 case: one windowed item for the set, on stage at 23:00,
+    // off at 01:00. The start is on the show's own date and the end is the next
+    // morning, the same split a load-out from 23:30 to 00:30 gets.
+    const headliner = item('headliner', '23:00', '01:00')
+    const { startsAt, endsAt, error } = resolveItemInstants(
+      [item('doors', '19:00'), headliner],
+      headliner.id,
+      DAY,
+      LONDON,
+    )
+
+    expect(error).toBeNull()
+    expect(startsAt).toBe('2026-06-14T22:00:00.000Z')
+    expect(endsAt).toBe('2026-06-15T00:00:00.000Z')
   })
 
   it('rolls both ends when the item itself has crossed midnight', () => {
