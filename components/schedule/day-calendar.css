@@ -110,23 +110,33 @@
 }
 
 /*
- * The event chip. Strip RBC's flat blue fill, 1px all-round border and rounded
- * corners back to a single-sided accent: a thick left border in the kind's
- * colour, a tinted background from the same hue, and a bottom edge that is solid
- * when the TM has stated an end and dashed when the end is synthetic. The accent
- * hue arrives as a marker class (.evt-*) from eventPropGetter, which sets the
- * two custom properties this rule reads.
+ * The event chip. Strip RBC's flat blue fill, 1px all-round border and default
+ * blue back to a rounded card carrying the kind's own hue: a tinted background
+ * from the hue, a 3px accent bar down the left drawn as an inset box-shadow (so
+ * it sits inside the corner radius and rounds with the chip, where a left border
+ * would square the corners off), a bottom edge that is solid when the TM has
+ * stated an end and dashed when it is synthetic, and text in the hue rather than
+ * flat grey. The accent hue arrives as a marker class (.evt-*) from
+ * eventPropGetter and sets --evt-accent/--evt-tint; the two text tokens are
+ * derived from it once here. Each is a single color-mix toward --foreground, so
+ * the same definition reads in both light and dark: --evt-text pulls hardest
+ * toward the mode's foreground for the title, --evt-meta stays closer to the raw
+ * hue for the quieter time label. No .dark override is needed.
  */
 .rbc-event,
 .rbc-day-slot .rbc-event {
-  padding: 1px 6px;
+  --evt-text: color-mix(in oklab, var(--evt-accent) 55%, var(--foreground));
+  --evt-meta: color-mix(in oklab, var(--evt-accent) 78%, var(--foreground));
+  margin-right: 6px;
+  /* Extra left padding clears the inset accent bar, which unlike a border does
+     not push content in on its own. */
+  padding: 1px 6px 1px 10px;
   background-color: var(--evt-tint);
   border: 0 solid var(--evt-accent);
-  border-left-width: 3px;
   border-bottom-width: 1.5px;
-  border-radius: 0;
-  box-shadow: none;
-  color: var(--foreground);
+  border-radius: 0.375rem;
+  box-shadow: inset 3px 0 0 var(--evt-accent);
+  color: var(--evt-text);
   font-size: 0.75rem;
   line-height: 1.2;
 }
