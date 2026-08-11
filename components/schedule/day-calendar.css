@@ -292,16 +292,18 @@
 }
 /* The two performance sets (REE-122). Each has its own hue, distinct from the
    generic purple 'show' accent and from every other kind, so the acts stand out
-   on the day: the headliner in fuchsia, the support act in violet. */
+   on the day. The headliner is the bold one in fuchsia; the support act is a
+   neutral gray, which reads as the lesser act and keeps clear of the cool
+   purple/violet family the show items already live in. */
 .evt-headliner {
   --evt-accent: var(--color-fuchsia-500);
   --evt-tint: color-mix(in oklab, var(--color-fuchsia-500) 14%, var(--background));
   --evt-text: color-mix(in oklab, var(--color-fuchsia-500) 55%, var(--foreground));
 }
 .evt-support {
-  --evt-accent: var(--color-violet-500);
-  --evt-tint: color-mix(in oklab, var(--color-violet-500) 14%, var(--background));
-  --evt-text: color-mix(in oklab, var(--color-violet-500) 55%, var(--foreground));
+  --evt-accent: var(--color-gray-500);
+  --evt-tint: color-mix(in oklab, var(--color-gray-500) 14%, var(--background));
+  --evt-text: color-mix(in oklab, var(--color-gray-500) 55%, var(--foreground));
 }
 .evt-transport {
   --evt-accent: var(--color-teal-500);
