@@ -257,7 +257,14 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
             depth: info?.depth ?? 0,
             style: {
               top,
-              height,
+              // A fixed 2px shaved off the bottom of every block (REE-109), so
+              // two items that abut in time (one ending as the next begins) show
+              // a clean 2px gap rather than touching. getRange returns a
+              // percentage, so the gap is expressed as a calc string RBC passes
+              // through verbatim: percent height minus a pixel-exact 2px, which
+              // stays 2px at any grid height. top is untouched, so the gap lands
+              // between the bottom of one block and the top of the next.
+              height: `calc(${height}% - 2px)`,
               width: `calc(100% - ${indentPx}px)`,
               xOffset: `${indentPx}px`,
             },
