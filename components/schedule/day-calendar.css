@@ -114,14 +114,13 @@
  * blue back to a rounded card carrying the kind's own hue: a tinted background
  * from the hue, a 3px accent bar down the left drawn as an inset box-shadow (so
  * it sits inside the corner radius and rounds with the chip, where a left border
- * would square the corners off), a bottom edge that is solid when the TM has
- * stated an end and dashed when it is synthetic, and text in the hue rather than
- * flat grey. The accent hue arrives as a marker class (.evt-*) from
- * eventPropGetter and sets --evt-accent/--evt-tint; the two text tokens are
- * derived from it once here. Each is a single color-mix toward --foreground, so
- * the same definition reads in both light and dark: --evt-text pulls hardest
- * toward the mode's foreground for the title, --evt-meta stays closer to the raw
- * hue for the quieter time label. No .dark override is needed.
+ * would square the corners off), and text in the hue rather than flat grey. The
+ * accent hue arrives as a marker class (.evt-*) from eventPropGetter and sets
+ * --evt-accent/--evt-tint; the two text tokens are derived from it once here.
+ * Each is a single color-mix toward --foreground, so the same definition reads
+ * in both light and dark: --evt-text pulls hardest toward the mode's foreground
+ * for the title, --evt-meta stays closer to the raw hue for the quieter time
+ * label. No .dark override is needed.
  */
 .rbc-event,
 .rbc-day-slot .rbc-event {
@@ -174,15 +173,6 @@
     align-items: flex-start;
     gap: 0;
   }
-}
-
-/* Solid where the end is stated, dashed where it was synthesised by the
-   adapter. This is the visible tell that "nobody has said how long this takes".*/
-.rbc-event.evt-firm-end {
-  border-bottom-style: solid;
-}
-.rbc-event.evt-soft-end {
-  border-bottom-style: dashed;
 }
 
 /* Kind accent ramp. Hue from Tailwind's palette variables; tint mixed against
