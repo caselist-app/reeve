@@ -8,6 +8,7 @@ import { DayInfoPanel } from '@/components/schedule/day-info-panel'
 import { DayInfoDock } from '@/components/schedule/day-info-dock'
 import { DateStrip } from '@/components/schedule/date-strip'
 import { defaultScheduleDate } from '@/lib/schedule/schedule-shell'
+import type { DayType } from '@/lib/schedule/day-link'
 
 interface TourDateLite {
   id: string
@@ -101,6 +102,8 @@ export async function DayContent({ tourId, tourName, timezone, selectedDate, tou
       dayInfoPanel={
         <DayInfoPanel
           tourId={tourId}
+          tourDateId={tourDate?.id ?? null}
+          dayType={(tourDate?.day_type as DayType | undefined) ?? null}
           date={selectedDate}
           show={records.shows[0] ?? null}
           dayNotes={tourDate?.notes ?? null}

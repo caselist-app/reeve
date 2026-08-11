@@ -1,10 +1,17 @@
 import { NotesTextarea } from '@/components/schedule/notes-textarea'
 import { VenueBlock } from '@/components/schedule/venue-block'
+import { AddVenueButton } from '@/components/schedule/add-venue-button'
 import type { DayShow } from '@/lib/schedule/day-records'
 import type { RosterPerson } from '@/lib/schedule/day-roster'
+import type { DayType } from '@/lib/schedule/day-link'
+import { venueSectionState } from '@/lib/schedule/day-info-venue'
 
 interface DayInfoPanelProps {
   tourId: string
+  // Null when the selected date is not a day of the tour: no day type, so the
+  // venue section is absent.
+  tourDateId: string | null
+  dayType: DayType | null
   date: string
   show: DayShow | null
   dayNotes: string | null
@@ -12,27 +19,35 @@ interface DayInfoPanelProps {
   roster: RosterPerson[]
 }
 
-export function DayInfoPanel({ tourId, date, show, dayNotes, roster }: DayInfoPanelProps) {
+export function DayInfoPanel({ tourId, tourDateId, dayType, date, show, dayNotes, roster }: DayInfoPanelProps) {
   const rosterPreview = roster.slice(0, 4)
   const rosterOverflow = roster.length - rosterPreview.length
+
+  // The venue section is conditional on the day type. It is absent on a travel
+  // day, a press day, a rehearsal day and a day off as a matter of fact: those
+  // days have no venue to have, so there is nothing to say. Do not restore a
+  // sentence for them.
+  const venue = dayType ? venueSectionState(dayType, show !== null) : { kind: 'absent' as const }
 
   return (
     <div className="flex flex-col h-full px-4 py-4 gap-5 overflow-y-auto">
       {/* Venue. Clickable since Brief 36 step 6: this is the way into a show's
           venue detail now that the show page is gone. */}
-      {show ? (
+      {venue.kind === 'venue' && show && (
         <section>
           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
             Venue
           </p>
           <VenueBlock tourId={tourId} show={show} />
         </section>
-      ) : (
+      )}
+      {venue.kind === 'needs-venue' && tourDateId && (
         <section>
           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-            Day info
+            Venue
           </p>
-          <p className="text-xs text-muted-foreground">No show on this date.</p>
+          <p className="text-xs text-muted-foreground">No venue yet.</p>
+          <AddVenueButton tourId={tourId} tourDateId={tourDateId} date={date} notes={dayNotes} />
         </section>
       )}
 
