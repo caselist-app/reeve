@@ -19,6 +19,11 @@
 import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs'
 import { join, dirname, resolve, extname } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import {
+  checkOperationsBlock,
+  BEGIN as FACTS_BEGIN,
+  END as FACTS_END,
+} from './facts.mjs'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const BASELINE_PATH = join(ROOT, 'scripts', 'conventions-baseline.json')
@@ -622,6 +627,57 @@ for (const file of sourceFiles) {
         'and localDateInZone() instead.',
       `luxon-containment|${rel(file)}`
     )
+  }
+}
+
+// ---- Rule 12: no document states a number, and OPERATIONS.md stays current ----
+// A number written into prose is a number that will be wrong within a week,
+// because nothing tells you when it moves. On 2026-08-11 the baseline count,
+// the three test counts and the migration count were each written down in four
+// places, several of them stale. scripts/facts.mjs computes all of them, and
+// OPERATIONS.md carries the generated block. This fails when that block has
+// fallen behind, the same way a lockfile check works.
+//
+// Part b catches the habit coming back: a doc restating the baseline count in
+// prose. The count is the one that has actually drifted repeatedly, because
+// CLAUDE.md cites it while arguing about the check itself.
+const staleFacts = checkOperationsBlock()
+if (staleFacts) {
+  report('facts-current', 'OPERATIONS.md', 1, staleFacts, 'facts-current|OPERATIONS.md')
+}
+
+// Two stage, because the count and the word "baseline" are routinely in
+// different sentences: CLAUDE.md's version was "...conventions-baseline.json.
+// It stood at 20 when the check was written and is at 7 since Brief 37."
+const COUNT_NEAR_BASELINE =
+  /(?:stands? at|stood at|is (?:now )?at|is now|sits at|holds|has|down to)\s+(\d+)\b|\b(\d+)\s+(?:known\s+)?(?:baselined?\s+)?(?:entries|violations)\b/gi
+const FACT_DOCS = ['CLAUDE.md', 'COMPONENTS.md', 'OPERATIONS.md', 'README.md', 'tests/README.md']
+for (const doc of FACT_DOCS) {
+  const full = join(ROOT, doc)
+  if (!existsSync(full)) continue
+  const src = readFileSync(full, 'utf8')
+  // The generated block is allowed to carry numbers. Nothing else is.
+  const gStart = src.indexOf(FACTS_BEGIN)
+  const gEnd = src.indexOf(FACTS_END)
+  const inGenerated = (i) =>
+    gStart !== -1 && gEnd !== -1 && i >= gStart && i < gEnd + FACTS_END.length
+
+  for (const anchor of src.matchAll(/baseline/gi)) {
+    const from = anchor.index
+    const window = src.slice(from, from + 320)
+    for (const m of window.matchAll(COUNT_NEAR_BASELINE)) {
+      const at = from + m.index
+      if (inGenerated(at)) continue
+      report(
+        'facts-in-prose',
+        doc,
+        lineOf(src, at),
+        `States the baseline count in prose ("${m[0].trim()}"). A number about this ` +
+          'repo goes stale silently and nothing tells you. Point at `pnpm facts`, or ' +
+          'at the generated block in OPERATIONS.md, instead of writing the figure.',
+        `facts-in-prose|${doc}|${lineOf(src, at)}`
+      )
+    }
   }
 }
 

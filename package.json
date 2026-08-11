@@ -9,6 +9,7 @@
     "lint": "next lint",
     "typecheck": "rm -rf .next/types && tsc --noEmit",
     "check:conventions": "node scripts/check-conventions.mjs",
+    "facts": "node scripts/facts.mjs",
     "check": "pnpm typecheck && pnpm lint && pnpm check:conventions && pnpm test && pnpm build",
     "test": "vitest run",
     "test:watch": "vitest",

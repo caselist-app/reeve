@@ -84,9 +84,23 @@ supabase db reset               # rebuild local DB from all migrations (destruct
 
 `pnpm check:conventions` runs `scripts/check-conventions.mjs` and is a CI step alongside typecheck, lint and build. It exists because an audit on 2026-08-04 found that every bug in the repo, including two that silently destroyed user data, passed all three of those. This file was complete and correct at the time and its rules were still broken repeatedly by agents that had read it. **A rule that cannot fail the build is a suggestion.**
 
-It currently enforces: `requireUser()` first in every server action, `revalidatePath` on the schedule route for any action writing a schedule-rendered table, no `.default()` on any schema in `lib/validators/`, no `getSession()`, `cache_control` on every Anthropic call, no unguarded `.in()`, no em-dashes, every `process.env` read declared in `.env.example`, `[BOTH]` marked on every variable reachable from `trigger/jobs/`, and a `-- deploy-order:` line on any migration that drops a column or table.
+It currently enforces: `requireUser()` first in every server action, `revalidatePath` on the schedule route for any action writing a schedule-rendered table, no `.default()` on any schema in `lib/validators/`, no `getSession()`, `cache_control` on every Anthropic call, no unguarded `.in()`, no em-dashes, every `process.env` read declared in `.env.example`, `[BOTH]` marked on every variable reachable from `trigger/jobs/`, a `-- deploy-order:` line on any migration that drops a column or table, luxon confined to the calendar localizer, the day item kind list agreeing with the database, and the facts rule below.
 
-Known violations that predate the check live in `scripts/conventions-baseline.json`, each with a reason saying whether it is **accepted** (the check is wrong about it) or **debt** (the check is right and the fix is scheduled). That file should only ever shrink. Removing an entry is part of the fix, because a stale entry fails the check too. It stood at 20 when the check was written and is at 7 since Brief 37, with no `revalidate-schedule` debt left in it.
+Known violations that predate the check live in `scripts/conventions-baseline.json`, each with a reason saying whether it is **accepted** (the check is wrong about it) or **debt** (the check is right and the fix is scheduled). That file should only ever shrink. Removing an entry is part of the fix, because a stale entry fails the check too. **For the current count, run `pnpm facts`.** It is deliberately not written here: see the next section.
+
+### No document states a number about this repo
+
+A number written into prose is a number that will be wrong within a week, because nothing tells you when it moves. On 2026-08-11 an audit found the baseline count, the three test counts and the migration count each written down in four places, several of them stale, alongside operational facts that were stale in five.
+
+So: **`scripts/facts.mjs` computes every such number and `pnpm facts` prints them.** `OPERATIONS.md` carries a generated block, regenerated with `pnpm facts --write`. `check:conventions` fails both when that block falls behind and when a doc restates the baseline count in prose, which is the one that has drifted repeatedly, because this file cites it while arguing about the check itself.
+
+Point at `pnpm facts`. Do not write the figure.
+
+### `OPERATIONS.md` is the other half of this file
+
+`CLAUDE.md` says how to write Reeve code. **`OPERATIONS.md` says what is true about the running world**: the two runtimes and how they deploy, what can and cannot be verified from a session, the state of Supabase and `db push`, which secret belongs in which scope, and the limits of the test suite. Those facts change when the world changes rather than when the code does, and nothing tells you when it happens, so they carry a confirmation date each and they live in exactly one place.
+
+If you find one of them restated somewhere else, that copy is wrong by construction. Delete it and point at `OPERATIONS.md`.
 
 If a check fires on you, the default assumption is that the check is right. If it genuinely is not, add a baseline entry explaining why, rather than weakening the rule. Do not delete a check to make the build pass.
 
