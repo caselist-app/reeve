@@ -34,7 +34,6 @@ function emptyRecords(): DayRecords {
     itemsError: null,
     segments: [],
     hotels: [],
-    lateNight: { segments: [] },
     segmentIds: [],
     hotelStayIds: [],
   }

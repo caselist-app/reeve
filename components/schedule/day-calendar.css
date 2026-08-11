@@ -282,7 +282,7 @@
 /* Kind accent ramp. Hue from Tailwind's palette variables; tint mixed against
    the current --background so one rule covers light and dark. --evt-text is the
    readable-on-tint version of the hue: the "No time set" rail pills and the
-   "After midnight" icon squares (REE-82) sit on --evt-tint and label with it,
+   "Outside this day" icon squares (REE-82) sit on --evt-tint and label with it,
    mixed toward --foreground so it stays legible in both light and dark rather
    than the medium palette shade washing out on a pale tint. */
 /* The generic show items (doors, changeover, load-in, soundcheck, curfew, and
