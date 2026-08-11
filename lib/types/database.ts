@@ -649,6 +649,145 @@ export type Database = {
           },
         ]
       }
+      guest_list_allotments: {
+        Row: {
+          created_at: string
+          id: string
+          num_allowed: number
+          pass_type: string
+          show_id: string
+          tour_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          num_allowed: number
+          pass_type: string
+          show_id: string
+          tour_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          num_allowed?: number
+          pass_type?: string
+          show_id?: string
+          tour_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "guest_list_allotments_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "guest_list_allotments_tour_id_fkey"
+            columns: ["tour_id"]
+            isOneToOne: false
+            referencedRelation: "tours"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      guest_list_entries: {
+        Row: {
+          created_at: string
+          decline_reason: string | null
+          email: string | null
+          first_name: string | null
+          guest_type: string | null
+          id: string
+          last_name: string | null
+          notes: string | null
+          notified_at: string | null
+          num_tickets: number
+          pass_type: string
+          pass_type_detail: string | null
+          pickup: string | null
+          pickup_detail: string | null
+          priority: boolean
+          request_channel: string
+          requested_by_person_id: string | null
+          show_id: string
+          status: string
+          tour_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          decline_reason?: string | null
+          email?: string | null
+          first_name?: string | null
+          guest_type?: string | null
+          id?: string
+          last_name?: string | null
+          notes?: string | null
+          notified_at?: string | null
+          num_tickets?: number
+          pass_type?: string
+          pass_type_detail?: string | null
+          pickup?: string | null
+          pickup_detail?: string | null
+          priority?: boolean
+          request_channel: string
+          requested_by_person_id?: string | null
+          show_id: string
+          status: string
+          tour_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          decline_reason?: string | null
+          email?: string | null
+          first_name?: string | null
+          guest_type?: string | null
+          id?: string
+          last_name?: string | null
+          notes?: string | null
+          notified_at?: string | null
+          num_tickets?: number
+          pass_type?: string
+          pass_type_detail?: string | null
+          pickup?: string | null
+          pickup_detail?: string | null
+          priority?: boolean
+          request_channel?: string
+          requested_by_person_id?: string | null
+          show_id?: string
+          status?: string
+          tour_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "guest_list_entries_requested_by_person_id_fkey"
+            columns: ["requested_by_person_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "guest_list_entries_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "guest_list_entries_tour_id_fkey"
+            columns: ["tour_id"]
+            isOneToOne: false
+            referencedRelation: "tours"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hotel_stays: {
         Row: {
           address: string | null
@@ -1040,6 +1179,8 @@ export type Database = {
           created_at: string
           date: string
           dressing_rooms: string | null
+          guest_list_cutoff_at: string | null
+          guest_list_locked: boolean
           house_lighting_plot: string | null
           house_pa_spec: string | null
           hub_ground_minutes: number | null
@@ -1070,6 +1211,8 @@ export type Database = {
           created_at?: string
           date: string
           dressing_rooms?: string | null
+          guest_list_cutoff_at?: string | null
+          guest_list_locked?: boolean
           house_lighting_plot?: string | null
           house_pa_spec?: string | null
           hub_ground_minutes?: number | null
@@ -1100,6 +1243,8 @@ export type Database = {
           created_at?: string
           date?: string
           dressing_rooms?: string | null
+          guest_list_cutoff_at?: string | null
+          guest_list_locked?: boolean
           house_lighting_plot?: string | null
           house_pa_spec?: string | null
           hub_ground_minutes?: number | null

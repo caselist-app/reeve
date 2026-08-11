@@ -36,6 +36,7 @@ const SCHEDULE_TABLES = [
   'shows', 'day_sheets', 'transport_segments', 'transport_assignments',
   'hotel_stays', 'room_assignments', 'day_events', 'day_items', 'tour_dates',
   'rehearsals', 'people', 'contacts',
+  'guest_list_entries', 'guest_list_allotments',
 ]
 
 // requireUser() is impossible before a session exists. These are the only
