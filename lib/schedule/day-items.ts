@@ -161,7 +161,7 @@ export async function fetchItemsForShows(
 }
 
 /**
- * Moves a show's items to another day, times and all.
+ * Moves a day's items to another date, times and all.
  *
  * A show's date is editable, and its running order has to go with it. Before
  * Brief 42 this was shiftDaySheetToDate in lib/actions/shows.ts, moving twenty
@@ -171,6 +171,14 @@ export async function fetchItemsForShows(
  * used to be on. Here it would be worse: the items would keep the old
  * tour_date_id, so the show would move to the 20th and its entire running order
  * would stay on the 14th, visible on a day with no show.
+ *
+ * SELECTED BY THE OLD DAY, NOT BY THE SHOW. day_items hang off the day through
+ * tour_date_id and only reference a show through the nullable show_id. The
+ * quick-add day form and the custom-event form both create items with show_id
+ * null (only email extraction and the planner ever set it), so filtering by
+ * show_id here carried the handful of linked items and stranded everything the
+ * TM had typed by hand, headliner included, on a day that no longer had a show.
+ * That is REE-118. The day is the anchor, so the day is what selects.
  *
  * Two things move together, and neither is optional. The day link becomes the
  * new day, and each instant is re-derived from the wall clock it reads as in the
@@ -190,7 +198,7 @@ export async function fetchItemsForShows(
  */
 export async function shiftDayItemsToDate(
   supabase: Client,
-  showId: string,
+  oldTourDateId: string,
   oldDate: string,
   newDate: string,
   newTourDateId: string,
@@ -199,10 +207,12 @@ export async function shiftDayItemsToDate(
   const { data: items, error } = await supabase
     .from('day_items')
     .select('id, starts_at, ends_at')
-    .eq('show_id', showId)
+    .eq('tour_date_id', oldTourDateId)
 
   if (error) {
-    console.error('[day-items] could not read the items to move:', error.message, { showId })
+    console.error('[day-items] could not read the items to move:', error.message, {
+      oldTourDateId,
+    })
     return false
   }
 
@@ -246,7 +256,7 @@ export async function shiftDayItemsToDate(
     // needs to know about, and this is the only place it is visible.
     if (updateError) {
       console.error('[day-items] could not move an item with its show:', updateError.message, {
-        showId,
+        oldTourDateId,
         itemId: item.id,
       })
       continue

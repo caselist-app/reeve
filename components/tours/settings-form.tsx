@@ -6,6 +6,7 @@ import { updateTourAction, archiveTourAction } from '@/lib/actions/tours'
 import { useEntityForm } from '@/hooks/use-entity-form'
 import { useTourNameStore } from '@/stores/tour-name-store'
 import { TOUR_TIMEZONES } from '@/lib/validators/tour'
+import { detectBrowserTourTimezone } from '@/lib/schedule/detect-timezone'
 import type { Tables } from '@/lib/types/database'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -65,6 +66,17 @@ export function TourSettingsForm({ tour }: Props) {
   const [currency, setCurrency] = useState(tour.base_currency)
   const [timezone, setTimezone] = useState(tour.timezone ?? '')
   const [inboundQa, setInboundQa] = useState(tour.inbound_qa_enabled ?? false)
+
+  // A tour saved before the timezone was picked renders the day calendar on the
+  // 'UTC' fallback, an hour or more from where the TM is (REE-119). When the tour
+  // has no timezone, suggest the TM's own zone so a save fixes it; detected in an
+  // effect because on the server Intl reports UTC. It only ever fills a blank
+  // selection, so a real saved timezone is left exactly as the TM set it.
+  useEffect(() => {
+    if (tour.timezone) return
+    const detected = detectBrowserTourTimezone()
+    if (detected) setTimezone((current) => current || detected)
+  }, [tour.timezone])
   const [morningMsg, setMorningMsg] = useState(tour.morning_message_enabled ?? false)
 
   const [archivePending, startArchive] = useTransition()
