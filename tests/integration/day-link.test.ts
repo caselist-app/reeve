@@ -170,6 +170,47 @@ describe('the day link survives an edit', () => {
       expect(itinerary).not.toContain('14 Jun')
     })
 
+    it('carries items that are on the day but not linked to the show, so the whole running order follows', async () => {
+      // The regression REE-118 reports. day_items hang off the day by
+      // tour_date_id and only reference a show through the nullable show_id.
+      // The quick-add day form and the custom-event form both create items with
+      // show_id null (only email extraction and the planner set it), so a move
+      // that carried items by show_id left every hand-added item, headliner
+      // included, stranded on a day with no show. The item moves because it is
+      // on the day, not because it names the show.
+      const unlinked = await createDayItem({
+        tour_id: fixture.tourId,
+        tour_date_id: fixture.tourDateId,
+        // No show_id: exactly what components/schedule/day-form.tsx sends.
+        kind: 'headliner',
+        start_clock: '21:00',
+      })
+      expect(unlinked.error).toBeNull()
+      if (!unlinked.itemId) throw new Error('no item created')
+
+      const moved = await updateShow(fixture.showId, showPayload(NEXT_DAY))
+      expect(moved.error).toBeNull()
+
+      const newDay = await tourDateFor(NEXT_DAY)
+      if (!newDay) throw new Error('the show did not get a day to move to')
+
+      const { data: item } = await testDb
+        .from('day_items')
+        .select('tour_date_id, show_id, starts_at')
+        .eq('id', unlinked.itemId)
+        .single()
+
+      // It followed the show to the new day, keeping its unlinked show_id, and
+      // its instant landed on the new date.
+      expect(item?.tour_date_id).toBe(newDay.id)
+      expect(item?.show_id).toBeNull()
+      expect(new Date(item?.starts_at as string).toISOString().slice(0, 10)).toBe(NEXT_DAY)
+
+      // And it is gone from the day the show left, rather than stranded on it.
+      const before = await dayRecords(DATE)
+      expect(before.items.map((i) => i.id)).not.toContain(unlinked.itemId)
+    })
+
     it('does not leave the old day labelled as a show day', async () => {
       await updateShow(fixture.showId, showPayload(NEXT_DAY))
 
