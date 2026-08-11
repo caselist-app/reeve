@@ -105,4 +105,29 @@ describe('the day sheet change alert', () => {
     expect(preview.message).not.toContain('load-in')
     expect(preview.message).not.toContain('curfew')
   })
+
+  // REE-93: a failed read must never render as an empty result. The day_sheet
+  // case reads every contactable person on the tour, and a broken read there
+  // returned an empty array that looked exactly like a genuinely unaffected
+  // tour. This cannot be red-tested by fixture, because those two states are
+  // identical from the outside, and mocking the Supabase client is forbidden
+  // here (it would pass on the very bug this suite exists to catch). So the
+  // proof is a procedure, documented in the PR: break the select string in the
+  // day_sheet case of getAffectedPeople (rename a column), run this file, and
+  // confirm this test goes red on `preview.error` rather than passing with zero
+  // people. This assertion is what makes that break visible.
+  it('surfaces a healthy day-sheet read with no error and the tour crew', async () => {
+    const preview = await previewBroadcast(fixture.tourId, {
+      type: 'day_sheet',
+      showId: fixture.showId,
+    })
+
+    // A null error is the signal the read succeeded. Break the select and this
+    // flips to a non-null PostgREST message, which is the whole point.
+    expect(preview.error).toBeNull()
+    // The fixture seeds one crew member on the tour, so a working read finds
+    // them. A failed read would find nobody and look like an empty tour.
+    expect(preview.people).toHaveLength(1)
+    expect(preview.people[0].name).toBe('Test Crew')
+  })
 })
