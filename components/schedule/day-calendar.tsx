@@ -351,9 +351,9 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
   const formats = useMemo(
     () => ({
       timeGutterFormat: (slot: Date) =>
-        localTimeInZone(fromGridInstant(slot.toISOString(), date, timezone), timezone),
+        localTimeInZone(fromGridInstant(slot.toISOString(), timezone), timezone),
     }),
-    [date, timezone],
+    [timezone],
   )
 
   // RBC positions its own red current-time hairline by feeding getNow() through
@@ -365,8 +365,8 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
   // RBC's default getNow, so the line tracks the clock; the nowMarker label in
   // the gutter (below) is shifted the same way and sits beside it.
   const getNow = useMemo(
-    () => () => new Date(toGridInstant(new Date().toISOString(), date, timezone)),
-    [date, timezone],
+    () => () => new Date(toGridInstant(new Date().toISOString(), timezone)),
+    [timezone],
   )
 
   const openEvent = useMemo(() => {
@@ -513,8 +513,8 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
     // real ones for the label.
     const gridStart = new Date(args.start)
     const gridEnd = new Date(args.end)
-    const start = new Date(fromGridInstant(gridStart.toISOString(), date, timezone))
-    const end = new Date(fromGridInstant(gridEnd.toISOString(), date, timezone))
+    const start = new Date(fromGridInstant(gridStart.toISOString(), timezone))
+    const end = new Date(fromGridInstant(gridEnd.toISOString(), timezone))
     const target = fromDropOrResize({ event, start, end }, event)
     startTransition(async () => {
       applyOptimistic({
@@ -552,8 +552,8 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
     // edit, so it un-shifts back to the real instant first (clicking the "01:00"
     // gutter row seeds 01:00, not the 21:00 it is drawn at).
     setPendingSelection({ start: new Date(slot.start), end: new Date(slot.end) })
-    const realStart = new Date(fromGridInstant(new Date(slot.start).toISOString(), date, timezone))
-    const realEnd = new Date(fromGridInstant(new Date(slot.end).toISOString(), date, timezone))
+    const realStart = new Date(fromGridInstant(new Date(slot.start).toISOString(), timezone))
+    const realEnd = new Date(fromGridInstant(new Date(slot.end).toISOString(), timezone))
     openSidePanel({
       type: 'day-form',
       tourId,

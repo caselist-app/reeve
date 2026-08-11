@@ -6,7 +6,12 @@ import {
   toGridInstant,
   fromGridInstant,
 } from '@/lib/schedule/day-window'
-import { localDayWindowUtc, wallClockToUtc } from '@/lib/schedule/datetime'
+import {
+  localDateInZone,
+  localDayWindowUtc,
+  localTimeInZone,
+  wallClockToUtc,
+} from '@/lib/schedule/datetime'
 
 // Step 1 of the broadcast-day grid: the pure day-window and grid-shift
 // primitives, with no UI or fetch attached yet. Every expectation here is a
@@ -14,9 +19,9 @@ import { localDayWindowUtc, wallClockToUtc } from '@/lib/schedule/datetime'
 //
 // The three zones cover the cases that historically diverge: a tour on UTC, one
 // east of it (Auckland, where the local clock is already the next date by
-// evening) and one west (Los Angeles). DST-transition dates are step 5's
-// problem and are deliberately avoided here (June and December are stable in all
-// three zones).
+// evening) and one west (Los Angeles). These use June and December, stable in
+// all three zones, so the shift is a clean four hours. The DST-transition cases,
+// where it is not, are the final describe block (REE-116).
 
 const DATE = '2026-06-14'
 const ZONES = ['UTC', 'Pacific/Auckland', 'America/Los_Angeles']
@@ -96,7 +101,7 @@ describe('toGridInstant places a full night onto one calendar-day grid', () => {
 
   for (const { tz, show, curfew, drive } of cases) {
     it(`maps show, curfew and drive into the grid day, in order (${tz})`, () => {
-      const g = (iso: string) => toGridInstant(iso, DATE, tz)
+      const g = (iso: string) => toGridInstant(iso, tz)
       const gShow = g(show)
       const gCurfew = g(curfew)
       const gDrive = g(drive)
@@ -111,7 +116,7 @@ describe('toGridInstant places a full night onto one calendar-day grid', () => {
     })
 
     it(`drops a 21:00 show 17 hours down the grid (21:00 - 04:00) (${tz})`, () => {
-      const gridShow = new Date(toGridInstant(show, DATE, tz)).getTime()
+      const gridShow = new Date(toGridInstant(show, tz)).getTime()
       // Offset from the top of the grid is the show's clock time minus 04:00.
       expect(gridShow - gridStartMs(tz)).toBe(17 * HOUR_MS)
     })
@@ -122,7 +127,7 @@ describe('toGridInstant shifts the broadcast start to grid midnight', () => {
   it('maps DAY_START_HOUR local onto the top of the grid in each zone', () => {
     for (const tz of ZONES) {
       const broadcastStart = localBroadcastDayWindowUtc(DATE, tz).start
-      expect(new Date(toGridInstant(broadcastStart, DATE, tz)).getTime()).toBe(gridStartMs(tz))
+      expect(new Date(toGridInstant(broadcastStart, tz)).getTime()).toBe(gridStartMs(tz))
     }
   })
 })
@@ -141,9 +146,9 @@ describe('broadcast-day boundary: 03:59 versus 04:00', () => {
       expect(at0359 < new Date(start).getTime()).toBe(true)
 
       // 04:00 maps to the very top of the grid; 03:59 maps one minute above it.
-      expect(new Date(toGridInstant(start, DATE, tz)).getTime()).toBe(gridStartMs(tz))
+      expect(new Date(toGridInstant(start, tz)).getTime()).toBe(gridStartMs(tz))
       expect(
-        new Date(toGridInstant(new Date(at0359).toISOString(), DATE, tz)).getTime(),
+        new Date(toGridInstant(new Date(at0359).toISOString(), tz)).getTime(),
       ).toBe(gridStartMs(tz) - 60_000)
     })
   }
@@ -193,8 +198,77 @@ describe('fromGridInstant is the exact inverse of toGridInstant', () => {
   for (const tz of ZONES) {
     for (const iso of instants) {
       it(`round-trips ${iso} in ${tz}`, () => {
-        expect(fromGridInstant(toGridInstant(iso, DATE, tz), DATE, tz)).toBe(iso)
+        expect(fromGridInstant(toGridInstant(iso, tz), tz)).toBe(iso)
       })
     }
   }
+})
+
+// REE-116. The shift is DAY_START_HOUR hours of WALL CLOCK, not a fixed elapsed
+// gap, so a transition inside the broadcast window does not throw a block off its
+// label. Europe/London springs forward 2026-03-29 (01:00 -> 02:00, a 23-hour
+// broadcast night when the transition is in the tail) and falls back 2026-10-25
+// (02:00 -> 01:00, a 25-hour one). Each fact below is a wall-clock statement:
+// where a real instant lands on the grid, read as a tour-local time. The retired
+// fixed-offset shift subtracted the view date's own 00:00-to-04:00 gap (three or
+// five real hours across the change) as one constant, so every block on the far
+// side of the transition came out an hour wrong; these pin the corrected value.
+describe('toGridInstant across a DST transition (wall-clock shift)', () => {
+  const LONDON = 'Europe/London'
+
+  // Both directions, both viewed-date positions relative to the change.
+  const cases = [
+    {
+      name: 'spring-forward day: transition before the 04:00 start, clean window',
+      viewedDate: '2026-03-29',
+      realWall: '2026-03-29T21:00', // a 21:00 show, post-transition BST
+      expectGridDate: '2026-03-29',
+      expectGridTime: '17:00', // 21:00 - 04:00
+    },
+    {
+      name: 'spring-forward tail: transition inside the previous night (23h window)',
+      viewedDate: '2026-03-28',
+      realWall: '2026-03-29T02:30', // a 02:30 curfew on the next date
+      expectGridDate: '2026-03-28',
+      expectGridTime: '22:30', // broadcast-wall 26:30 -> grid 22:30
+    },
+    {
+      name: 'fall-back day: transition before the 04:00 start, clean window',
+      viewedDate: '2026-10-25',
+      realWall: '2026-10-25T21:00', // a 21:00 show, post-transition GMT
+      expectGridDate: '2026-10-25',
+      expectGridTime: '17:00',
+    },
+    {
+      name: 'fall-back tail: transition inside the previous night (25h window)',
+      viewedDate: '2026-10-24',
+      realWall: '2026-10-25T03:00', // a 03:00 lobby call on the next date
+      expectGridDate: '2026-10-24',
+      expectGridTime: '23:00', // broadcast-wall 27:00 -> grid 23:00
+    },
+  ]
+
+  for (const { name, realWall, expectGridDate, expectGridTime } of cases) {
+    it(name, () => {
+      const real = wallClockToUtc(realWall, LONDON)
+      const grid = toGridInstant(real, LONDON)
+
+      // The grid instant reads at the broadcast wall clock minus four hours, on
+      // the day the grid renders. This is what RBC positions a block by.
+      expect(localDateInZone(grid, LONDON)).toBe(expectGridDate)
+      expect(localTimeInZone(grid, LONDON)).toBe(expectGridTime)
+
+      // Unambiguous wall clocks on both ends, so the inverse is exact even here.
+      expect(fromGridInstant(grid, LONDON)).toBe(real)
+    })
+  }
+
+  it('maps the broadcast start onto grid midnight on a transition day', () => {
+    // The window opens at 04:00 local whatever the offset is doing; it must still
+    // land on the top of the grid (the view date's local 00:00).
+    for (const viewedDate of ['2026-03-29', '2026-10-25']) {
+      const broadcastStart = localBroadcastDayWindowUtc(viewedDate, LONDON).start
+      expect(toGridInstant(broadcastStart, LONDON)).toBe(localDayWindowUtc(viewedDate, LONDON).start)
+    }
+  })
 })

@@ -49,9 +49,9 @@ export function nowMarker(
   timezone: string,
   viewedDate: string,
 ): NowMarker | null {
-  // Shift now onto the broadcast grid for viewedDate. Its grid instant falls on
-  // viewedDate's calendar day exactly when now is within this broadcast day.
-  const gridNow = toGridInstant(nowIso, viewedDate, timezone)
+  // Shift now onto the broadcast grid. Its grid instant falls on viewedDate's
+  // calendar day exactly when now is within viewedDate's broadcast day.
+  const gridNow = toGridInstant(nowIso, timezone)
   if (localDateInZone(gridNow, timezone) !== viewedDate) return null
 
   // Position from the shifted (grid) wall clock, so the marker lines up with the
