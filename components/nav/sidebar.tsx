@@ -9,6 +9,7 @@ import {
   Settings,
   Search,
   Contact,
+  UserCog,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TourSelector } from '@/components/nav/tour-selector'
@@ -113,6 +114,7 @@ export function Sidebar({
   }
 
   const isRoster = pathname.startsWith('/roster')
+  const isAccount = pathname.startsWith('/settings')
 
   const itemClass = (active: boolean) =>
     cn(
@@ -186,6 +188,34 @@ export function Sidebar({
             >
               <Contact className="h-3.5 w-3.5 shrink-0" />
               Roster
+            </Link>
+          )}
+
+          {/* Account settings, distinct from a tour's Settings gear below: this
+              is account-level (the TM's own Telegram connection), so it sits in
+              the account-level nav block alongside Roster, not the tour nav. */}
+          {collapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link
+                  href="/settings"
+                  className={itemClass(isAccount)}
+                  style={isAccount ? undefined : { color: 'var(--sidebar-muted-foreground)' }}
+                  aria-label="Account"
+                >
+                  <UserCog className="h-3.5 w-3.5 shrink-0" />
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right">Account</TooltipContent>
+            </Tooltip>
+          ) : (
+            <Link
+              href="/settings"
+              className={itemClass(isAccount)}
+              style={isAccount ? undefined : { color: 'var(--sidebar-muted-foreground)' }}
+            >
+              <UserCog className="h-3.5 w-3.5 shrink-0" />
+              Account
             </Link>
           )}
         </nav>

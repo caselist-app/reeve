@@ -48,6 +48,7 @@ export type Database = {
           name: string
           stripe_customer_id: string | null
           subscription_status: string
+          telegram_chat_id: number | null
           updated_at: string
         }
         Insert: {
@@ -58,6 +59,7 @@ export type Database = {
           name: string
           stripe_customer_id?: string | null
           subscription_status?: string
+          telegram_chat_id?: number | null
           updated_at?: string
         }
         Update: {
@@ -68,6 +70,7 @@ export type Database = {
           name?: string
           stripe_customer_id?: string | null
           subscription_status?: string
+          telegram_chat_id?: number | null
           updated_at?: string
         }
         Relationships: []
@@ -889,6 +892,7 @@ export type Database = {
       }
       notification_log: {
         Row: {
+          account_id: string | null
           channel: string
           created_at: string
           dedup_dimension: string
@@ -896,7 +900,7 @@ export type Database = {
           error: string | null
           id: string
           notification_type: string
-          person_id: string
+          person_id: string | null
           provider_message_id: string | null
           read_at: string | null
           sent_at: string | null
@@ -905,6 +909,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          account_id?: string | null
           channel: string
           created_at?: string
           dedup_dimension: string
@@ -912,7 +917,7 @@ export type Database = {
           error?: string | null
           id?: string
           notification_type: string
-          person_id: string
+          person_id?: string | null
           provider_message_id?: string | null
           read_at?: string | null
           sent_at?: string | null
@@ -921,6 +926,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          account_id?: string | null
           channel?: string
           created_at?: string
           dedup_dimension?: string
@@ -928,7 +934,7 @@ export type Database = {
           error?: string | null
           id?: string
           notification_type?: string
-          person_id?: string
+          person_id?: string | null
           provider_message_id?: string | null
           read_at?: string | null
           sent_at?: string | null
@@ -937,6 +943,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "notification_log_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "notification_log_person_id_fkey"
             columns: ["person_id"]
@@ -1295,7 +1308,7 @@ export type Database = {
       telegram_link_tokens: {
         Row: {
           account_id: string
-          contact_id: string
+          contact_id: string | null
           created_at: string
           expires_at: string
           token: string
@@ -1303,7 +1316,7 @@ export type Database = {
         }
         Insert: {
           account_id: string
-          contact_id: string
+          contact_id?: string | null
           created_at?: string
           expires_at?: string
           token?: string
@@ -1311,7 +1324,7 @@ export type Database = {
         }
         Update: {
           account_id?: string
-          contact_id?: string
+          contact_id?: string | null
           created_at?: string
           expires_at?: string
           token?: string
