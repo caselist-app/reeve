@@ -200,6 +200,29 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
       ),
   )
 
+  // Which events overlap another and so get drawn side by side by RBC's
+  // no-overlap algorithm (REE-81). They are marked evt-stacked and lifted apart
+  // with a depth shadow in day-calendar.css, because two adjacent tinted blocks
+  // otherwise read as one panel. The test is the same interval intersection RBC
+  // uses to decide the side-by-side layout (start before the other's end, and
+  // the other's start before this end), run over the positioned events with the
+  // ends they were drawn with, so the marker matches exactly what the grid laid
+  // out. eventPropGetter cannot see layout, hence the flag is computed here.
+  const stackedIds = useMemo(() => {
+    const ids = new Set<string>()
+    for (let i = 0; i < displayEvents.length; i++) {
+      for (let j = i + 1; j < displayEvents.length; j++) {
+        const a = displayEvents[i]
+        const b = displayEvents[j]
+        if (a.start < b.end && b.start < a.end) {
+          ids.add(a.id)
+          ids.add(b.id)
+        }
+      }
+    }
+    return ids
+  }, [displayEvents])
+
   // Lookups from a clicked event back to its record, so a click can open the
   // right detail panel. Segments include the late-night tail, which is
   // clickable too.
@@ -418,7 +441,11 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
               return { className: 'evt-selection' }
             }
             return {
-              className: accentClassName(event.source, event.accent),
+              className: cn(
+                accentClassName(event.source, event.accent),
+                // Depth shadow when this block shares its time with another.
+                stackedIds.has(event.id) && 'evt-stacked',
+              ),
             }
           }}
           // Desktop only. RBC's drag addon is mouse-oriented; on mobile every
