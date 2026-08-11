@@ -139,6 +139,12 @@
   color: var(--evt-text);
   font-size: 0.75rem;
   line-height: 1.2;
+  /* REE-79: the chip is its own query container so its contents can react to the
+     block's own height, not the viewport. A block tall enough for two lines puts
+     the title above the time (the column branch below); a short block stays a
+     single row. `size` (not `inline-size`) because the query is on min-height.
+     RBC gives every event an explicit height, so size containment is safe here. */
+  container-type: size;
 }
 .rbc-event:focus-visible {
   outline: 2px solid var(--ring);
@@ -154,6 +160,20 @@
    duplicate it. */
 .rbc-event .rbc-event-label {
   display: none;
+}
+
+/* REE-79: two-line layout only when the block is tall enough to hold it. The
+   chip body is a row by default (title then time on one line, the collapsed
+   branch styled in day-calendar.tsx), and flips to a column here so the title
+   sits above the time. 2.5rem is just over the height of a 30-minute block, so
+   the shortest real blocks (an item with a synthesised end) stay one line and
+   never drop their time. The query container is `.rbc-event` above. */
+@container (min-height: 2.5rem) {
+  .rbc-event .evt-chip-body {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
 }
 
 /* Solid where the end is stated, dashed where it was synthesised by the
