@@ -38,7 +38,10 @@ export interface DayItemKind {
   aliases: string[]
   // Semantic, not a colour. The render site maps it to a class, because the card
   // token and the timeline's accent classes live in components, not here.
-  accent: 'show' | 'catering' | 'other'
+  // 'headliner' and 'support' are the two performance sets (REE-122): they each
+  // carry their own hue so the acts stand out from the rest of the show day, and
+  // no other kind shares those two accents.
+  accent: 'show' | 'catering' | 'headliner' | 'support' | 'other'
   // True means a time earlier than the day's latest daytime time has crossed
   // midnight and belongs to the following morning. resolveItemDayOffsets walks
   // the crossing kinds in list order, so their order here is load bearing.
@@ -182,7 +185,9 @@ export const DAY_ITEM_KINDS: readonly DayItemKind[] = [
     // 'support off' still matches 'support', so a TM typing it lands on the
     // right kind and sets whichever end they typed a time for.
     aliases: ['support', 'support act', 'support on', 'opener', 'opening act'],
-    accent: 'show',
+    // Its own hue, not the generic show accent, so the act stands out on the
+    // grid and is not reachable by any other day entry (REE-122).
+    accent: 'support',
     // The start (on) is an evening slot before the changeover, so it anchors the
     // day like support_on did rather than joining the crossing walk. The end
     // (off) can still run past midnight, and resolveItemInstants settles that
@@ -224,7 +229,9 @@ export const DAY_ITEM_KINDS: readonly DayItemKind[] = [
       'onstage',
       'showtime',
     ],
-    accent: 'show',
+    // Its own hue, not the generic show accent, so the headline set stands out
+    // on the grid and is not reachable by any other day entry (REE-122).
+    accent: 'headliner',
     // The start (on) can itself fall after midnight on a festival, so it stays
     // in the crossing walk exactly where headliner_on was. The end (off) is
     // resolved per item by resolveItemInstants from ends_at < starts_at.
