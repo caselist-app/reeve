@@ -53,8 +53,21 @@ export interface CalendarEvent {
   recordId: string
   source: EventSource
   title: string
+  // start/end are what RBC positions by. This adapter fills them with the REAL
+  // instants; the broadcast-day grid then overwrites them with synthetic
+  // grid-space instants at the view seam (buildDayCalendarView, REE-114), because
+  // the grid renders a broadcast day [04:00, +1 04:00) mapped onto one literal
+  // calendar day and RBC's DnD addon reads event.start directly. realStart/realEnd
+  // always hold the real instants, so labels and click-through never see the
+  // shift. Doing the shift in the view (not here) keeps this adapter a pure
+  // instant->instant mapper and keeps fromDropOrResize working in real space.
   start: Date
   end: Date
+  // The real UTC instants, never shifted. Equal to start/end as this adapter
+  // produces them; they diverge once the view shifts start/end into grid space.
+  // Everything that shows a wall-clock time or opens a record reads these.
+  realStart: Date
+  realEnd: Date
   // True means `end` was invented by this adapter and must not be persisted as a
   // stated end. See fromDropOrResize.
   syntheticEnd: boolean
@@ -210,6 +223,8 @@ export function toCalendarEvents(
       title: dayItemTitle(item),
       start,
       end,
+      realStart: start,
+      realEnd: end,
       syntheticEnd,
       accent: kind?.accent ?? 'other',
       icon: kind?.icon ?? 'CircleDashed',
@@ -239,6 +254,8 @@ export function toCalendarEvents(
       title: segmentTitle(seg),
       start,
       end,
+      realStart: start,
+      realEnd: end,
       syntheticEnd,
       accent: 'other',
       icon: segmentIcon(seg.mode),
@@ -272,6 +289,8 @@ export function toCalendarEvents(
       title: hotelTitle(hotel),
       start,
       end: synthesiseEnd(start),
+      realStart: start,
+      realEnd: synthesiseEnd(start),
       syntheticEnd: true,
       accent: 'other',
       icon: 'BedDouble',
