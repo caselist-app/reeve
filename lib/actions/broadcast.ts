@@ -18,6 +18,10 @@ import type { ChangeDescriptor, AffectedPerson } from '@/lib/comms/affected'
 export type BroadcastPreview = {
   people: Pick<AffectedPerson, 'id' | 'name'>[]
   message: string
+  // Non-null when the affected-people read failed. A broken query and a
+  // genuinely unaffected tour both return no people, so the panel needs this to
+  // avoid rendering a failed read as "nobody is affected".
+  error: string | null
 }
 
 export type BroadcastResult = {
@@ -42,16 +46,17 @@ export async function previewBroadcast(
   // belongs to that tour, and a TM with two tours would otherwise be able to
   // render tour B's segment into a message and send it to tour A's crew.
   if (!(await changeBelongsToTour(supabase, tourId, change))) {
-    return { people: [], message: '' }
+    return { people: [], message: '', error: null }
   }
 
-  const people = await getAffectedPeople(change, tourId, supabase)
+  const { people, error } = await getAffectedPeople(change, tourId, supabase)
 
   const message = await buildPreviewMessage(supabase, tourId, change, previousValue)
 
   return {
     people: people.map((p) => ({ id: p.id, name: p.name })),
     message,
+    error,
   }
 }
 
@@ -103,7 +108,12 @@ export async function sendBroadcast(params: {
     return { error: 'That record is not on this tour.' }
   }
 
-  const people = await getAffectedPeople(change, tourId, supabase)
+  const { people, error } = await getAffectedPeople(change, tourId, supabase)
+  // A failed read must never be sent as a broadcast to nobody. Surface it so the
+  // TM retries rather than believing the change reached no one.
+  if (error) {
+    return { error: 'Could not work out who to notify. Please try again.' }
+  }
   if (people.length === 0) {
     return { error: null, sent: 0 }
   }

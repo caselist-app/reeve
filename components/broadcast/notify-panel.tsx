@@ -42,7 +42,15 @@ export function NotifyPanel({
     setPreview({ status: 'loading' })
     previewBroadcast(tourId, change, previousValue)
       .then((result) => {
-        setPreview({ status: 'ready', people: result.people, message: result.message })
+        // A failed read comes back with no people and a non-null error, which is
+        // indistinguishable from a genuinely unaffected tour by count alone. Show
+        // the error rather than silently rendering nothing (which reads as "nobody
+        // is affected").
+        if (result.error) {
+          setPreview({ status: 'error', message: 'Could not check who this affects. Please try again.' })
+        } else {
+          setPreview({ status: 'ready', people: result.people, message: result.message })
+        }
       })
       .catch(() => {
         setPreview({ status: 'error', message: 'Could not load affected people.' })
