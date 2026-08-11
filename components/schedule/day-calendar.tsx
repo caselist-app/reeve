@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useOptimistic, useTransition, type ReactNode } from 'react'
+import { useEffect, useMemo, useOptimistic, useState, useTransition, type ReactNode } from 'react'
 import { Calendar, Views, type SlotInfo } from 'react-big-calendar'
 import withDragAndDrop, {
   type EventInteractionArgs,
@@ -56,6 +56,14 @@ import type { DayRecords, DaySegment } from '@/lib/schedule/day-records'
 // Calendar. Typed to our own event so the drop and resize callbacks carry
 // CalendarEvent rather than RBC's loose base Event.
 const DnDCalendar = withDragAndDrop<CalendarEvent>(Calendar)
+
+// The id of the display-only background event that keeps the dragged range
+// highlighted while the add form is open (REE-68). RBC clears its own
+// slot-selection highlight the instant the drag ends, so without this the block
+// the TM just drew vanishes the moment the panel appears. It is never a real
+// record: it carries this sentinel id so the event chip renders nothing for it
+// and eventPropGetter can give it its own selection styling.
+const PENDING_SELECTION_ID = '__pending_selection__'
 
 interface DayCalendarProps {
   // The day's records, fetched by a Server Component and passed in. The grid
@@ -150,9 +158,25 @@ function accentClassName(source: EventSource, accent: CalendarEvent['accent']): 
  * out.
  */
 export function DayCalendar({ records, tourId, tourDateId, timezone, date, header }: DayCalendarProps) {
-  const { open: openSidePanel } = useSidePanel()
+  const { open: openSidePanel, isOpen: panelIsOpen, panel } = useSidePanel()
   const isMobile = useIsMobile()
   const [, startTransition] = useTransition()
+
+  // The dragged range, kept alive as a highlight while its add form is open
+  // (REE-68). RBC drops its native selection the moment the gesture ends; this
+  // holds the range so it can be drawn as a background event underneath the
+  // panel instead.
+  const [pendingSelection, setPendingSelection] = useState<{ start: Date; end: Date } | null>(null)
+
+  // The highlight belongs to the day form this drag opened. Drop it once that
+  // form is closed, or once the panel has moved on to anything else (the TM
+  // clicked a different block, or opened another add flow). Without this it
+  // would linger after the panel that justified it has gone.
+  useEffect(() => {
+    if (pendingSelection && (!panelIsOpen || panel?.type !== 'day-form')) {
+      setPendingSelection(null)
+    }
+  }, [pendingSelection, panelIsOpen, panel])
 
   const view = useMemo(() => buildDayCalendarView(records, timezone), [records, timezone])
 
@@ -229,12 +253,37 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
     }
   }, [itemsById, segmentsById, hotelsById, openSidePanel, tourId, timezone])
 
+  // The dragged range as a background event, so RBC draws it behind the grid's
+  // real blocks and it survives the panel being open (REE-68). Empty when there
+  // is no live selection, which is the resting state. It is styled purely as a
+  // highlight: the sentinel id makes the chip render nothing and gives it its
+  // own class in eventPropGetter.
+  const backgroundEvents = useMemo<CalendarEvent[]>(() => {
+    if (!pendingSelection) return []
+    return [
+      {
+        id: PENDING_SELECTION_ID,
+        recordId: '',
+        source: 'day_item',
+        title: '',
+        start: pendingSelection.start,
+        end: pendingSelection.end,
+        syntheticEnd: false,
+        accent: 'other',
+        icon: 'CircleDashed',
+      },
+    ]
+  }, [pendingSelection])
+
   // RBC's event component. It receives the CalendarEvent the adapter produced,
   // so it reads the icon and accent that ultimately came from the kinds list. A
   // real button, so a click opens the detail panel and so the revalidate e2e can
   // find it by role. Memoised on openEvent so RBC does not remount every event.
   const components = useMemo(() => {
     function EventChip({ event }: { event: CalendarEvent }) {
+      // The selection highlight is chrome, not a record: it carries no title or
+      // time of its own, so it renders as a bare tinted block (REE-68).
+      if (event.id === PENDING_SELECTION_ID) return null
       const Icon = eventIcon(event.icon)
       // Time range only when the end is real. A synthesised end is not a claim
       // about duration (see the adapter), so surfacing it as "10:00 to 10:30"
@@ -286,6 +335,9 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
   // every other day_item write, so nothing here derives a day.
   function handleSelectSlot(slot: SlotInfo) {
     if (!gesturesEnabled) return
+    // Keep the dragged range on screen behind the panel (REE-68). Cleared by
+    // the effect above when the panel that follows is closed.
+    setPendingSelection({ start: new Date(slot.start), end: new Date(slot.end) })
     openSidePanel({
       type: 'day-form',
       tourId,
@@ -335,6 +387,10 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
         <DnDCalendar
           localizer={localizer}
           events={displayEvents}
+          // The persisted drag highlight (REE-68). RBC renders these behind the
+          // real blocks and never treats them as selectable, so they cannot be
+          // dragged or clicked; they only mark where the pending add sits.
+          backgroundEvents={backgroundEvents}
           date={calendarDate}
           view={Views.DAY}
           views={[Views.DAY]}
@@ -347,13 +403,20 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
           // Overlapping items sit side by side rather than stacked with an
           // offset, which is RBC's default and reads as a pile.
           dayLayoutAlgorithm="no-overlap"
-          eventPropGetter={(event: CalendarEvent) => ({
-            className: cn(
-              accentClassName(event.source, event.accent),
-              // Solid bottom edge for a stated end, dashed for a synthesised one.
-              event.syntheticEnd ? 'evt-soft-end' : 'evt-firm-end',
-            ),
-          })}
+          eventPropGetter={(event: CalendarEvent) => {
+            // The pending-selection highlight gets its own class, not a kind
+            // accent (REE-68): it is not one of the coloured record blocks.
+            if (event.id === PENDING_SELECTION_ID) {
+              return { className: 'evt-selection' }
+            }
+            return {
+              className: cn(
+                accentClassName(event.source, event.accent),
+                // Solid bottom edge for a stated end, dashed for a synthesised one.
+                event.syntheticEnd ? 'evt-soft-end' : 'evt-firm-end',
+              ),
+            }
+          }}
           // Desktop only. RBC's drag addon is mouse-oriented; on mobile every
           // gesture is off and the grid is display plus tap-to-open.
           draggableAccessor={() => gesturesEnabled}
