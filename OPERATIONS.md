@@ -8,31 +8,9 @@ What is true about the running world, as opposed to the code. `CLAUDE.md` says h
 
 ## The numbers
 
-Never write a number about this repo into prose. It will be wrong within a week and nothing will tell you. Run `pnpm facts`, which computes all of them, or read the generated block below. `pnpm check:conventions` fails when this block has fallen behind, so it cannot rot.
+**Run `pnpm facts`.** It prints the baseline count and its split, the enforced rule count, the three test-suite file counts, the migration count and the `[BOTH]` env var count, computed from the repo at the moment you ask.
 
-<!-- FACTS:BEGIN -->
-
-```
-conventions-baseline.json entries    7  (7 accepted)
-check:conventions rules             13
-unit test files                     14
-integration test files              16
-e2e spec files                       5
-migrations                          52
-env vars marked [BOTH]              37
-```
-
-- **conventions-baseline.json entries.** Should only ever shrink. A new entry added to make a build pass is a defect.
-- **check:conventions rules.** Run them with pnpm check:conventions.
-- **unit test files.** pnpm test. No Docker, so this is the one suite Matt can run himself.
-- **integration test files.** pnpm test:integration. Needs real Postgres, so CI only.
-- **e2e spec files.** pnpm test:e2e. Real browser against a real build, so CI only.
-- **migrations.** Matt runs every one of them. Write them, never apply them.
-- **env vars marked [BOTH].** Read by job code, so they must be set in Trigger.dev as well as Vercel.
-
-<!-- FACTS:END -->
-
-Regenerate with `pnpm facts --write` when a check tells you to. Never edit the block by hand.
+**No number about this repo is written down, here or anywhere else, and that includes this file.** The first version of this section carried a generated block that `check:conventions` compared against the computed values. It went stale the same day it landed: a pull request adding one unit test file turned `main` red without touching this file at all, because the block had been generated before that test existed. A committed block is still a number written down. `check:conventions` rule 12 now fails any doc that states the baseline count in prose, and there is nothing left to regenerate.
 
 ## The gates
 

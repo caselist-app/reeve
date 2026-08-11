@@ -92,9 +92,11 @@ Known violations that predate the check live in `scripts/conventions-baseline.js
 
 A number written into prose is a number that will be wrong within a week, because nothing tells you when it moves. On 2026-08-11 an audit found the baseline count, the three test counts and the migration count each written down in four places, several of them stale, alongside operational facts that were stale in five.
 
-So: **`scripts/facts.mjs` computes every such number and `pnpm facts` prints them.** `OPERATIONS.md` carries a generated block, regenerated with `pnpm facts --write`. `check:conventions` fails both when that block falls behind and when a doc restates the baseline count in prose, which is the one that has drifted repeatedly, because this file cites it while arguing about the check itself.
+So: **`scripts/facts.mjs` computes every such number and `pnpm facts` prints them.** Nothing stores them. `check:conventions` rule 12 fails any doc that restates the baseline count in prose, which is the one that has drifted repeatedly, because this file cites it while arguing about the check itself.
 
 Point at `pnpm facts`. Do not write the figure.
+
+**This rule was learned the hard way, twice in one day.** The first version kept a generated block inside `OPERATIONS.md` and had the check compare the committed copy against the computed values. That block went stale within hours: a pull request adding one unit test file turned `main` red without touching `OPERATIONS.md` at all, because the block had been written before that test existed. A committed block is still a number written down, and putting a check around it only made the staleness loud instead of preventing it. There is nothing to regenerate now, which is the point.
 
 ### `OPERATIONS.md` is the other half of this file
 
