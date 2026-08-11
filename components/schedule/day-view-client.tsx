@@ -1,14 +1,12 @@
 'use client'
 
 import { useEffect, useState, type ReactNode } from 'react'
-import { Plus, MoreHorizontal, X, Type } from 'lucide-react'
+import { Plus, MoreHorizontal, X } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { BottomSheet, BottomSheetClose } from '@/components/ui/bottom-sheet'
 import { cn } from '@/lib/utils'
 import { useSidePanel } from '@/stores/side-panel-store'
 import { useIsMobile } from '@/hooks/use-is-mobile'
-import { AddPicker, type AddCategory } from '@/components/schedule/add/add-picker'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -92,40 +90,18 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
   const { open: openSidePanel } = useSidePanel()
   const router = useRouter()
   const isMobile = useIsMobile()
-  const [popoverOpen, setPopoverOpen] = useState(false)
-  // Mobile-only: the FAB opens the category picker as a bottom-sheet.
-  const [pickerOpen, setPickerOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [dayInfoOpen, setDayInfoOpen] = useState(false)
 
-  // Opens the add form in the side panel. onBack closes it and reopens the
-  // picker it came from, the popover on desktop or the bottom-sheet on
-  // mobile, mirroring how it opened.
-  function handleCategorySelect(category: AddCategory) {
-    setPopoverOpen(false)
-    setPickerOpen(false)
-    openSidePanel({
-      type: 'add-to-day',
-      ...addContext,
-      category,
-      onBack: () => {
-        if (isMobile) setPickerOpen(true)
-        else setPopoverOpen(true)
-      },
-    })
-  }
-
-  // REE-22: the typed one-line fast path. Sits beside the '+' category picker,
-  // not in place of it: typing is for anything where the time is the point, the
-  // picker is for a flight, drive, rail or hotel. Both need a day to add to, so
-  // both are gated on a tour date existing (addContext.tourDateId is '' when the
-  // selected day has no tour_dates row yet).
+  // REE-89: one door into a day. The '+', the '/' shortcut and the mobile FAB
+  // all open the same typed day-form; the category popover and its mobile sheet
+  // are gone. The form needs a day to add to, so every entry point is gated on a
+  // tour date existing (addContext.tourDateId is '' when the selected day has no
+  // tour_dates row yet). The Dates panel's own '+' is the door that creates a day.
   const hasDay = Boolean(addContext.tourDateId)
 
   function openTypedForm() {
-    setPopoverOpen(false)
-    setPickerOpen(false)
     openSidePanel({
       type: 'day-form',
       tourId: addContext.tourId,
@@ -189,31 +165,13 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
         <button
           type="button"
           onClick={openTypedForm}
-          aria-label="Type a line to add"
-          title="Type a line to add ( / )"
+          aria-label="Add to day"
+          title="Add to day ( / )"
           className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-foreground transition-colors hover:bg-muted/70"
         >
-          <Type className="h-4 w-4" />
+          <Plus className="h-4 w-4" />
         </button>
       )}
-
-      <Popover open={popoverOpen} onOpenChange={setPopoverOpen}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            aria-label="Add to day"
-            className="flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-foreground transition-colors hover:bg-muted/70"
-          >
-            <Plus className="h-4 w-4" />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent align="end" className="w-56 p-2">
-          <p className="px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Add to day
-          </p>
-          <AddPicker onSelect={handleCategorySelect} />
-        </PopoverContent>
-      </Popover>
     </div>
   )
 
@@ -227,11 +185,13 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
             {timeline}
           </div>
 
-          {/* Mobile add-to-day FAB, pinned bottom-right of the timeline, above the dock. */}
-          {isMobile && (
+          {/* Mobile add-to-day FAB, pinned bottom-right of the timeline, above the
+              dock. Opens the same typed day-form the desktop '+' does, gated on a
+              day existing. */}
+          {isMobile && hasDay && (
             <button
               type="button"
-              onClick={() => setPickerOpen(true)}
+              onClick={openTypedForm}
               aria-label="Add to day"
               className="absolute bottom-4 right-4 z-20 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform active:scale-95 lg:hidden"
             >
@@ -311,33 +271,6 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
           </div>
           <div className="flex-1 overflow-y-auto">
             {dayInfoPanel}
-          </div>
-        </BottomSheet>
-      )}
-
-      {/* Mobile category picker: opened by the FAB. Choosing a category opens
-          the add form in the global side panel (a full-width takeover on
-          mobile), same as it does from the desktop popover. */}
-      {isMobile && (
-        <BottomSheet open={pickerOpen} onOpenChange={setPickerOpen} title="Add to day">
-          <div className="px-2 pb-2">
-            {/* The typed fast path, offered alongside the category picker rather
-                than replacing it. Same split as desktop: type a timed item, pick
-                a flight or hotel. */}
-            {hasDay && (
-              <button
-                type="button"
-                onClick={openTypedForm}
-                className="mb-1 flex w-full items-center gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted/60"
-              >
-                <Type className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <div className="flex flex-1 items-baseline gap-1.5 min-w-0">
-                  <span className="text-sm font-medium">Type a line</span>
-                  <span className="truncate text-[11px] text-muted-foreground">load in 2pm, curfew 11...</span>
-                </div>
-              </button>
-            )}
-            <AddPicker onSelect={handleCategorySelect} />
           </div>
         </BottomSheet>
       )}

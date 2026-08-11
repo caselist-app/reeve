@@ -3,7 +3,12 @@
 import dynamic from 'next/dynamic'
 import { PanelShell } from '@/components/layout/panel-shell'
 import { useSidePanel } from '@/stores/side-panel-store'
-import type { AddCategory } from '@/components/schedule/add/add-picker'
+
+// The six categories the add-to-day panel can render. flight/drive/rail/hotel
+// are reached from the day-form's Book rows (REE-89 deleted the standalone
+// category picker); show and event stay for the venue block and any other
+// add-to-day caller. Kept in step with ScheduleAddCategory in side-panel-store.
+export type AddCategory = 'flight' | 'drive' | 'rail' | 'hotel' | 'show' | 'event'
 
 // The add forms only render once a category is picked, so each loads on demand
 // instead of shipping in the schedule bundle.
