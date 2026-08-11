@@ -8,21 +8,24 @@
 //
 // THE ARRAY ORDER IS LOAD BEARING. Two separate things depend on it:
 //
-//   1. resolveDayOffsets walks the crossesMidnight kinds in order and treats the
-//      clock going backwards as evidence of midnight. That walk is only correct
-//      while those kinds are in the order they actually occur: a support act
-//      finishes before the changeover, which finishes before the headliner goes
-//      on. Reordering them looks cosmetic and silently breaks Brief 40's rule,
-//      which is why tests/unit/day-item-kinds.test.ts pins the sequence.
+//   1. resolveItemDayOffsets walks the crossesMidnight kinds in order and treats
+//      the clock going backwards as evidence of midnight. That walk is only
+//      correct while those kinds are in the order they actually occur: the
+//      changeover finishes before the headliner goes on, which finishes before
+//      the curfew. Reordering them looks cosmetic and silently breaks Brief 40's
+//      rule, which is why tests/unit/day-item-kinds.test.ts pins the sequence.
 //   2. The combo box offers kinds in this order when the input is empty.
 //
 // So: add a kind in its chronological place, never at the end for convenience.
 //
-// The eighteen kinds are exactly the seventeen that existed as fixed day-sheet
-// columns plus 'other'. No speculative kinds, not even press, even though press
-// is already a tour_dates.day_type. The mechanism for finding out what deserves
-// promoting is what TMs actually type into 'other' (decision 8), not a guess
-// made here.
+// Sixteen kinds. Brief 42 started from the seventeen fixed day-sheet columns
+// plus 'other' (eighteen), carrying "headliner on"/"headliner off" and "support
+// on"/"support off" across as four separate kinds. REE-100 collapsed each on/off
+// pair into a single windowed kind (headliner, support) with a start and an end,
+// the way catering already stores, because a set is one thing with two ends, not
+// two events. No speculative kinds, not even press, even though press is already
+// a tour_dates.day_type. The mechanism for finding out what deserves promoting is
+// what TMs actually type into 'other' (decision 8), not a guess made here.
 
 export interface DayItemKind {
   // Matches the day_items check constraint exactly. scripts/check-conventions.mjs
@@ -173,31 +176,29 @@ export const DAY_ITEM_KINDS: readonly DayItemKind[] = [
     icon: 'Users',
   },
   {
-    kind: 'support_on',
-    label: 'Support on',
-    // Bare 'support' resolves to the start, which is the one a TM sets more
-    // often. 'support off' is longer and therefore wins its own match.
-    aliases: ['support on', 'support onstage', 'support', 'opener on'],
+    kind: 'support',
+    label: 'Support',
+    // One item with a start (on) and an end (off), not two events. REE-100.
+    // 'support off' still matches 'support', so a TM typing it lands on the
+    // right kind and sets whichever end they typed a time for.
+    aliases: ['support', 'support act', 'support on', 'opener', 'opening act'],
     accent: 'show',
+    // The start (on) is an evening slot before the changeover, so it anchors the
+    // day like support_on did rather than joining the crossing walk. The end
+    // (off) can still run past midnight, and resolveItemInstants settles that
+    // per item from ends_at < starts_at, independently of this flag.
     crossesMidnight: false,
     defaultMeridiem: 'pm',
-    surfaceEndInComms: false,
+    // Both ends surface in comms. The off time is a stated set end a TM sets on
+    // purpose, not a load-in's fifteen minute estimate, so it is the catering
+    // case: a range is the point, not a mistake. REE-100.
+    surfaceEndInComms: true,
     icon: 'Music',
   },
 
   // ---- Everything below can cross midnight, in the order it occurs. ---------
-  // This run is genuinely chronological and resolveDayOffsets depends on it.
+  // This run is genuinely chronological and resolveItemDayOffsets depends on it.
 
-  {
-    kind: 'support_off',
-    label: 'Support off',
-    aliases: ['support off', 'support offstage', 'opener off'],
-    accent: 'show',
-    crossesMidnight: true,
-    defaultMeridiem: 'pm',
-    surfaceEndInComms: false,
-    icon: 'Music',
-  },
   {
     kind: 'changeover',
     label: 'Changeover',
@@ -209,23 +210,29 @@ export const DAY_ITEM_KINDS: readonly DayItemKind[] = [
     icon: 'RefreshCw',
   },
   {
-    kind: 'headliner_on',
-    label: 'Headliner on',
-    aliases: ['headliner on', 'headline on', 'stage time', 'set time', 'onstage', 'showtime'],
+    kind: 'headliner',
+    label: 'Headliner',
+    // One item with a start (on) and an end (off). REE-100. 'stage time' and
+    // 'set time' are the set as a whole; a bare time is the on.
+    aliases: [
+      'headliner',
+      'headline',
+      'headliner on',
+      'headline on',
+      'stage time',
+      'set time',
+      'onstage',
+      'showtime',
+    ],
     accent: 'show',
+    // The start (on) can itself fall after midnight on a festival, so it stays
+    // in the crossing walk exactly where headliner_on was. The end (off) is
+    // resolved per item by resolveItemInstants from ends_at < starts_at.
     crossesMidnight: true,
     defaultMeridiem: 'pm',
-    surfaceEndInComms: false,
-    icon: 'Volume2',
-  },
-  {
-    kind: 'headliner_off',
-    label: 'Headliner off',
-    aliases: ['headliner off', 'headline off', 'offstage', 'set end'],
-    accent: 'show',
-    crossesMidnight: true,
-    defaultMeridiem: 'pm',
-    surfaceEndInComms: false,
+    // Both ends surface in comms: the off is a stated set end crew care about,
+    // the catering case rather than the load-in case. REE-100.
+    surfaceEndInComms: true,
     icon: 'Volume2',
   },
   {

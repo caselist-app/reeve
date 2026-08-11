@@ -53,7 +53,10 @@ export function showBlockTimesFromItems(
     load_in: at('load_in'),
     soundcheck: at('soundcheck'),
     changeover: at('changeover'),
-    headliner_on: at('headliner_on'),
+    // The headliner set is one windowed item now (REE-100). Its start is the
+    // on-stage time the "Show" slot has always carried; the off time lives in
+    // the item's ends_at and is not one of the fixed template placeholders.
+    headliner_on: at('headliner'),
     curfew: at('curfew'),
     catering_type: cateringType,
     catering_breakfast_start: at('catering_breakfast'),
