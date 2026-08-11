@@ -1,7 +1,6 @@
 'use client'
 
 import { useCallback, useEffect, useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
 import { Lock } from 'lucide-react'
 import { PanelShell } from '@/components/layout/panel-shell'
 import { PanelDeleteMenu } from '@/components/schedule/panels/panel-delete-menu'
@@ -23,7 +22,8 @@ import {
   sendGuestConfirmations,
   type GuestListView,
 } from '@/lib/actions/guest-list'
-import { allotmentLines, waitingPhrase } from '@/lib/schedule/guest-list-summary'
+import { allotmentLines, summarise, waitingPhrase } from '@/lib/schedule/guest-list-summary'
+import { useGuestCounts } from '@/stores/guest-list-count-store'
 import { guestTypeLabel, passTypeLabel } from '@/lib/guest-list/vocabulary'
 import { toDatetimeLocal, fromDatetimeLocal } from '@/lib/schedule/datetime'
 import { cn } from '@/lib/utils'
@@ -50,19 +50,30 @@ export function GuestListPanel({ tourId, showId, venueName }: GuestListPanelProp
   const [view, setView] = useState<GuestListView | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const setCount = useGuestCounts((s) => s.setCount)
+
+  // setView plus the day-info block's count, in one place. The block reads the
+  // count from the store rather than a server refresh, because this panel is
+  // mounted above the schedule route and a revalidate/refresh across that
+  // boundary is unreliable (REE-65). Every load and every mutation re-reads the
+  // list (which IS reliable, it is a direct client call) and writes the count it
+  // just derived here, so the block tracks the change with no server round trip.
+  const applyView = useCallback(
+    (result: GuestListView) => {
+      setError(null)
+      setView(result)
+      setCount(showId, summarise(result.entries))
+    },
+    [showId, setCount],
+  )
 
   // A silent re-read after a mutation. It does not toggle `loading`, so the list
-  // does not flash back to a spinner every time the TM approves a name. The
-  // server actions revalidate the schedule route for the day-info count; this
-  // keeps the panel's own copy in step.
+  // does not flash back to a spinner every time the TM approves a name.
   const refresh = useCallback(async () => {
     const result = await getGuestList(showId)
     if (result.error) setError(result.error)
-    else {
-      setError(null)
-      setView(result)
-    }
-  }, [showId])
+    else applyView(result)
+  }, [showId, applyView])
 
   useEffect(() => {
     let cancelled = false
@@ -70,7 +81,7 @@ export function GuestListPanel({ tourId, showId, venueName }: GuestListPanelProp
       .then((result) => {
         if (cancelled) return
         if (result.error) setError(result.error)
-        else setView(result)
+        else applyView(result)
       })
       .catch(() => {
         if (!cancelled) setError('Could not load the guest list.')
@@ -81,7 +92,7 @@ export function GuestListPanel({ tourId, showId, venueName }: GuestListPanelProp
     return () => {
       cancelled = true
     }
-  }, [showId])
+  }, [showId, applyView])
 
   const entries = view?.entries ?? []
   const waiting = entries.filter((e) => e.status === 'requested')
@@ -193,12 +204,8 @@ function AddGuestForm({
         last_name: data.last_name,
       })
     },
-    // The add-form pattern: refresh on the client so the day-info block's
-    // server-rendered count picks the new name up. Relying on createGuestEntry's
-    // revalidatePath alone was racy here (a startTransition-dispatched action does
-    // not reliably re-resolve a server-rendered sibling), which is what the e2e
-    // caught. onAdded still re-reads the panel's own client-side list.
-    refreshOnSuccess: true,
+    // No refreshOnSuccess: the day-info block updates through the guest count
+    // store, written by onAdded's re-read, not a server refresh (REE-65).
     onSuccess: () => {
       setFirstName('')
       setLastName('')
@@ -283,18 +290,15 @@ function GuestRow({
   tourId: string
   onChanged: () => void
 }) {
-  const router = useRouter()
   const [pending, startTransition] = useTransition()
 
-  // onChanged re-reads the panel's own list; router.refresh re-resolves the
-  // day-info block's server-rendered count. Both, for the same reason the add
-  // form refreshes: the revalidatePath inside the action does not reliably reach
-  // a server-rendered sibling on its own.
+  // onChanged re-reads the panel's list, which also writes the day-info block's
+  // count into the guest count store. No server refresh: the block updates from
+  // that store, not a revalidate across the panel/route boundary (REE-65).
   function approve() {
     startTransition(async () => {
       await approveGuestEntry(tourId, entry.id)
       onChanged()
-      router.refresh()
     })
   }
 
@@ -302,29 +306,19 @@ function GuestRow({
     startTransition(async () => {
       await declineGuestEntry(tourId, entry.id)
       onChanged()
-      router.refresh()
     })
   }
 
   // Removing a name is a soft delete: status becomes 'removed' via
   // removeGuestEntry, never a hard delete, so the record of who asked survives
   // for the promoter's question later.
-  //
-  // router.refresh() re-resolves the day-info block's server-rendered count, the
-  // same as the transport and venue delete menus: this runs from PanelDeleteMenu's
-  // plain click handler, not through a transition, so removeGuestEntry's
-  // revalidatePath does not auto-apply the way the add and approve paths' do.
-  // onChanged() separately re-reads the panel's own client-side list.
   async function remove(): Promise<string | null> {
     const result = await removeGuestEntry(entry.id)
     if (result.error) return result.error
+    // onChanged re-reads the list and writes the new count into the store, which
+    // is what updates the day-info block: no server refresh, so nothing depends
+    // on a repaint across the panel/route boundary (REE-65).
     onChanged()
-    // Wrapped in a transition: this runs from PanelDeleteMenu's plain click
-    // handler as the confirm dialog closes, and a bare router.refresh() there is
-    // interrupted by the dialog's own unmount, so the block's count does not
-    // re-resolve (the REE-65 cross-route refresh class). The add and approve
-    // paths refresh inside a transition already, which is why they hold.
-    startTransition(() => router.refresh())
     return null
   }
 

@@ -41,20 +41,21 @@ test('the guest list block opens the panel and its count tracks an add without a
   // The name appears in the panel's "On the list" group.
   await expect(page.getByText('Ada Lovelace')).toBeVisible()
 
-  // The block's count moves from 0 to 1 with no reload anywhere in this test. If
-  // createGuestEntry stops revalidating the schedule route, the panel still shows
-  // the name but the block stays "No names yet" and this line fails.
+  // The block's count moves from 0 to 1 with no reload anywhere in this test.
+  // The block tracks the panel through the guest count store (the panel writes
+  // the count it re-reads; the block reads it), not a server refresh across the
+  // panel/route boundary, which is unreliable (REE-65). If that wiring breaks,
+  // the panel still shows the name but the block stays "No names yet" here.
   await expect(block).toContainText('1 name')
 
   // Cleanup, so the spec is repeat-safe: remove the name through the row's
-  // options menu, which soft-deletes it (status 'removed'). Asserted on the
-  // panel, which re-reads its list client-side and is deterministic, rather than
-  // on the block: the block's server re-render after a delete is the flaky
-  // cross-route refresh, and the add assertion above already proves the
-  // revalidate. The name gone from the panel proves the row is off the list.
+  // options menu, which soft-deletes it (status 'removed').
   await page.getByRole('button', { name: 'Options for Ada Lovelace' }).click()
   await page.getByRole('menuitem', { name: 'Remove from the list' }).click()
   await page.getByRole('button', { name: 'Remove', exact: true }).click()
 
+  // The name is gone from the panel (its re-read drops the removed row) and the
+  // block falls back to empty through the same store update. Both deterministic.
   await expect(page.getByText('Ada Lovelace')).toBeHidden()
+  await expect(block).toContainText('No names yet')
 })
