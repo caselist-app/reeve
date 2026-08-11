@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useOptimistic, useTransition, type ReactNode } from 'react'
-import { Calendar, Views } from 'react-big-calendar'
+import { Calendar, Views, type SlotInfo } from 'react-big-calendar'
 import withDragAndDrop, {
   type EventInteractionArgs,
 } from 'react-big-calendar/lib/addons/dragAndDrop'
@@ -46,6 +46,7 @@ import { useSidePanel } from '@/stores/side-panel-store'
 import { useIsMobile } from '@/hooks/use-is-mobile'
 import { createZonedLocalizer } from '@/lib/schedule/calendar-localizer'
 import { localTimeInZone, localDayWindowUtc } from '@/lib/schedule/datetime'
+import { slotToDayFormInput } from '@/lib/schedule/day-form-prefill'
 import { buildDayCalendarView } from '@/lib/schedule/day-calendar-view'
 import { fromDropOrResize, type CalendarEvent, type EventSource } from '@/lib/schedule/calendar-adapter'
 import { moveScheduleItem } from '@/lib/actions/move-schedule-item'
@@ -107,19 +108,6 @@ const EVENT_ICONS: Record<string, LucideIcon> = {
 
 function eventIcon(name: string): LucideIcon {
   return EVENT_ICONS[name] ?? CircleDashed
-}
-
-// A 24-hour "HH:MM" as a 12-hour clock with an explicit meridiem ("07:30" to
-// "7:30am", "19:30" to "7:30pm"). The click-to-add time is pre-filled into the
-// day form's free-text input, which runs through parseDayItem, and that parser
-// reads a bare hour of 1 to 11 as ambiguous and applies a kind's default
-// meridiem: "07:30" would come back as 19:30. A dragged time is exact and must
-// not be re-guessed, so it is handed over with the meridiem already stated.
-function to12HourClock(hhmm: string): string {
-  const [hour, minute] = hhmm.split(':').map(Number)
-  const meridiem = hour < 12 ? 'am' : 'pm'
-  const hour12 = hour % 12 === 0 ? 12 : hour % 12
-  return `${hour12}:${String(minute).padStart(2, '0')}${meridiem}`
 }
 
 // The accent marker class per event. Source decides first: transport is teal and
@@ -288,24 +276,21 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
     })
   }
 
-  // Click-empty-to-add. The click is a shortcut for typing the time, nothing
-  // more: it opens Brief 42's day form with the time pre-filled, snapped to 15
-  // minutes, and the TM types the rest. Which day the time falls on is the day
-  // being viewed; the form resolves the instant server-side like every other
-  // day_item write, so nothing here derives a day.
-  function handleSelectSlot(slot: { start: Date | string }) {
+  // Click-or-drag-empty-to-add. It opens Brief 42's day form with the time
+  // pre-filled, snapped to 15 minutes, and the TM types the rest. A click seeds
+  // just the start; a drag seeds the range it spanned, so the dragged duration
+  // survives into the saved item instead of collapsing to the kind's synthesised
+  // end (REE-69). Both ends carry a stated meridiem so the parser reads the exact
+  // time back rather than guessing pm on a morning hour. Which day the time falls
+  // on is the day being viewed; the form resolves the instant server-side like
+  // every other day_item write, so nothing here derives a day.
+  function handleSelectSlot(slot: SlotInfo) {
     if (!gesturesEnabled) return
-    const fifteenMin = 15 * 60 * 1000
-    // Snapping the instant is snapping the wall clock: every timezone this
-    // product cares about is a whole number of 15-minute steps off UTC.
-    const snapped = new Date(Math.round(new Date(slot.start).getTime() / fifteenMin) * fifteenMin)
-    // Stated meridiem so the parser reads the exact time back, rather than
-    // guessing pm on a morning hour and turning 07:30 into 19:30.
     openSidePanel({
       type: 'day-form',
       tourId,
       tourDateId,
-      initialInput: to12HourClock(localTimeInZone(snapped.toISOString(), timezone)),
+      initialInput: slotToDayFormInput(new Date(slot.start), new Date(slot.end), slot.action, timezone),
     })
   }
 
