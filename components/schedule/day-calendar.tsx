@@ -1,6 +1,17 @@
 'use client'
 
-import { useEffect, useMemo, useOptimistic, useState, useTransition, type ReactNode } from 'react'
+import {
+  Children,
+  cloneElement,
+  isValidElement,
+  useEffect,
+  useMemo,
+  useOptimistic,
+  useState,
+  useTransition,
+  type ReactElement,
+  type ReactNode,
+} from 'react'
 import { Calendar, Views, type SlotInfo } from 'react-big-calendar'
 import withDragAndDrop, {
   type EventInteractionArgs,
@@ -48,6 +59,7 @@ import { createZonedLocalizer } from '@/lib/schedule/calendar-localizer'
 import { localTimeInZone, localDayWindowUtc } from '@/lib/schedule/datetime'
 import { slotToDayFormInput } from '@/lib/schedule/day-form-prefill'
 import { buildDayCalendarView } from '@/lib/schedule/day-calendar-view'
+import { nowMarker } from '@/lib/schedule/now-marker'
 import { assignOverlapDepths } from '@/lib/schedule/overlap-layout'
 import { fromDropOrResize, type CalendarEvent, type EventSource } from '@/lib/schedule/calendar-adapter'
 import { moveScheduleItem } from '@/lib/actions/move-schedule-item'
@@ -369,8 +381,39 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
         </button>
       )
     }
-    return { event: EventChip }
-  }, [openEvent, timezone])
+
+    // The red "now" label in the hour gutter, drawn next to RBC's own red
+    // hairline (REE-83). RBC hands this wrapper the .rbc-time-gutter column as
+    // its single child; we inject the label into it so a `position: relative`
+    // gutter and a `top: %` label line up with the hairline in the day column.
+    // The clock ticks every 30s. It stays null until mounted so the server
+    // render and the first client render match: the marker only appears after
+    // the effect runs, which never happens on the server.
+    function TimeGutterWrapper({ children }: { children?: ReactNode }) {
+      const [nowIso, setNowIso] = useState<string | null>(null)
+      useEffect(() => {
+        const tick = () => setNowIso(new Date().toISOString())
+        tick()
+        const id = setInterval(tick, 30_000)
+        return () => clearInterval(id)
+      }, [])
+
+      const marker = nowIso ? nowMarker(nowIso, timezone, date) : null
+      if (!marker || !isValidElement(children)) return children
+
+      const gutter = children as ReactElement<{ children?: ReactNode }>
+      return cloneElement(
+        gutter,
+        undefined,
+        ...Children.toArray(gutter.props.children),
+        <span key="now" className="rbc-now-label" style={{ top: `${marker.topPercent}%` }}>
+          {marker.label}
+        </span>,
+      )
+    }
+
+    return { event: EventChip, timeGutterWrapper: TimeGutterWrapper }
+  }, [openEvent, timezone, date])
 
   // A move (onEventDrop) and a resize (onEventResize) share one write path. The
   // difference lives entirely in fromDropOrResize: a move whose duration is
