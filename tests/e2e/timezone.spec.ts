@@ -56,3 +56,48 @@ test('an Auckland day is drawn in Auckland time from a London browser', async ({
   expect(topPercent).toBeGreaterThan(15)
   expect(topPercent).toBeLessThan(27)
 })
+
+// The DST regression for the broadcast grid (REE-116). The grid shifts a real
+// instant back four hours of WALL CLOCK, not a fixed elapsed offset, so a block
+// on a spring-forward or fall-back day lands on its gutter label instead of an
+// hour off it. This opens a Europe/London show on 2026-03-29, the day the clocks
+// jump 01:00 -> 02:00: the broadcast window is a clean 24 wall hours while the
+// calendar day RBC draws is only 23, which is exactly where the retired
+// fixed-offset shift went wrong.
+//
+// The browser context is still Europe/London (test.use above), and so is the
+// tour, because this pins the shift, not the browser-vs-tour zone independence
+// that the Auckland test above pins. Running it end to end in a real browser is
+// what makes it a regression guard rather than a restatement of the unit maths in
+// calendar-zone.test.ts.
+test('a spring-forward day places a block on its broadcast label, not an hour off', async ({
+  page,
+}) => {
+  const seed = readSeed()
+  const { zonedDst } = seed.a
+
+  await page.goto(`/tours/${zonedDst.tourId}/schedule?date=${zonedDst.date}`)
+
+  // The seeded load-in is 09:00 London on the transition day. Its chip label is
+  // the tour-zone wall clock of the real instant, so it reads 09:00 whatever the
+  // shift does; the position is the part the shift decides. .first() for the same
+  // first-paint double-mount reason as the test above.
+  const block = page.locator('.rbc-event', { hasText: 'Load-in' }).first()
+  await expect(block).toBeVisible()
+  await expect(block).toContainText('09:00')
+
+  // The gutter still opens at the 04:00 broadcast start, un-shifted back to its
+  // real instant and formatted in the tour zone.
+  const topGutterLabel = page.locator('.rbc-time-gutter .rbc-label').first()
+  await expect(topGutterLabel).toHaveText(/04:00/)
+
+  // The discriminating assertion. 09:00 is five hours past the 04:00 broadcast
+  // start, so the block sits at 5/24 = 20.8% down the grid. The retired
+  // fixed-offset shift subtracted only the three real hours between the view
+  // date's 00:00 and 04:00 (the spring-forward gap eats one), which lands the same
+  // block at 6/24 = 25%. The window below passes the wall-clock shift and fails
+  // the elapsed one.
+  const topPercent = await block.evaluate((el) => parseFloat((el as HTMLElement).style.top))
+  expect(topPercent).toBeGreaterThan(18)
+  expect(topPercent).toBeLessThan(23)
+})

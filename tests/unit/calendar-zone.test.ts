@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { createZonedLocalizer } from '@/lib/schedule/calendar-localizer'
+import { toGridInstant } from '@/lib/schedule/day-window'
+import { localDayWindowUtc, wallClockToUtc } from '@/lib/schedule/datetime'
 
 // The spike for Brief 43, kept as a regression test rather than thrown away.
 // It proves the one thing that gated the whole calendar project: that a
@@ -151,5 +153,63 @@ describe('createZonedLocalizer: the block positioning path', () => {
     const aucklandEvening = new Date('2026-04-04T20:00:00.000Z')
 
     expect(auckland.getDstOffset(aucklandMidnight, aucklandEvening)).toBe(-60)
+  })
+})
+
+// The block-positioning path above proves the localizer places an instant at the
+// right position, DST correction and all. The broadcast grid (REE-114) sits one
+// step earlier: it shifts a real instant back four hours with toGridInstant
+// before RBC ever sees it. REE-116 makes that a wall-clock shift so the two agree
+// on a transition day, where a fixed four-hour elapsed shift left every block
+// past the change an hour off its label.
+//
+// These compose the two: toGridInstant, then RBC's own positionFromDate, which is
+// literally what sets a block's `top` (react-big-calendar/lib/utils/TimeSlots.js):
+// diff from the grid's start plus the localizer's getDstOffset correction. It is
+// spelled out here rather than via getMinutesFromMidnight on purpose. RBC's
+// default getMinutesFromMidnight reads a module-scoped getDstOffset, not the
+// instance override this file pins, so it would bypass the very correction under
+// test; positionFromDate reads localizer.getDstOffset, the override. The expected
+// value is the broadcast wall clock minus four hours, in minutes: a 21:00 show
+// sits at 17:00 = 1020, whatever the offset did earlier that day. The retired
+// fixed-offset shift returns 1080 (spring) or 960 (fall-back) here.
+//
+// Europe/London is both the tour zone and the pinned unit-job TZ, so these read
+// the same on a UTC runner: toGridInstant and getDstOffset are both explicit-zone.
+// The override-removal regression is caught by the Auckland tests above, not
+// these; what these add is the broadcast shift being wall-clock, not elapsed.
+describe('createZonedLocalizer: positioning a broadcast block across a DST transition', () => {
+  const london = createZonedLocalizer('Europe/London')
+
+  // RBC's positionFromDate, using the instance override, against the grid's own
+  // 00:00 (the calendar's `min` for the viewed day).
+  function gridPositionMinutes(realWall: string, viewedDate: string): number {
+    const gridStart = new Date(localDayWindowUtc(viewedDate, 'Europe/London').start)
+    const gridInstant = new Date(
+      toGridInstant(wallClockToUtc(realWall, 'Europe/London'), 'Europe/London'),
+    )
+    return london.diff(gridStart, gridInstant, 'minutes') + london.getDstOffset(gridStart, gridInstant)
+  }
+
+  // 2026-03-29, London springs forward 01:00 -> 02:00. Viewed as its own day, the
+  // broadcast window [04:00, +1 04:00) is past the change and clean, so a 21:00
+  // show is a straight 17:00 on the grid: 1020 minutes down a column the
+  // getDstOffset correction still draws as a full 24 hours.
+  it('places a 21:00 show at 17:00 (1020 min) on the spring-forward day', () => {
+    expect(gridPositionMinutes('2026-03-29T21:00', '2026-03-29')).toBe(1020)
+  })
+
+  // The mirror on 2026-10-25, fall back 02:00 -> 01:00. Same 1020, reached with a
+  // negative correction instead of a positive one.
+  it('places a 21:00 show at 17:00 (1020 min) on the fall-back day', () => {
+    expect(gridPositionMinutes('2026-10-25T21:00', '2026-10-25')).toBe(1020)
+  })
+
+  // Viewing 2026-03-28, whose broadcast night runs into the 29th and so contains
+  // the spring-forward change (a 23-hour night). A 02:30 curfew on the 29th is
+  // broadcast-wall 26:30, i.e. grid 22:30 = 1350 minutes. The fixed-offset shift
+  // read this an hour early, at 21:30.
+  it('places a next-morning curfew at 22:30 (1350 min) when the change is in the tail', () => {
+    expect(gridPositionMinutes('2026-03-29T02:30', '2026-03-28')).toBe(1350)
   })
 })

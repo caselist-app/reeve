@@ -23,8 +23,8 @@
 // shift out of the adapter keeps it a pure instant->instant mapper and keeps
 // fromDropOrResize (the write path's data-protecting core) working in real space.
 //
-// It still asks nothing about which day a record is on: toGridInstant is a fixed
-// millisecond offset for the viewed day, not a day derivation. resolveTourDateId
+// It still asks nothing about which day a record is on: toGridInstant is a
+// wall-clock shift by DAY_START_HOUR hours, not a day derivation. resolveTourDateId
 // and localDateInZone remain the only authorities on that. See
 // lib/schedule/calendar-adapter.ts and lib/schedule/day-window.ts.
 
@@ -70,16 +70,15 @@ export interface DayCalendarView {
   errorMessage: string | null
 }
 
-// A real event rewritten into synthetic grid space for the given broadcast day.
-// start/end are shifted; realStart/realEnd preserve the real instants. The gap
-// between start and end is unchanged (both ends shift by the same offset), so a
-// synthesised 30-minute block stays 30 minutes and fromDropOrResize's duration
-// logic is untouched.
-function toGridEvent(event: CalendarEvent, date: string, timezone: string): CalendarEvent {
+// A real event rewritten into synthetic grid space. start/end are shifted;
+// realStart/realEnd preserve the real instants. Both ends shift by the same
+// wall-clock amount, so a synthesised 30-minute block stays 30 minutes off a
+// DST-transition day and fromDropOrResize's duration logic is untouched.
+function toGridEvent(event: CalendarEvent, timezone: string): CalendarEvent {
   return {
     ...event,
-    start: new Date(toGridInstant(event.start.toISOString(), date, timezone)),
-    end: new Date(toGridInstant(event.end.toISOString(), date, timezone)),
+    start: new Date(toGridInstant(event.start.toISOString(), timezone)),
+    end: new Date(toGridInstant(event.end.toISOString(), timezone)),
     realStart: event.start,
     realEnd: event.end,
   }
@@ -95,8 +94,8 @@ function toGridEvent(event: CalendarEvent, date: string, timezone: string): Cale
  * than being dropped. An untimed record from any source is set aside in
  * `unpositioned` by the adapter's own rule.
  *
- * @param date the viewed day, YYYY-MM-DD. Both the shift and the window are
- *   derived for this day in the tour timezone.
+ * @param date the viewed day, YYYY-MM-DD. The on-grid window is derived for this
+ *   day in the tour timezone; the shift itself is intrinsic to each instant.
  */
 export function buildDayCalendarView(
   records: DayRecords,
@@ -118,7 +117,7 @@ export function buildDayCalendarView(
   const events: CalendarEvent[] = []
   const outsideDay: CalendarEvent[] = []
   for (const real of realEvents) {
-    const grid = toGridEvent(real, date, timezone)
+    const grid = toGridEvent(real, timezone)
     const startMs = grid.start.getTime()
     if (startMs >= gridStart && startMs < gridEnd) {
       events.push(grid)

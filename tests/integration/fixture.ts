@@ -159,6 +159,11 @@ export interface E2eSeed {
     // On the same account so the signed-in browser can open it; RLS would hide a
     // separate account's tour.
     zoned: ZonedShowDay
+    // A Europe/London tour on the spring-forward day (2026-03-29), one positioned
+    // day_item. The timezone spec opens it to prove the broadcast grid shifts by
+    // wall clock, not a fixed elapsed offset, so a block past the 01:00 -> 02:00
+    // change lands on its label rather than an hour off (REE-116).
+    zonedDst: ZonedShowDay
   }
   // A second ACCOUNT, not a second tour. createSecondTour puts both tours on
   // one account, which is right for cross-tour id checks and proves nothing
@@ -189,6 +194,20 @@ export async function createE2eSeed(): Promise<E2eSeed> {
     dayItemLocalTime: '09:00',
     tourName: 'Aurora Australis Tour',
     artistName: 'Southern Cross',
+  })
+
+  // A Europe/London show on the spring-forward day: clocks jump 01:00 -> 02:00,
+  // so the broadcast window [04:00, +1 04:00) is a clean 24 wall hours but the
+  // literal calendar day RBC draws is only 23. A 09:00 load-in is five hours past
+  // the 04:00 broadcast start, so it must sit at 5/24 of the grid whatever the
+  // change did earlier. The retired fixed-offset shift put it at 6/24, an hour
+  // low; tests/e2e/timezone.spec.ts opens this to catch that in a real browser.
+  const zonedDst = await createZonedShowDay(a.userId, {
+    timezone: 'Europe/London',
+    date: '2026-03-29',
+    dayItemLocalTime: '09:00',
+    tourName: 'Equinox Tour',
+    artistName: 'Meridian',
   })
 
   // A day_items row since Brief 42, not a fixed day-sheet column. Inserted directly
@@ -250,7 +269,7 @@ export async function createE2eSeed(): Promise<E2eSeed> {
   }
 
   return {
-    a: { ...a, hotelStayId: stay.id, rehearsalId: rehearsal.id, rehearsalDate, zoned },
+    a: { ...a, hotelStayId: stay.id, rehearsalId: rehearsal.id, rehearsalDate, zoned, zonedDst },
     b,
   }
 }
