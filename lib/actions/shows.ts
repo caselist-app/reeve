@@ -180,10 +180,12 @@ export async function updateShow(
     // Brief 42: the running order is day_items rows, and it moves with the show
     // or it stays behind on a day that no longer has one. Both the day link and
     // each instant move, and each item's day offset is carried, so a 01:30
-    // curfew lands on the morning after the NEW date.
+    // curfew lands on the morning after the NEW date. Selected by the old day
+    // (existing.tour_date_id), not the show: most items carry no show_id, and
+    // filtering by show_id stranded the hand-added running order. REE-118.
     carriedTimes = await shiftDayItemsToDate(
       supabase,
-      showId,
+      existing.tour_date_id,
       existing.date,
       parsed.data.date,
       nextTourDateId,
