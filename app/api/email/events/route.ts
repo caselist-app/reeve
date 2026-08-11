@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createHmac, timingSafeEqual } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { nudgeAdvanceFromShareClick } from '@/lib/shows/advance'
 
 // Resend uses Svix for webhook signatures.
 // Headers: svix-id, svix-timestamp, svix-signature (v1,<base64_hmac>)
@@ -77,7 +78,7 @@ export async function POST(request: NextRequest) {
     if (clickedUrl?.includes('/acknowledge/')) {
       const shareToken = clickedUrl.split('/acknowledge/')[1]?.split(/[?#]/)[0]
       if (shareToken) {
-        await handleAcknowledgement(admin, shareToken)
+        await nudgeAdvanceFromShareClick(admin, shareToken)
       }
     }
   }
@@ -95,49 +96,4 @@ function extractShareToken(
   if (!url) return null
   const match = url.match(/\/a\/([a-zA-Z0-9_-]+)/)
   return match?.[1] ?? null
-}
-
-async function handleAcknowledgement(
-  admin: ReturnType<typeof import('@/lib/supabase/admin').createAdminClient>,
-  shareToken: string
-): Promise<void> {
-  const now = new Date().toISOString()
-
-  const { data: share } = await admin
-    .from('document_shares')
-    .update({ acknowledged_at: now, opened_at: now })
-    .eq('share_token', shareToken)
-    .is('acknowledged_at', null)
-    .select('document_id, tour_id, documents(doc_type)')
-    .single()
-
-  if (!share) return
-
-  // Nudge the relevant show_advance department toward done.
-  // doc_type maps to a department: tech_rider->audio, hospitality_rider->hospitality, etc.
-  const doc = share.documents as { doc_type: string } | null
-  if (!doc) return
-
-  const departmentMap: Record<string, string> = {
-    tech_rider: 'status_audio',
-    lighting_rider: 'status_lighting',
-    staging_rider: 'status_staging',
-    hospitality_rider: 'status_hospitality',
-    travel_brief: 'status_travel',
-  }
-
-  type AdvanceColumn = 'status_audio' | 'status_lighting' | 'status_staging' | 'status_hospitality' | 'status_travel'
-  const column = departmentMap[doc.doc_type] as AdvanceColumn | undefined
-  if (!column) return
-
-  // Build a typed update object. The computed key is narrowed to AdvanceColumn
-  // which matches the show_advance update shape.
-  type AdvanceUpdate = { [K in AdvanceColumn]?: string }
-  const updatePayload: AdvanceUpdate = { [column]: 'in_progress' }
-
-  await admin
-    .from('show_advance')
-    .update(updatePayload)
-    .eq('tour_id', share.tour_id)
-    .eq(column, 'not_started')
 }

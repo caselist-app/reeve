@@ -4,6 +4,12 @@ import { createAdminClient } from '@/lib/supabase/admin'
 
 export type Department = 'audio' | 'lighting' | 'staging' | 'hospitality' | 'travel'
 export type AdvanceStatus = 'not_started' | 'in_progress' | 'done'
+export type AdvanceColumn =
+  | 'status_audio'
+  | 'status_lighting'
+  | 'status_staging'
+  | 'status_hospitality'
+  | 'status_travel'
 
 // The four departments that advance through a document, and the doc_type each
 // one sends. `travel` is the fifth department on show_advance and has no rider,
@@ -71,10 +77,7 @@ export type DepartmentShareData = {
 // Maps the department name to the show_advance column it controls.
 // Both the UI action and the document-share acknowledge path use this
 // function so the mapping never drifts between callers.
-const DEPARTMENT_COLUMN: Record<
-  Department,
-  'status_audio' | 'status_lighting' | 'status_staging' | 'status_hospitality' | 'status_travel'
-> = {
+const DEPARTMENT_COLUMN: Record<Department, AdvanceColumn> = {
   audio: 'status_audio',
   lighting: 'status_lighting',
   staging: 'status_staging',
@@ -128,6 +131,60 @@ export async function updateAdvanceStatusFromShare(shareToken: string): Promise<
   if (!department) return
 
   await setAdvanceStatus(share.show_id, department, 'done', admin)
+}
+
+// Maps a document doc_type to the show_advance column it controls, or null for
+// a doc_type with no department behind it. The one source of truth for both
+// acknowledgement paths (the button and the Resend webhook), built from
+// DEPARTMENT_DOC_TYPE so a new rider type cannot advance the wrong column, or a
+// nonexistent one: the webhook used to keep its own copy of this map, which had
+// drifted to include a `travel_brief` doc_type nothing ever writes.
+export function docTypeToAdvanceColumn(docType: string): AdvanceColumn | null {
+  const department = docTypeToDepartment(docType)
+  return department ? DEPARTMENT_COLUMN[department] : null
+}
+
+// Called by the Resend webhook when a recipient clicks the tracked acknowledge
+// link in a shared document email. Marks the share acknowledged and nudges the
+// relevant department from not_started to in_progress on the one show the share
+// belongs to.
+//
+// Deliberately distinct from updateAdvanceStatusFromShare, the button path,
+// which promotes straight to 'done'. A tracked-link click is a weaker signal
+// than the recipient landing on the acknowledge page and confirming, and both
+// fire for the same click, so the webhook only nudges and the page POST
+// finishes the job.
+//
+// Scoped by show_id, never tour_id: show_advance holds one row per show with
+// tour_id denormalised on it, so filtering by tour_id marked every show on the
+// tour advanced off a single rider (REE-8).
+export async function nudgeAdvanceFromShareClick(
+  admin: SupabaseClient<Database>,
+  shareToken: string
+): Promise<void> {
+  const now = new Date().toISOString()
+
+  const { data: share } = await admin
+    .from('document_shares')
+    .update({ acknowledged_at: now, opened_at: now })
+    .eq('share_token', shareToken)
+    .is('acknowledged_at', null)
+    .select('show_id, documents(doc_type)')
+    .single()
+
+  if (!share?.show_id) return
+
+  const doc = share.documents as { doc_type: string } | null
+  if (!doc) return
+
+  const column = docTypeToAdvanceColumn(doc.doc_type)
+  if (!column) return
+
+  await admin
+    .from('show_advance')
+    .update({ [column]: 'in_progress' } as TablesUpdate<'show_advance'>)
+    .eq('show_id', share.show_id)
+    .eq(column, 'not_started')
 }
 
 // Maps a document doc_type to the advance department it controls, by inverting
