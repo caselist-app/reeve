@@ -171,7 +171,7 @@ function accentClassName(source: EventSource, accent: CalendarEvent['accent']): 
  * out.
  */
 export function DayCalendar({ records, tourId, tourDateId, timezone, date, header }: DayCalendarProps) {
-  const { open: openSidePanel, isOpen: panelIsOpen, panel } = useSidePanel()
+  const { open: openSidePanel, isOpen: panelIsOpen, panel, syncScheduleItemTimes } = useSidePanel()
   const isMobile = useIsMobile()
   const [, startTransition] = useTransition()
 
@@ -428,7 +428,15 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
     const target = fromDropOrResize({ event, start, end }, event)
     startTransition(async () => {
       applyOptimistic({ id: event.id, start, end, endStated: target.endsAt !== null })
-      await moveScheduleItem(tourId, target)
+      const result = await moveScheduleItem(tourId, target)
+      // Keep a detail panel open on this same block in step with the grid: a
+      // resize adds an end the panel was opened before knowing about (REE-85).
+      // Only after the write succeeds, so the panel never shows a time the
+      // server rejected, and keyed by event.id so it no-ops unless that record's
+      // panel is the one open.
+      if (!result.error) {
+        syncScheduleItemTimes(event.id, target.startsAt, target.endsAt)
+      }
     })
   }
 
