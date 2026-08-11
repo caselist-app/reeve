@@ -207,26 +207,35 @@
 }
 
 /* Kind accent ramp. Hue from Tailwind's palette variables; tint mixed against
-   the current --background so one rule covers light and dark. */
+   the current --background so one rule covers light and dark. --evt-text is the
+   readable-on-tint version of the hue: the "No time set" rail pills and the
+   "After midnight" icon squares (REE-82) sit on --evt-tint and label with it,
+   mixed toward --foreground so it stays legible in both light and dark rather
+   than the medium palette shade washing out on a pale tint. */
 .evt-show {
   --evt-accent: var(--color-purple-500);
   --evt-tint: color-mix(in oklab, var(--color-purple-500) 14%, var(--background));
+  --evt-text: color-mix(in oklab, var(--color-purple-500) 55%, var(--foreground));
 }
 .evt-transport {
   --evt-accent: var(--color-teal-500);
   --evt-tint: color-mix(in oklab, var(--color-teal-500) 14%, var(--background));
+  --evt-text: color-mix(in oklab, var(--color-teal-500) 55%, var(--foreground));
 }
 .evt-hotel {
   --evt-accent: var(--color-blue-500);
   --evt-tint: color-mix(in oklab, var(--color-blue-500) 14%, var(--background));
+  --evt-text: color-mix(in oklab, var(--color-blue-500) 55%, var(--foreground));
 }
 .evt-catering {
   --evt-accent: var(--color-emerald-500);
   --evt-tint: color-mix(in oklab, var(--color-emerald-500) 14%, var(--background));
+  --evt-text: color-mix(in oklab, var(--color-emerald-500) 55%, var(--foreground));
 }
 .evt-other {
   --evt-accent: var(--color-amber-500);
   --evt-tint: color-mix(in oklab, var(--color-amber-500) 14%, var(--background));
+  --evt-text: color-mix(in oklab, var(--color-amber-500) 55%, var(--foreground));
 }
 
 /*

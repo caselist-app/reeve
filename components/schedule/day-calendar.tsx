@@ -432,14 +432,21 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
             No time set
           </p>
           <div className="flex flex-wrap gap-1.5">
-            {view.unpositioned.map((record) => (
-              <span
-                key={`${record.source}:${record.id}`}
-                className="inline-flex items-center gap-1.5 rounded-md bg-muted px-2 py-1 text-xs text-foreground"
-              >
-                {record.title}
-              </span>
-            ))}
+            {view.unpositioned.map((record) => {
+              const Icon = eventIcon(record.icon)
+              return (
+                <span
+                  key={`${record.source}:${record.id}`}
+                  className={cn(
+                    accentClassName(record.source, record.accent),
+                    'inline-flex items-center gap-1.5 rounded-md bg-[var(--evt-tint)] px-2 py-1 text-xs text-[var(--evt-text)]',
+                  )}
+                >
+                  <Icon className="h-3 w-3 shrink-0" aria-hidden />
+                  {record.title}
+                </span>
+              )
+            })}
           </div>
         </div>
       )}
@@ -522,7 +529,12 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
                     onClick={() => openEvent(event)}
                     className="flex w-full items-center gap-2 text-left text-sm"
                   >
-                    <span className={cn('flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted')}>
+                    <span
+                      className={cn(
+                        accentClassName(event.source, event.accent),
+                        'flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-[var(--evt-tint)] text-[var(--evt-text)]',
+                      )}
+                    >
                       <Icon className="h-3.5 w-3.5" aria-hidden />
                     </span>
                     <span className="tabular-nums text-xs text-muted-foreground">
