@@ -2,33 +2,18 @@
 
 import { useTransition, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { MoreHorizontal, ArrowUpRight, ArrowDownRight } from 'lucide-react'
+import { ArrowUpRight, ArrowDownRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { formatFlightNumber } from '@/lib/utils/format-flight-number'
 import { placeName } from '@/lib/utils/place-name'
 import { PanelShell } from '@/components/layout/panel-shell'
+import { PanelDeleteMenu } from '@/components/schedule/panels/panel-delete-menu'
 import { AirlineLogo } from '@/components/schedule/airline-logo'
 import { Input } from '@/components/ui/input'
 import { PlacesAddressInput } from '@/components/shows/places-address-input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { StatusBadge, TRANSPORT_VARIANT } from '@/components/ui/status-badge'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 import { updateTransportSegment, deleteTransportSegment } from '@/lib/actions/transport'
 import { useSidePanel } from '@/stores/side-panel-store'
 import { DateMoveNotice } from '@/components/schedule/date-move-notice'
@@ -86,64 +71,25 @@ const FLIGHT_STATUS_TEXT: Record<string, { label: string; className: string; sta
 function DeleteMenu({ segmentId, modeLabel }: { segmentId: string; modeLabel: string }) {
   const router = useRouter()
   const { close } = useSidePanel()
-  const [open, setOpen] = useState(false)
-  const [deleting, setDeleting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
-  async function handleDelete() {
-    setDeleting(true)
+  async function handleDelete(): Promise<string | null> {
     const result = await deleteTransportSegment(segmentId)
-    setDeleting(false)
-    if (result.error) { setError(result.error); return }
-    setOpen(false)
+    if (result.error) return result.error
     close()
     router.refresh()
+    return null
   }
 
   return (
-    <>
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            aria-label="Segment options"
-            className="flex h-7 w-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" className="w-40">
-          <DropdownMenuItem
-            onClick={() => setOpen(true)}
-            className="text-destructive focus:text-destructive"
-          >
-            Delete {modeLabel.toLowerCase()}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <AlertDialog open={open} onOpenChange={setOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this {modeLabel.toLowerCase()}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This removes it from the day. This cannot be undone.
-              {error && <span className="mt-2 block text-destructive">{error}</span>}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              disabled={deleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {deleting ? 'Deleting...' : 'Delete'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </>
+    <PanelDeleteMenu
+      triggerLabel="Segment options"
+      menuLabel={`Delete ${modeLabel.toLowerCase()}`}
+      confirmLabel="Delete"
+      pendingLabel="Deleting..."
+      dialogTitle={`Delete this ${modeLabel.toLowerCase()}?`}
+      dialogDescription="This removes it from the day. This cannot be undone."
+      onConfirm={handleDelete}
+    />
   )
 }
 

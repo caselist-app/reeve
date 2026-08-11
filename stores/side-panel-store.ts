@@ -184,11 +184,47 @@ export type SchedulePanelDescriptor = Extract<
   { type: 'transport' | 'hotel' | 'day-item' }
 >
 
+/**
+ * Rewrites the open schedule panel's stored times after a grid drag or resize.
+ *
+ * A detail panel holds a snapshot of its record, captured when the block was
+ * clicked. Resizing that same block on the grid persists a new end (REE-85), but
+ * the snapshot in this store does not know, so the panel keeps showing the stale
+ * time: an item resized to end at 06:45 still reads "Ends --:--", and a Save from
+ * that stale form would then write the empty end back over the one the resize
+ * just added. This patches the snapshot so the panel reflects the move.
+ *
+ * Pure and keyed by `key` (the CalendarEvent id, e.g. `day_item:<id>`), so it
+ * only touches the panel showing the moved record and leaves anything else, or a
+ * closed panel, alone. Returns null when there is nothing to patch. `endsAt` maps
+ * straight onto the record's own end column: a move that preserved a synthesised
+ * end sends null here, which matches the null the write path left stored.
+ */
+export function patchScheduleItemTimes(
+  panel: PanelDescriptor | null,
+  key: string,
+  startsAt: string,
+  endsAt: string | null,
+): PanelDescriptor | null {
+  if (!panel) return null
+  if (panel.type === 'day-item' && panel.key === key) {
+    return { ...panel, item: { ...panel.item, starts_at: startsAt, ends_at: endsAt } }
+  }
+  if (panel.type === 'transport' && panel.key === key) {
+    return { ...panel, segment: { ...panel.segment, depart_at: startsAt, arrive_at: endsAt } }
+  }
+  return null
+}
+
 interface SidePanelState {
   panel: PanelDescriptor | null
   isOpen: boolean
   open: (descriptor: PanelDescriptor) => void
   close: () => void
+  // Called by day-calendar.tsx after a drag or resize commits, so a detail panel
+  // open on the moved record shows the new times rather than the stale snapshot
+  // it was opened with (REE-85). A no-op unless that record's panel is open.
+  syncScheduleItemTimes: (key: string, startsAt: string, endsAt: string | null) => void
 }
 
 export const useSidePanel = create<SidePanelState>()((set) => ({
@@ -196,4 +232,10 @@ export const useSidePanel = create<SidePanelState>()((set) => ({
   isOpen: false,
   open: (descriptor) => set({ panel: descriptor, isOpen: true }),
   close: () => set({ isOpen: false }),
+  syncScheduleItemTimes: (key, startsAt, endsAt) =>
+    set((state) => {
+      if (!state.isOpen) return {}
+      const next = patchScheduleItemTimes(state.panel, key, startsAt, endsAt)
+      return next ? { panel: next } : {}
+    }),
 }))
