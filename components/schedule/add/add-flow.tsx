@@ -4,11 +4,14 @@ import dynamic from 'next/dynamic'
 import { PanelShell } from '@/components/layout/panel-shell'
 import { useSidePanel } from '@/stores/side-panel-store'
 
-// The six categories the add-to-day panel can render. flight/drive/rail/hotel
-// are reached from the day-form's Book rows (REE-89 deleted the standalone
-// category picker); show and event stay for the venue block and any other
-// add-to-day caller. Kept in step with ScheduleAddCategory in side-panel-store.
-export type AddCategory = 'flight' | 'drive' | 'rail' | 'hotel' | 'show' | 'event'
+// The four categories the add-to-day panel can render, one per dedicated add
+// form. flight/drive/rail/hotel are the things with structure beyond a time; the
+// day form (buildAddOptions) hands them here from its Book rows. Show and event
+// left this list (REE-90): a show rewrites the day's type, so it is a day-type
+// decision reached from the venue block, and an event is just a custom day_items
+// row typed into the day form. Kept in step with ScheduleAddCategory in
+// side-panel-store.
+export type AddCategory = 'flight' | 'drive' | 'rail' | 'hotel'
 
 // The add forms only render once a category is picked, so each loads on demand
 // instead of shipping in the schedule bundle.
@@ -16,8 +19,6 @@ const AddFlightForm = dynamic(() => import('@/components/schedule/add/add-flight
 const AddDriveForm = dynamic(() => import('@/components/schedule/add/add-drive-form').then((m) => m.AddDriveForm), { ssr: false })
 const AddRailForm = dynamic(() => import('@/components/schedule/add/add-rail-form').then((m) => m.AddRailForm), { ssr: false })
 const AddHotelForm = dynamic(() => import('@/components/schedule/add/add-hotel-form').then((m) => m.AddHotelForm), { ssr: false })
-const AddShowForm = dynamic(() => import('@/components/schedule/add/add-show-form').then((m) => m.AddShowForm), { ssr: false })
-const AddEventForm = dynamic(() => import('@/components/schedule/add/add-event-form').then((m) => m.AddEventForm), { ssr: false })
 
 interface AddFlowProps {
   tourId: string
@@ -36,8 +37,6 @@ const CATEGORY_TITLES: Record<AddCategory, string> = {
   drive:  'Add drive',
   rail:   'Add train',
   hotel:  'Add hotel',
-  show:   'Add show',
-  event:  'Add event',
 }
 
 // Renders the form for a pre-selected category, on PanelShell like every
@@ -53,8 +52,6 @@ export function AddFlow({ tourId, tourDateId, date, timezone, category, onBack }
       {category === 'drive'  && <AddDriveForm  {...formProps} />}
       {category === 'rail'   && <AddRailForm   {...formProps} />}
       {category === 'hotel'  && <AddHotelForm  {...formProps} />}
-      {category === 'show'   && <AddShowForm   tourId={tourId} date={date} onBack={onBack} onSuccess={close} />}
-      {category === 'event'  && <AddEventForm  {...formProps} />}
     </PanelShell>
   )
 }
