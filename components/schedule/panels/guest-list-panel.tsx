@@ -193,6 +193,12 @@ function AddGuestForm({
         last_name: data.last_name,
       })
     },
+    // The add-form pattern: refresh on the client so the day-info block's
+    // server-rendered count picks the new name up. Relying on createGuestEntry's
+    // revalidatePath alone was racy here (a startTransition-dispatched action does
+    // not reliably re-resolve a server-rendered sibling), which is what the e2e
+    // caught. onAdded still re-reads the panel's own client-side list.
+    refreshOnSuccess: true,
     onSuccess: () => {
       setFirstName('')
       setLastName('')
@@ -280,10 +286,15 @@ function GuestRow({
   const router = useRouter()
   const [pending, startTransition] = useTransition()
 
+  // onChanged re-reads the panel's own list; router.refresh re-resolves the
+  // day-info block's server-rendered count. Both, for the same reason the add
+  // form refreshes: the revalidatePath inside the action does not reliably reach
+  // a server-rendered sibling on its own.
   function approve() {
     startTransition(async () => {
       await approveGuestEntry(tourId, entry.id)
       onChanged()
+      router.refresh()
     })
   }
 
@@ -291,6 +302,7 @@ function GuestRow({
     startTransition(async () => {
       await declineGuestEntry(tourId, entry.id)
       onChanged()
+      router.refresh()
     })
   }
 
