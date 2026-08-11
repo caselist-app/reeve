@@ -48,12 +48,15 @@ describe.each(ZONES)('moveScheduleItem on $tz', ({ tz }) => {
     return data
   }
 
-  // Case 1, and the one the whole issue exists for. A segment linked to the 14th
-  // and departing at 22:00 local moves to 01:30 on the 15th. Its link must follow
-  // the departure to the 15th, or it renders on neither day: the 14th filters it
-  // out on time, the 15th never queries for it. This fails on any implementation
-  // that writes depart_at alone.
-  it('moves a segment past midnight and takes its day link with it', async () => {
+  // Case 1, and the one the whole issue exists for (REE-110, REE-115). A segment
+  // linked to the 14th and departing at 22:00 local is dragged to 01:30 on the
+  // 15th. That crosses real midnight but stays inside the SAME broadcast night
+  // ([14th 04:00, 15th 04:00)), so its link must NOT move: the grid is one
+  // broadcast day and the TM dragged it within tonight. Re-homing it to the 15th
+  // (the pre-broadcast, calendar-day behaviour) made it vanish from the 14th the
+  // TM was working on. This fails on any implementation that derives the day from
+  // the calendar date rather than the broadcast day.
+  it('keeps a same-night cross-midnight segment drag on its own broadcast day', async () => {
     const { data: seg } = await testDb
       .from('transport_segments')
       .insert({
@@ -76,13 +79,73 @@ describe.each(ZONES)('moveScheduleItem on $tz', ({ tz }) => {
     })
     expect(result.error).toBeNull()
 
+    const { data: after } = await testDb
+      .from('transport_segments')
+      .select('tour_date_id, depart_at')
+      .eq('id', seg.id)
+      .single()
+    // The link stayed on the 14th; only the instant crossed midnight.
+    expect(after?.tour_date_id).toBe(fixture.tourDateId)
+    expect(localDateInZone(after!.depart_at!, tz)).toBe(NEXT)
+    expect(localTimeInZone(after!.depart_at!, tz)).toBe('01:30')
+
+    // And it is still fetched by the 14th, not lost: the transport window runs to
+    // the next broadcast boundary, so a 01:30 departure linked to the 14th is kept.
+    const day14 = await fetchDayRecords(testDb, {
+      tourId: fixture.tourId,
+      tourDateId: fixture.tourDateId,
+      date: DATE,
+      timezone: tz,
+    })
+    expect(day14.segments.map((s) => s.id)).toContain(seg.id)
+
+    // The drag did not silently create a 15th to strand it on.
     const { data: nextDay } = await testDb
       .from('tour_dates')
       .select('id')
       .eq('tour_id', fixture.tourId)
       .eq('date', NEXT)
+      .maybeSingle()
+    expect(nextDay).toBeNull()
+  })
+
+  // Case 1b, the other side of the boundary. A drop PAST 04:00 is a genuine move
+  // to the next day, not a within-night drag, so the link must follow it there
+  // (creating the day as a travel day if it is new). This is the "drag past the
+  // boundary changes the day" half of the rule the same derivation enforces.
+  it('re-homes a segment dragged past the 04:00 broadcast boundary', async () => {
+    const { data: seg } = await testDb
+      .from('transport_segments')
+      .insert({
+        tour_id: fixture.tourId,
+        tour_date_id: fixture.tourDateId,
+        mode: 'flight',
+        origin: 'LHR',
+        destination: 'CDG',
+        depart_at: wallClockToUtc(`${DATE}T22:00`, tz),
+        status: 'planned',
+      })
+      .select('id')
+      .single()
+    if (!seg) throw new Error('could not seed the segment under test')
+
+    // 05:00 on the 15th is past the 04:00 boundary: the 15th's own broadcast day.
+    const result = await moveScheduleItem(fixture.tourId, {
+      source: 'segment',
+      id: seg.id,
+      startsAt: wallClockToUtc(`${NEXT}T05:00`, tz),
+    })
+    expect(result.error).toBeNull()
+
+    const { data: nextDay } = await testDb
+      .from('tour_dates')
+      .select('id, day_type')
+      .eq('tour_id', fixture.tourId)
+      .eq('date', NEXT)
       .single()
     if (!nextDay) throw new Error('the move did not create the 15th')
+    // A day that exists only because a departure landed on it is a travel day.
+    expect(nextDay.day_type).toBe('travel')
 
     const { data: after } = await testDb
       .from('transport_segments')
@@ -91,7 +154,7 @@ describe.each(ZONES)('moveScheduleItem on $tz', ({ tz }) => {
       .single()
     expect(after?.tour_date_id).toBe(nextDay.id)
     expect(localDateInZone(after!.depart_at!, tz)).toBe(NEXT)
-    expect(localTimeInZone(after!.depart_at!, tz)).toBe('01:30')
+    expect(localTimeInZone(after!.depart_at!, tz)).toBe('05:00')
 
     // And it is actually fetched by the 15th, not just stored against it.
     const day15 = await fetchDayRecords(testDb, {

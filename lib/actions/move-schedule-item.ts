@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { bustTourContextCache } from '@/lib/ai/context'
 import { resolveTourDateId } from '@/lib/schedule/day-link'
 import { localDateInZone, localTimeInZone } from '@/lib/schedule/datetime'
+import { localBroadcastDateInZone } from '@/lib/schedule/day-window'
 import { definedOnly } from '@/lib/forms/write-row'
 import { moveScheduleItemSchema, type MoveScheduleItemInput } from '@/lib/validators/move-schedule-item'
 import type { TablesUpdate } from '@/lib/types/database'
@@ -22,6 +23,14 @@ import type { TablesUpdate } from '@/lib/types/database'
 // writing tour_date_id will look like it worked and lose the record. This action
 // writes both, together, every time.
 //
+// AND THE DAY IT WRITES IS THE BROADCAST DAY, NOT THE CALENDAR DAY (REE-115). The
+// grid the drag happens on is one broadcast night [04:00, +1 04:00), so a segment
+// dragged from 22:00 to 01:30 is still on tonight. Deriving its day from the
+// calendar date instead moved it to tomorrow and it disappeared from the night
+// the TM was working on: the same vanish, one midnight later (REE-110). moveSegment
+// derives the day with localBroadcastDateInZone so a same-night drag keeps its day
+// and only a drop past 04:00 re-homes it.
+//
 // THE INVERSE, equally load-bearing: a day_item's link and instant are ALLOWED
 // to disagree. A 01:30 curfew belongs to the show it ends, so dragging it later
 // into the small hours must not repoint its tour_date_id at the next calendar
@@ -30,8 +39,9 @@ import type { TablesUpdate } from '@/lib/types/database'
 //
 // THE RULE OF BRIEF 43: nothing reaching this action asked RBC or Luxon which
 // day something is on. The drag proposes an instant; this action derives the
-// day, through resolveTourDateId() and localDateInZone(). That is what makes the
-// library's weak timezone story survivable.
+// day, through resolveTourDateId() and localDateInZone() (calendar day, for the
+// hotel path) or localBroadcastDateInZone() (broadcast night, for the segment
+// path). That is what makes the library's weak timezone story survivable.
 
 type Client = Awaited<ReturnType<typeof createClient>>
 
@@ -139,13 +149,19 @@ async function moveSegment(
 
   const timezone = await tourTimezone(supabase, tourId)
 
-  // THE VANISH-CASE FIX. The day the departure now falls on, in the tour's
-  // timezone, and the tour_date_id for it, written together with depart_at. A
-  // day this move brings into existence is a travel day; dayType only labels a
-  // freshly created row, so moving onto an existing show or off day leaves that
+  // THE VANISH-CASE FIX, now on the broadcast day rather than the calendar day.
+  // The grid the TM drags on is one broadcast night [04:00, +1 04:00), so a
+  // block dragged from 22:00 into the small hours is still on tonight even though
+  // its instant crossed real midnight. Deriving the day from the calendar date
+  // (localDateInZone) re-homed it to the next date, so the 14th filtered it out
+  // on time and the 15th never queried for it: the record vanished the moment it
+  // crossed midnight (REE-110). localBroadcastDateInZone keeps a same-night drag
+  // on its own day and only moves it once the drop crosses the 04:00 boundary.
+  // The day this move brings into existence is a travel day; dayType only labels
+  // a freshly created row, so moving onto an existing show or off day leaves that
   // day's type alone.
-  const localDate = localDateInZone(move.startsAt, timezone)
-  const resolved = await resolveTourDateId(supabase, tourId, localDate, { dayType: 'travel' })
+  const broadcastDate = localBroadcastDateInZone(move.startsAt, timezone)
+  const resolved = await resolveTourDateId(supabase, tourId, broadcastDate, { dayType: 'travel' })
   if (resolved.id === null) return { error: resolved.error }
 
   // arrive_at is the segment's stated end. RBC shifts it with the departure on a
@@ -181,6 +197,14 @@ async function moveHotel(
   // names. tour_date_id and check_in_date are a composite foreign key onto
   // tour_dates(id, date): an inconsistent pair raises 23503 rather than failing
   // silently, so they are resolved and written as one.
+  //
+  // This stays on the CALENDAR day, unlike the broadcast day the segment path
+  // now derives (REE-115). The composite key forces check_in_date to equal
+  // tour_dates.date, and check_in_date is also the literal date the stay begins,
+  // so filing a 00:30 check-in under the previous broadcast night would have to
+  // write the wrong calendar date into check_in_date. A hotel's day is its
+  // check-in date, full stop; only transport, with a real depart_at instant and
+  // no composite key, can be a broadcast night.
   const checkInDate = localDateInZone(move.startsAt, timezone)
   const checkInTime = localTimeInZone(move.startsAt, timezone)
 

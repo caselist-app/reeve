@@ -1,11 +1,12 @@
 import { describe, it, expect } from 'vitest'
 import {
   DAY_START_HOUR,
+  localBroadcastDateInZone,
   localBroadcastDayWindowUtc,
   toGridInstant,
   fromGridInstant,
 } from '@/lib/schedule/day-window'
-import { localDayWindowUtc } from '@/lib/schedule/datetime'
+import { localDayWindowUtc, wallClockToUtc } from '@/lib/schedule/datetime'
 
 // Step 1 of the broadcast-day grid: the pure day-window and grid-shift
 // primitives, with no UI or fetch attached yet. Every expectation here is a
@@ -144,6 +145,38 @@ describe('broadcast-day boundary: 03:59 versus 04:00', () => {
       expect(
         new Date(toGridInstant(new Date(at0359).toISOString(), DATE, tz)).getTime(),
       ).toBe(gridStartMs(tz) - 60_000)
+    })
+  }
+})
+
+describe('localBroadcastDateInZone', () => {
+  // Which broadcast night a real instant belongs to. This is what a segment drag
+  // files by (REE-115): a same-night cross-midnight drag keeps its day, and only
+  // a drop past 04:00 moves it. Built with wallClockToUtc so each case is a
+  // wall-clock fact in the zone, read back the way the action does.
+  const NEXT = '2026-06-15'
+
+  for (const tz of ZONES) {
+    it(`keeps an evening departure on its own date (${tz})`, () => {
+      expect(localBroadcastDateInZone(wallClockToUtc(`${DATE}T22:00`, tz), tz)).toBe(DATE)
+    })
+
+    it(`keeps a small-hours instant on the previous night (${tz})`, () => {
+      // 01:30 on the 15th is the tail of the 14th's broadcast night.
+      expect(localBroadcastDateInZone(wallClockToUtc(`${NEXT}T01:30`, tz), tz)).toBe(DATE)
+    })
+
+    it(`opens the new broadcast day at exactly 04:00 (${tz})`, () => {
+      expect(localBroadcastDateInZone(wallClockToUtc(`${NEXT}T04:00`, tz), tz)).toBe(NEXT)
+    })
+
+    it(`moves an instant past 04:00 onto the adjacent day (${tz})`, () => {
+      // 05:00 on the 15th is past the boundary: it is genuinely the 15th's day.
+      expect(localBroadcastDateInZone(wallClockToUtc(`${NEXT}T05:00`, tz), tz)).toBe(NEXT)
+    })
+
+    it(`treats 03:59 as the previous night, one minute before the boundary (${tz})`, () => {
+      expect(localBroadcastDateInZone(wallClockToUtc(`${NEXT}T03:59`, tz), tz)).toBe(DATE)
     })
   }
 })
