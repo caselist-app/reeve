@@ -42,7 +42,7 @@ type ScheduleDayItem = Pick<
 >
 
 // Mirrors AddCategory from components/schedule/add/add-flow.tsx
-type ScheduleAddCategory = 'flight' | 'drive' | 'rail' | 'hotel' | 'show' | 'event'
+type ScheduleAddCategory = 'flight' | 'drive' | 'rail' | 'hotel'
 
 // Tour-specific context passed when opening a contact panel from the people
 // page. Carries the membership fields (type, role, per-tour rates) that live
