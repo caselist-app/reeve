@@ -70,9 +70,12 @@
   border-top: none;
 }
 
-/* The gutter: small, muted, tabular numerals, right-aligned with a little air. */
+/* The gutter: small, muted, tabular numerals, right-aligned with a little air.
+   Positioned so the "now" label (REE-83) can sit at a percentage down its full
+   height and line up with the red hairline in the day column. */
 .rbc-time-gutter {
   background-color: transparent;
+  position: relative;
 }
 .rbc-time-gutter .rbc-timeslot-group {
   border-bottom: none;
@@ -107,6 +110,22 @@
   height: 6px;
   border-radius: 9999px;
   background-color: var(--destructive);
+}
+
+/* The red "now" label in the gutter (REE-83), sitting next to the hairline
+   above. Same size, weight and right-alignment as the hour labels, but in the
+   alert token. A --background fill masks the hour label it lands on so the two
+   never overprint, and centring on its own baseline puts it on the hairline. */
+.rbc-time-gutter .rbc-now-label {
+  position: absolute;
+  right: 0;
+  transform: translateY(-50%);
+  padding: 0 0.5rem;
+  font-size: 0.6875rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--destructive);
+  background-color: var(--background);
+  pointer-events: none;
 }
 
 /*
