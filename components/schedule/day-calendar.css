@@ -51,24 +51,36 @@
   display: none; /* Chrome, Safari, Opera */
 }
 
-/* The gutter/day divider and the day column: hairlines on --border, never the
-   default grey. */
+/* The gutter/day divider: a single 1px hairline on --border, never the default
+   grey. RBC draws its own vertical divider on the inner children too
+   (`.rbc-time-content > * + * > *`, at #ddd), which stacked against the one
+   below into a 2px double line; suppress the inner one so only this hairline
+   remains (REE-109). */
 .rbc-time-content > * + * {
   border-left: 1px solid var(--border);
+}
+.rbc-time-content > * + * > * {
+  border-left: none;
 }
 .rbc-day-slot,
 .rbc-time-gutter {
   border-color: var(--border);
 }
 
-/* Hour rows. One hairline per hour on the group; the half-hour slot line inside
-   it is suppressed so the grid reads as hours, not a ledger. Taller rows than
-   the RBC default give the chips room to breathe. */
+/* Hour rows. One 1px hairline per hour on the group. The sub-hour slot lines are
+   suppressed so the grid reads as hours, not a ledger (REE-109): RBC draws them
+   on `.rbc-day-slot .rbc-time-slot` (specificity 0,2,0), so the override has to
+   match that specificity to win, not the bare `.rbc-time-slot` it used to be.
+   That plain rule also lost the first slot's top border, which coincides with
+   the hour hairline and doubled it into a thick 2px line at every hour; removing
+   it here is what makes the hour lines a clean 1px. Taller rows than the RBC
+   default give the chips room to breathe. */
 .rbc-timeslot-group {
   border-bottom: 1px solid var(--border);
   min-height: 3.5rem;
 }
-.rbc-time-slot {
+.rbc-time-slot,
+.rbc-day-slot .rbc-time-slot {
   border-top: none;
 }
 
