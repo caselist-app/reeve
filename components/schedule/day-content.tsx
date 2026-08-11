@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { fetchDayRecords } from '@/lib/schedule/day-records'
 import { fetchDayRoster } from '@/lib/schedule/day-roster'
+import { fetchGuestListSummary } from '@/lib/schedule/guest-list-summary'
 import { DayViewClient } from '@/components/schedule/day-view-client'
 import { DayCalendar } from '@/components/schedule/day-calendar'
 import { DayHeader } from '@/components/schedule/day-header'
@@ -45,11 +46,17 @@ export async function DayContent({ tourId, tourName, timezone, selectedDate, tou
   })
 
   // Roster fetched once here and shared by the info panel and the mobile dock.
-  const roster = await fetchDayRoster(supabase, {
-    tourId,
-    segmentIds: records.segmentIds,
-    hotelStayIds: records.hotelStayIds,
-  })
+  // The guest list count for the day-info block rides alongside it: both depend
+  // only on `records`, so they run in parallel rather than in series. A day with
+  // no show passes a null show id and the summary short-circuits to zeros.
+  const [roster, guestListSummary] = await Promise.all([
+    fetchDayRoster(supabase, {
+      tourId,
+      segmentIds: records.segmentIds,
+      hotelStayIds: records.hotelStayIds,
+    }),
+    fetchGuestListSummary(supabase, records.shows[0]?.id ?? null),
+  ])
 
   return (
     <DayViewClient
@@ -108,6 +115,7 @@ export async function DayContent({ tourId, tourName, timezone, selectedDate, tou
           show={records.shows[0] ?? null}
           dayNotes={tourDate?.notes ?? null}
           roster={roster}
+          guestListSummary={guestListSummary}
         />
       }
       dayInfoDock={

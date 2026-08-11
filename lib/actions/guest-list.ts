@@ -55,6 +55,11 @@ export type GuestListView = {
   allotments: Tables<'guest_list_allotments'>[]
   cutoffAt: string | null
   locked: boolean
+  // The tour timezone, so the panel's cutoff field can render a stored UTC
+  // instant as tour-local wall clock and write it back the same way (the
+  // transport-panel approach). The panel loads its own context, so this rides
+  // along here rather than on the descriptor.
+  timezone: string
 }
 
 type Client = Awaited<ReturnType<typeof createClient>>
@@ -120,23 +125,34 @@ async function findSurnameMatches(
 export async function getGuestList(showId: string): Promise<GuestListView> {
   await requireUser()
 
-  const empty: GuestListView = { error: null, entries: [], allotments: [], cutoffAt: null, locked: false }
+  const empty: GuestListView = {
+    error: null,
+    entries: [],
+    allotments: [],
+    cutoffAt: null,
+    locked: false,
+    timezone: 'UTC',
+  }
 
   const supabase = await createClient()
 
   const show = await resolveShowTour(supabase, showId)
   if (!show) return { ...empty, error: 'Could not load the guest list.' }
 
-  const [{ data: entries, error: entriesError }, { data: allotments, error: allotmentsError }] =
-    await Promise.all([
-      supabase
-        .from('guest_list_entries')
-        .select('*')
-        .eq('show_id', showId)
-        .in('status', ['requested', 'approved', 'declined'])
-        .order('created_at', { ascending: true }),
-      supabase.from('guest_list_allotments').select('*').eq('show_id', showId),
-    ])
+  const [
+    { data: entries, error: entriesError },
+    { data: allotments, error: allotmentsError },
+    { data: tour },
+  ] = await Promise.all([
+    supabase
+      .from('guest_list_entries')
+      .select('*')
+      .eq('show_id', showId)
+      .in('status', ['requested', 'approved', 'declined'])
+      .order('created_at', { ascending: true }),
+    supabase.from('guest_list_allotments').select('*').eq('show_id', showId),
+    supabase.from('tours').select('timezone').eq('id', show.tour_id).maybeSingle(),
+  ])
 
   if (entriesError || allotmentsError) {
     console.error(
@@ -152,6 +168,7 @@ export async function getGuestList(showId: string): Promise<GuestListView> {
     allotments: allotments ?? [],
     cutoffAt: show.guest_list_cutoff_at,
     locked: show.guest_list_locked,
+    timezone: tour?.timezone ?? 'UTC',
   }
 }
 
