@@ -457,6 +457,8 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
       type: 'day-form',
       tourId,
       tourDateId,
+      date,
+      timezone,
       initialInput: slotToDayFormInput(new Date(slot.start), new Date(slot.end), slot.action, timezone),
     })
   }

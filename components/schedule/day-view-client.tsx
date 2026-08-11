@@ -130,6 +130,8 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
       type: 'day-form',
       tourId: addContext.tourId,
       tourDateId: addContext.tourDateId,
+      date: addContext.date,
+      timezone: addContext.timezone,
     })
   }
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { buildAddOptions, ADD_CATEGORIES } from '@/lib/schedule/add-options'
+import { buildAddOptions, ADD_CATEGORIES, addOptionPreview } from '@/lib/schedule/add-options'
 import { DAY_ITEM_KINDS } from '@/lib/schedule/day-item-kinds'
 
 // REE-87. The add-panel ranking, pulled out of the combo box so a test can reach
@@ -117,5 +117,61 @@ describe('buildAddOptions', () => {
     const unmatched = buildAddOptions('qwerty', [])
     expect(unmatched).toHaveLength(1)
     expect(unmatched[0].action === 'commit' && unmatched[0].kind).toBe('other')
+  })
+})
+
+describe('addOptionPreview', () => {
+  // REE-88. The merged panel renders one preview line per highlighted row and it
+  // must build without a fallback for every AddOption the function can return.
+  // The component itself cannot be render-tested here, so the exhaustiveness lives
+  // in this pure builder and both of its branches are pinned below.
+
+  it('builds a commit preview carrying the time and ending in "Enter adds it"', () => {
+    const [first] = buildAddOptions('load in 10am', [])
+    expect(first.action).toBe('commit')
+    if (first.action !== 'commit') throw new Error('expected a commit row')
+
+    const preview = addOptionPreview(first)
+    expect(preview).toBe('Load-in · 10:00 · Enter adds it')
+    expect(preview).toContain('Enter adds it')
+  })
+
+  it('reads "no time yet" for a commit row with no parsed time', () => {
+    const commit = buildAddOptions('', []).find((option) => option.action === 'commit')
+    expect(commit).toBeDefined()
+    if (!commit || commit.action !== 'commit') throw new Error('expected a commit row')
+
+    const preview = addOptionPreview(commit)
+    expect(preview).toBe(`${commit.label} · no time yet · Enter adds it`)
+    expect(preview).toContain('no time yet')
+  })
+
+  it('names both ends when a commit row has a start and an end', () => {
+    // headliner is a windowed kind (REE-100), so 'headliner 9-10pm' parses both.
+    const commit = buildAddOptions('headliner 9-10pm', []).find(
+      (option) => option.action === 'commit' && option.kind === 'headliner',
+    )
+    expect(commit).toBeDefined()
+    if (!commit || commit.action !== 'commit') throw new Error('expected a commit row')
+    expect(commit.startClock).toBe('21:00')
+    expect(commit.endClock).toBe('22:00')
+
+    expect(addOptionPreview(commit)).toBe('Headliner · 21:00–22:00 · Enter adds it')
+  })
+
+  it('builds an open preview naming the lowercased form', () => {
+    const flight = buildAddOptions('', []).find(
+      (option) => option.action === 'open' && option.category === 'flight',
+    )
+    expect(flight).toBeDefined()
+    if (!flight || flight.action !== 'open') throw new Error('expected an open row')
+
+    expect(addOptionPreview(flight)).toBe('Flight · Enter opens the flight form')
+  })
+
+  it('builds without a fallback for every option on empty input', () => {
+    for (const option of buildAddOptions('', ['After show'])) {
+      expect(addOptionPreview(option).length).toBeGreaterThan(0)
+    }
   })
 })
