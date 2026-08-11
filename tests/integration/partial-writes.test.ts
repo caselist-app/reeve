@@ -4,6 +4,7 @@ import { createFixture, destroyFixture, type Fixture } from './fixture'
 import { updateContact } from '@/lib/actions/contacts'
 import { addPerson, updatePersonTerms } from '@/lib/actions/people'
 import { createDayItem, updateDayItem, deleteDayItem } from '@/lib/actions/day-items'
+import { updateTourDate } from '@/lib/actions/tour-dates'
 import type { ContactForm } from '@/lib/validators/contact'
 
 // The bug this file exists for, in full:
@@ -509,5 +510,67 @@ describe('contact and person partial writes', () => {
       .single()
 
     expect(contact?.notes).toBe('Allergic to early lobby calls.')
+  })
+})
+
+// The same class again, on the day itself. The Edit Day panel holds its fields
+// in useState, not FormData, so readForm and check:conventions are both blind
+// to it: it used to post notes on every save, so opening Edit Day only to change
+// the day type nulled whatever note the day carried. updateTourDate takes a
+// partial, so both directions have to hold: a payload with no notes key leaves
+// the column alone, and a payload that clears it writes null (not ''). They are
+// inverses, so one test covers both.
+
+describe('tour date partial writes', () => {
+  let fixture: Fixture
+  let dayId: string
+
+  // A non-show day of its own with a note, inserted directly so a bug in create
+  // cannot hide one in update. Separate from the fixture's show day: that one
+  // has a show attached, which updateTourDate refuses to change the type of.
+  beforeEach(async () => {
+    fixture = await createFixture()
+
+    const { data, error } = await testDb
+      .from('tour_dates')
+      .insert({
+        tour_id: fixture.tourId,
+        date: '2026-06-20',
+        day_type: 'travel',
+        notes: 'Ferry to Calais',
+      })
+      .select('id')
+      .single()
+
+    if (error || !data) throw new Error(`could not seed a tour date: ${error?.message}`)
+    dayId = data.id
+  })
+
+  afterEach(async () => {
+    await destroyFixture(fixture)
+  })
+
+  async function readDay() {
+    const { data } = await testDb.from('tour_dates').select('*').eq('id', dayId).single()
+    return data
+  }
+
+  it('leaves the notes alone when only the day type changes', async () => {
+    // The panel's payload for a type-only edit: no notes key at all. This is the
+    // assertion that goes red against the old shape, which posted notes every
+    // time.
+    const result = await updateTourDate(dayId, { day_type: 'press' })
+    expect(result.error).toBeNull()
+
+    const after = await readDay()
+    expect(after?.notes).toBe('Ferry to Calais')
+    expect(after?.day_type).toBe('press')
+  })
+
+  it('clears the notes when the TM blanks them, because null is not undefined', async () => {
+    const result = await updateTourDate(dayId, { notes: '' })
+    expect(result.error).toBeNull()
+
+    expect((await readDay())?.notes).toBeNull()
   })
 })

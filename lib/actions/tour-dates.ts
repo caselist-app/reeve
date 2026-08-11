@@ -109,9 +109,18 @@ export async function updateTourDate(
     }
   }
 
+  // A blank note is the TM clearing it, so store null rather than an empty
+  // string, matching updateDayNotes and what the sidebar and press header
+  // check for. A notes key that is absent (undefined) is a partial write that
+  // must leave the column untouched, so only a present string is normalised.
+  const patch = { ...data }
+  if (typeof patch.notes === 'string') {
+    patch.notes = patch.notes.trim() ? patch.notes.trim() : null
+  }
+
   const { data: row, error } = await supabase
     .from('tour_dates')
-    .update(data)
+    .update(patch)
     .eq('id', tourDateId)
     .select('tour_id')
     .single()

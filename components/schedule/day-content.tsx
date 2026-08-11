@@ -69,6 +69,7 @@ export async function DayContent({ tourId, tourName, timezone, selectedDate, tou
         tourDateId: tourDate.id,
         dayType: tourDate.day_type as 'show' | 'rehearsal' | 'travel' | 'press' | 'day_off',
         notes: tourDate.notes ?? null,
+        hasShow: records.shows.length > 0,
       } : null}
       timeline={
         tourDate ? (

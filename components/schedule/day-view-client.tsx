@@ -40,6 +40,7 @@ interface DayViewClientProps {
     tourDateId: string
     dayType: 'show' | 'rehearsal' | 'travel' | 'press' | 'day_off'
     notes: string | null
+    hasShow: boolean
   } | null
 }
 
@@ -140,6 +141,7 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
       date: addContext.date,
       dayType: dayMeta.dayType,
       notes: dayMeta.notes,
+      hasShow: dayMeta.hasShow,
     })
   }
 

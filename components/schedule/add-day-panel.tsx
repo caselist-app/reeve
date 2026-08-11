@@ -27,9 +27,13 @@ interface Props {
   initialDayType?: DayType
   initialDate?: string
   initialNotes?: string | null
+  // Edit mode: whether the day already has a show. Setting an existing day to a
+  // show when it has none hands off to ShowForm to collect the venue, the same
+  // as add mode (REE-91). Ignored in add mode.
+  hasShow?: boolean
 }
 
-export function AddDayPanel({ tourId, tourDateId, initialDayType, initialDate, initialNotes }: Props) {
+export function AddDayPanel({ tourId, tourDateId, initialDayType, initialDate, initialNotes, hasShow }: Props) {
   const { close } = useSidePanel()
   const router = useRouter()
 
@@ -48,9 +52,16 @@ export function AddDayPanel({ tourId, tourDateId, initialDayType, initialDate, i
     setSaving(true)
     setError(null)
 
+    // Send notes only when the TM actually changed them. The panel holds its
+    // fields in useState rather than FormData, so readForm cannot draw the
+    // "not submitted" vs "cleared" line for it: opening Edit Day just to change
+    // the type used to write notes back unconditionally, nulling them whenever
+    // the field read empty. Comparing against the initial value keeps a
+    // type-only edit from touching notes at all (REE-91).
+    const notesChanged = notes !== (initialNotes ?? '')
     const result = await updateTourDate(tourDateId, {
       day_type: dayType as DayType,
-      notes: notes || null,
+      ...(notesChanged ? { notes } : {}),
     })
     setSaving(false)
     if (result.error) { setError(result.error); return }
@@ -92,11 +103,16 @@ export function AddDayPanel({ tourId, tourDateId, initialDayType, initialDate, i
     router.refresh()
   }
 
-  // Edit mode: just day type + notes (date is fixed).
+  // Edit mode: just day type + notes (date is fixed). Setting the type to a
+  // show on a day that has none needs a venue, so it hands off to ShowForm
+  // rather than writing the type through, exactly as add mode does. A day that
+  // already has a show stays on the plain form: its type is already 'show' and
+  // updateTourDate blocks any change while the show is attached.
   if (isEditMode) {
+    const needsVenue = dayType === 'show' && !hasShow
     return (
       <PanelShell title="Edit day">
-        <form onSubmit={handleEditSubmit} className="space-y-5">
+        <div className="space-y-5">
           <div className="space-y-2">
             <Label>Day type</Label>
             <Select value={dayType} onValueChange={(v) => setDayType(v as DayType)}>
@@ -112,20 +128,34 @@ export function AddDayPanel({ tourId, tourDateId, initialDayType, initialDate, i
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="edit-day-notes">Notes (optional)</Label>
-            <Input
-              id="edit-day-notes"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="e.g. Paris press junket"
+
+          {needsVenue ? (
+            <ShowForm
+              tourId={tourId}
+              initialData={{ date: initialDate }}
+              onSuccess={() => {
+                close()
+                router.refresh()
+              }}
             />
-          </div>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button type="submit" disabled={saving || !dayType} className="w-full">
-            {saving ? 'Saving...' : 'Save changes'}
-          </Button>
-        </form>
+          ) : (
+            <form onSubmit={handleEditSubmit} className="space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="edit-day-notes">Notes (optional)</Label>
+                <Input
+                  id="edit-day-notes"
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="e.g. Paris press junket"
+                />
+              </div>
+              {error && <p className="text-sm text-destructive">{error}</p>}
+              <Button type="submit" disabled={saving || !dayType} className="w-full">
+                {saving ? 'Saving...' : 'Save changes'}
+              </Button>
+            </form>
+          )}
+        </div>
       </PanelShell>
     )
   }
