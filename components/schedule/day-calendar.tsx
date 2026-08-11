@@ -328,6 +328,18 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
     }
   }, [itemsById, segmentsById, hotelsById, openSidePanel, tourId, timezone])
 
+  // The event whose detail panel is currently open, so its block can paint as
+  // selected: a solid accent fill with white text, matching the reference
+  // (REE-109). Driven off the side-panel store rather than RBC's own click
+  // selection so it tracks exactly what the sidebar is showing (and clears when
+  // the panel closes). The panel's `key` is the CalendarEvent id we opened it
+  // with, so it compares straight against event.id.
+  const selectedKey =
+    panelIsOpen &&
+    (panel?.type === 'day-item' || panel?.type === 'transport' || panel?.type === 'hotel')
+      ? panel.key
+      : null
+
   // The dragged range as a background event, so RBC draws it behind the grid's
   // real blocks and it survives the panel being open (REE-68). Empty when there
   // is no live selection, which is the resting state. It is styled purely as a
@@ -378,7 +390,7 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
         <button
           type="button"
           onClick={() => openEvent(event)}
-          className="flex h-full w-full items-start gap-1 overflow-hidden text-left"
+          className="flex h-full w-full items-center gap-1 overflow-hidden text-left"
         >
           <Icon className="mt-px h-3 w-3 shrink-0" aria-hidden />
           <span className="evt-chip-body flex min-w-0 flex-1 flex-row items-baseline gap-1.5">
@@ -546,6 +558,8 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
               className: cn(
                 accentClassName(event.source, event.accent),
                 stacked && 'evt-stacked',
+                // Its detail panel is open: fill it with the accent (REE-109).
+                event.id === selectedKey && 'evt-selected',
               ),
             }
           }}

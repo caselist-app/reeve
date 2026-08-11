@@ -214,12 +214,23 @@
    branch styled in day-calendar.tsx), and flips to a column here so the title
    sits above the time. 2.5rem is just over the height of a 30-minute block, so
    the shortest real blocks (an item with a synthesised end) stay one line and
-   never drop their time. The query container is `.rbc-event` above. */
+   never drop their time. The query container is `.rbc-event` above.
+
+   Vertical placement of the whole chip goes with it (REE-109). A short,
+   single-line block centres its content in the block (the button is
+   items-center by default in day-calendar.tsx), so a 30-minute item reads on
+   its own middle. Once the block is tall enough to hold the two-line layout the
+   content pins to the top with a little breathing room, so a long item's title
+   sits near its start rather than floating in the middle of a big block. */
 @container (min-height: 2.5rem) {
   .rbc-event .evt-chip-body {
     flex-direction: column;
     align-items: flex-start;
     gap: 0;
+  }
+  .rbc-event button {
+    align-items: flex-start;
+    padding-top: 0.25rem;
   }
 }
 
@@ -250,6 +261,22 @@
   box-shadow:
     inset 3px 0 0 0 var(--evt-accent),
     -2px -1px 4px color-mix(in oklab, var(--foreground) 14%, transparent);
+}
+
+/* Selected: the block whose detail panel is open (REE-109). It fills solid with
+   the kind's accent and flips its text white, the way the Notion reference does,
+   so the open item reads as picked out rather than just tinted. Placed after the
+   hover and stacked rules so it wins the cascade on an equal-specificity match,
+   and re-asserted on :hover so pointing at the open block does not drop it back
+   to the hover tint. White text is deliberate and mode-independent (the fill is
+   always the saturated accent), so --evt-meta is a near-white mix rather than a
+   theme foreground that would flip dark. */
+.rbc-event.evt-selected,
+.rbc-day-slot .rbc-event.evt-selected,
+.rbc-event.evt-selected:hover {
+  --evt-meta: color-mix(in oklab, white 80%, var(--evt-accent));
+  background-color: var(--evt-accent);
+  color: white;
 }
 
 /* Kind accent ramp. Hue from Tailwind's palette variables; tint mixed against
