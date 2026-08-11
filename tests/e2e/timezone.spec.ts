@@ -36,23 +36,23 @@ test('an Auckland day is drawn in Auckland time from a London browser', async ({
   await expect(block).toBeVisible()
   await expect(block).toContainText('09:00')
 
-  // The hour gutter is where RBC's own zoned rendering shows. Its topmost label
-  // is midnight in the tour zone (12:00 AM Auckland). If the localizer had fallen
-  // back to the browser's zone, the top of an Auckland-midnight-bounded grid
-  // would read 1:00 PM (Auckland midnight is 13:00 in London in June), so this is
-  // the assertion that fails on a zone regression. The matcher is tolerant of the
-  // 12/24-hour split because the label format follows the browser locale.
+  // The gutter reads the broadcast day (REE-114): the grid runs [04:00, +1 04:00)
+  // in the tour zone, so its topmost label is the 04:00 broadcast start in
+  // Auckland, not calendar midnight. The label is un-shifted back to its real
+  // instant and formatted in the tour zone (timeGutterFormat in day-calendar.tsx),
+  // so a zone regression that drew it in the London browser's zone would not read
+  // "04:00" here.
   const topGutterLabel = page.locator('.rbc-time-gutter .rbc-label').first()
-  await expect(topGutterLabel).toHaveText(/12:00\s?AM|12\s?AM|00:00/i)
+  await expect(topGutterLabel).toHaveText(/04:00/)
 
-  // Placement check, not a second zone proof. On a day with no DST change RBC
-  // positions a block by elapsed minutes from the grid's start (see
-  // getSlotMetrics/positionFromDate), which is zone-independent, so 09:00 sits at
-  // 9/24 = 37.5% down the grid whatever the localizer's zone. Asserting it
-  // confirms the block landed at the 09:00 row that the gutter above labels in
-  // Auckland time, so position and label agree; the DST-day case where position
-  // itself becomes zone-sensitive is pinned in calendar-zone.test.ts.
+  // Placement check. The block sits in synthetic grid space: 09:00 Auckland is
+  // five hours past the 04:00 broadcast start, so it lands at 5/24 = 20.8% down
+  // the grid, under the "04:00" the gutter labels above it. RBC positions by
+  // elapsed minutes from the grid's start (see getSlotMetrics/positionFromDate),
+  // which is zone-independent, so position and the Auckland-time gutter agree; the
+  // DST-day case where position itself becomes zone-sensitive is pinned in
+  // calendar-zone.test.ts.
   const topPercent = await block.evaluate((el) => parseFloat((el as HTMLElement).style.top))
-  expect(topPercent).toBeGreaterThan(30)
-  expect(topPercent).toBeLessThan(45)
+  expect(topPercent).toBeGreaterThan(15)
+  expect(topPercent).toBeLessThan(27)
 })

@@ -57,6 +57,7 @@ import { useSidePanel } from '@/stores/side-panel-store'
 import { useIsMobile } from '@/hooks/use-is-mobile'
 import { createZonedLocalizer } from '@/lib/schedule/calendar-localizer'
 import { localTimeInZone, localDayWindowUtc } from '@/lib/schedule/datetime'
+import { fromGridInstant, toGridInstant } from '@/lib/schedule/day-window'
 import { slotToDayFormInput } from '@/lib/schedule/day-form-prefill'
 import { buildDayCalendarView } from '@/lib/schedule/day-calendar-view'
 import { nowMarker } from '@/lib/schedule/now-marker'
@@ -195,7 +196,10 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
     }
   }, [pendingSelection, panelIsOpen, panel])
 
-  const view = useMemo(() => buildDayCalendarView(records, timezone), [records, timezone])
+  const view = useMemo(
+    () => buildDayCalendarView(records, timezone, date),
+    [records, timezone, date],
+  )
 
   // The gesture is desktop only. On mobile the grid still renders and events
   // still open their panels; only drag, resize and click-to-add are off.
@@ -209,10 +213,30 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
   // position falls away on its own when the transition ends.
   const [displayEvents, applyOptimistic] = useOptimistic(
     view.events,
-    (events: CalendarEvent[], patch: { id: string; start: Date; end: Date; endStated: boolean }) =>
+    (
+      events: CalendarEvent[],
+      patch: {
+        id: string
+        start: Date
+        end: Date
+        realStart: Date
+        realEnd: Date
+        endStated: boolean
+      },
+    ) =>
       events.map((event) =>
         event.id === patch.id
-          ? { ...event, start: patch.start, end: patch.end, syntheticEnd: patch.endStated ? false : event.syntheticEnd }
+          ? {
+              ...event,
+              // Grid-space positions for RBC, real instants for the chip label,
+              // both patched so a dropped block neither snaps back nor shows a
+              // stale time before the revalidate lands.
+              start: patch.start,
+              end: patch.end,
+              realStart: patch.realStart,
+              realEnd: patch.realEnd,
+              syntheticEnd: patch.endStated ? false : event.syntheticEnd,
+            }
           : event,
       ),
   )
@@ -317,6 +341,34 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
     }
   }, [date, timezone])
 
+  // The gutter reads the broadcast wall clock (04:00, 05:00, ..., 03:00), not the
+  // literal calendar day the grid is bounded to (00:00..23:59). Each slot instant
+  // is grid space; un-shift it back to its real instant, then format in the tour
+  // zone. So the top-of-grid slot (grid 00:00) un-shifts to real 04:00 and reads
+  // "04:00"; the slot three hours from the bottom un-shifts to real 01:00. The
+  // block positions and this gutter share one shift, so a 01:00 curfew's chip
+  // lines up with the "01:00" gutter label.
+  const formats = useMemo(
+    () => ({
+      timeGutterFormat: (slot: Date) =>
+        localTimeInZone(fromGridInstant(slot.toISOString(), date, timezone), timezone),
+    }),
+    [date, timezone],
+  )
+
+  // RBC positions its own red current-time hairline by feeding getNow() through
+  // the same slot metrics as the blocks. The grid is synthetic, so getNow has to
+  // be synthetic too: the real instant shifted onto the broadcast grid. Without
+  // this, RBC would place the hairline against the real clock on a shifted grid
+  // and land it hours out of place (and hide it entirely once now is past
+  // midnight, which reads as a different calendar day). Recomputed per call, like
+  // RBC's default getNow, so the line tracks the clock; the nowMarker label in
+  // the gutter (below) is shifted the same way and sits beside it.
+  const getNow = useMemo(
+    () => () => new Date(toGridInstant(new Date().toISOString(), date, timezone)),
+    [date, timezone],
+  )
+
   const openEvent = useMemo(() => {
     return (event: CalendarEvent) => {
       if (event.source === 'day_item') {
@@ -357,8 +409,13 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
         recordId: '',
         source: 'day_item',
         title: '',
+        // The selection is drawn on the grid, so its start/end are already
+        // grid-space slot instants; it carries no label, so realStart/realEnd
+        // are unused and mirror them.
         start: pendingSelection.start,
         end: pendingSelection.end,
+        realStart: pendingSelection.start,
+        realEnd: pendingSelection.end,
         syntheticEnd: false,
         accent: 'other',
         icon: 'CircleDashed',
@@ -379,11 +436,13 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
       // Time range only when the end is real. A synthesised end is not a claim
       // about duration (see the adapter), so surfacing it as "10:00 to 10:30"
       // would invent a window the TM never set; the start alone is shown, which
-      // already carries that the end is open.
-      const startLabel = localTimeInZone(event.start.toISOString(), timezone)
+      // already carries that the end is open. Read off realStart/realEnd, never
+      // the shifted start/end: the block sits in grid space but reads its true
+      // wall clock (a 01:00 curfew shows "01:00", not the 21:00 it is drawn at).
+      const startLabel = localTimeInZone(event.realStart.toISOString(), timezone)
       const timeLabel = event.syntheticEnd
         ? startLabel
-        : `${startLabel}–${localTimeInZone(event.end.toISOString(), timezone)}`
+        : `${startLabel}–${localTimeInZone(event.realEnd.toISOString(), timezone)}`
       // Title first, then time. On a tall block the body flips to a column (the
       // @container branch in day-calendar.css) so the title sits above the time;
       // on a short block it stays this single row. The time is shrink-0 and the
@@ -446,11 +505,26 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
   // soft edge before the revalidate.
   function commitMove(args: EventInteractionArgs<CalendarEvent>) {
     const event = args.event
-    const start = new Date(args.start)
-    const end = new Date(args.end)
+    // RBC hands back grid-space instants (the block was dragged on the synthetic
+    // broadcast grid). Persistence and fromDropOrResize both work in real space,
+    // so un-shift here first. The step-4 gesture work refines the boundary cases;
+    // this un-shift is the minimum that keeps a drag from writing a time hours
+    // off. The optimistic patch keeps the grid instants for RBC and carries the
+    // real ones for the label.
+    const gridStart = new Date(args.start)
+    const gridEnd = new Date(args.end)
+    const start = new Date(fromGridInstant(gridStart.toISOString(), date, timezone))
+    const end = new Date(fromGridInstant(gridEnd.toISOString(), date, timezone))
     const target = fromDropOrResize({ event, start, end }, event)
     startTransition(async () => {
-      applyOptimistic({ id: event.id, start, end, endStated: target.endsAt !== null })
+      applyOptimistic({
+        id: event.id,
+        start: gridStart,
+        end: gridEnd,
+        realStart: start,
+        realEnd: end,
+        endStated: target.endsAt !== null,
+      })
       const result = await moveScheduleItem(tourId, target)
       // Keep a detail panel open on this same block in step with the grid: a
       // resize adds an end the panel was opened before knowing about (REE-85).
@@ -473,16 +547,20 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
   // every other day_item write, so nothing here derives a day.
   function handleSelectSlot(slot: SlotInfo) {
     if (!gesturesEnabled) return
-    // Keep the dragged range on screen behind the panel (REE-68). Cleared by
-    // the effect above when the panel that follows is closed.
+    // The slot instants are grid space. The highlight is drawn on the grid, so
+    // it keeps them; the form prefill is a wall-clock time the TM will read and
+    // edit, so it un-shifts back to the real instant first (clicking the "01:00"
+    // gutter row seeds 01:00, not the 21:00 it is drawn at).
     setPendingSelection({ start: new Date(slot.start), end: new Date(slot.end) })
+    const realStart = new Date(fromGridInstant(new Date(slot.start).toISOString(), date, timezone))
+    const realEnd = new Date(fromGridInstant(new Date(slot.end).toISOString(), date, timezone))
     openSidePanel({
       type: 'day-form',
       tourId,
       tourDateId,
       date,
       timezone,
-      initialInput: slotToDayFormInput(new Date(slot.start), new Date(slot.end), slot.action, timezone),
+      initialInput: slotToDayFormInput(realStart, realEnd, slot.action, timezone),
     })
   }
 
@@ -546,6 +624,10 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
           step={15}
           timeslots={4}
           toolbar={false}
+          // Broadcast-day gutter labels (04:00..03:00) and a grid-shifted now,
+          // so RBC's own hairline and hour labels match the synthetic grid.
+          formats={formats}
+          getNow={getNow}
           components={components}
           // Overlapping items cascade: full-width blocks indented from the left
           // by depth, later ones on top, instead of RBC's side-by-side split
@@ -589,16 +671,20 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
         />
       </div>
 
-      {/* The late-night transport tail: a list, not grid rows. A 01:30 red-eye
-          after a show is part of tonight from where the TM is standing, even
-          though it is stored on tomorrow. RBC's day view has nowhere for it. */}
-      {view.lateNight.length > 0 && (
+      {/* Outside this day: a record whose tour_date_id is this day but whose time
+          falls outside the broadcast window the grid renders (e.g. a 03:00 item,
+          before the 04:00 start, which belongs to the previous night's grid). RBC
+          would drop it off the column silently; it is listed here instead, still
+          clickable, with its real wall clock. This replaces the old "After
+          midnight" tail: a past-midnight drive is now ON the grid, so the tail is
+          gone and only genuinely off-window records land here. */}
+      {view.outsideDay.length > 0 && (
         <div className="shrink-0 border-t border-border px-4 pt-3 pb-4 lg:px-8">
           <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            After midnight
+            Outside this day
           </p>
           <ul className="flex flex-col gap-1.5">
-            {view.lateNight.map((event) => {
+            {view.outsideDay.map((event) => {
               const Icon = eventIcon(event.icon)
               return (
                 <li key={event.id}>
@@ -616,7 +702,7 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
                       <Icon className="h-3.5 w-3.5" aria-hidden />
                     </span>
                     <span className="tabular-nums text-xs text-muted-foreground">
-                      {localTimeInZone(event.start.toISOString(), timezone)}
+                      {localTimeInZone(event.realStart.toISOString(), timezone)}
                     </span>
                     <span className="truncate">{event.title}</span>
                   </button>

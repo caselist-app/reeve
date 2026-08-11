@@ -89,7 +89,7 @@ describe('the three day sources map to grid events', () => {
     // assertion on an empty array would do.
     expect(records.itemsError).toBeNull()
 
-    const view = buildDayCalendarView(records, TIMEZONE)
+    const view = buildDayCalendarView(records, TIMEZONE, DATE)
 
     // One from each source, all positioned, none set aside.
     expect(view.events).toHaveLength(3)
@@ -119,7 +119,7 @@ describe('the three day sources map to grid events', () => {
     })
     expect(records.itemsError).toBeNull()
 
-    const view = buildDayCalendarView(records, TIMEZONE)
+    const view = buildDayCalendarView(records, TIMEZONE, DATE)
 
     // On the rail, not the grid.
     expect(view.events).toHaveLength(0)
@@ -146,7 +146,7 @@ describe('a failed read is a message, not a blank grid', () => {
       hotelStayIds: [],
     }
 
-    const view = buildDayCalendarView(records, TIMEZONE)
+    const view = buildDayCalendarView(records, TIMEZONE, DATE)
 
     expect(view.events).toHaveLength(0)
     // A blank grid would say nothing. The message says it could not load, which
@@ -166,6 +166,6 @@ describe('a failed read is a message, not a blank grid', () => {
       hotelStayIds: [],
     }
 
-    expect(buildDayCalendarView(records, TIMEZONE).errorMessage).toBeNull()
+    expect(buildDayCalendarView(records, TIMEZONE, DATE).errorMessage).toBeNull()
   })
 })

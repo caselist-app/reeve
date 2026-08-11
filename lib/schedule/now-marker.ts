@@ -11,8 +11,17 @@
 // reads as 09:00, and deriving either from the UTC clock puts it on the wrong
 // day and prints the wrong time. So the day check uses localDateInZone and the
 // label uses localTimeInZone, and there is no third notion of the day in here.
+//
+// BROADCAST DAY (REE-114). The grid renders a broadcast day [04:00, +1 04:00)
+// shifted onto one literal calendar day, so "now" has to be placed in that same
+// grid space, not against the real wall clock. Now is shifted with toGridInstant
+// before both the on-day check and the position: a real 01:00 during tonight's
+// show sits near the bottom of tonight's grid, not off the top of tomorrow's.
+// The label, though, is the real wall clock (01:00), because that is the time it
+// actually is. Position from the shifted instant, label from the real one.
 
 import { localDateInZone, localTimeInZone } from '@/lib/schedule/datetime'
+import { toGridInstant } from '@/lib/schedule/day-window'
 
 export interface NowMarker {
   // How far down the 00:00-to-24:00 gutter the marker sits, as a percentage.
@@ -29,21 +38,26 @@ export interface NowMarker {
  * @param timezone  the tour's IANA timezone
  * @param viewedDate the day the grid is showing, YYYY-MM-DD
  *
- * Returns null unless `nowIso` falls on `viewedDate` in the tour zone, so the
- * label only appears on today's grid. The day comparison is the whole reason
- * this is not inlined: it must be the tour-local day, so an instant that is a
- * different date in UTC but the same date in the tour zone still marks the day.
+ * Returns null unless `nowIso` falls on `viewedDate`'s broadcast day in the tour
+ * zone, so the label only appears on today's grid. The day comparison is the
+ * whole reason this is not inlined: it must be the tour-local broadcast day, so
+ * a real 01:00 that is tonight's small hours (and a different calendar date, in
+ * UTC or the tour zone) still marks this day.
  */
 export function nowMarker(
   nowIso: string,
   timezone: string,
   viewedDate: string,
 ): NowMarker | null {
-  if (localDateInZone(nowIso, timezone) !== viewedDate) return null
+  // Shift now onto the broadcast grid for viewedDate. Its grid instant falls on
+  // viewedDate's calendar day exactly when now is within this broadcast day.
+  const gridNow = toGridInstant(nowIso, viewedDate, timezone)
+  if (localDateInZone(gridNow, timezone) !== viewedDate) return null
 
-  const label = localTimeInZone(nowIso, timezone)
-  const [hours, minutes] = label.split(':').map(Number)
+  // Position from the shifted (grid) wall clock, so the marker lines up with the
+  // grid RBC drew; label from the real wall clock, so it reads the true time.
+  const [hours, minutes] = localTimeInZone(gridNow, timezone).split(':').map(Number)
   const topPercent = ((hours + minutes / 60) / 24) * 100
 
-  return { topPercent, label }
+  return { topPercent, label: localTimeInZone(nowIso, timezone) }
 }
