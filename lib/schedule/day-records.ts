@@ -2,7 +2,11 @@ import type { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/lib/types/database'
 import { localDayWindowUtc } from '@/lib/schedule/datetime'
 import { localBroadcastDayWindowUtc } from '@/lib/schedule/day-window'
-import { fetchDayItems, type DayItem } from '@/lib/schedule/day-items'
+import {
+  fetchContinuingDayItems,
+  fetchDayItems,
+  type DayItem,
+} from '@/lib/schedule/day-items'
 
 // Single source of truth for a schedule day's records. The day view used to
 // fetch this set two to three times per navigation (the page for panel data,
@@ -55,6 +59,15 @@ export interface DayRecords {
   itemsError: string | null
   segments: DaySegment[]          // deduped union of tour_date-linked and date-matched
   hotels: DayHotelItem[]          // check-ins and check-outs falling on this day
+  // Blocks filed on a PREVIOUS broadcast day whose stated end reaches past this
+  // day's 04:00 start, so they break over the boundary (REE-124). A second view
+  // of those rows, drawn read-only and clamped to the grid top on this day, NOT
+  // a reassignment: they stay filed on the day they start. Kept separate from
+  // `items`/`segments` so "which day is this record on" still has one answer,
+  // and out of the roster so a previous night's overnight drive does not add its
+  // passengers to this day. Hotels are excluded by scope: a stay stays discrete
+  // check-in/check-out point events, never a bar across its nights.
+  continuedFromPrev: { items: DayItem[]; segments: DaySegment[] }
   // Ids of the segments and hotels on this day, used by the info panel to
   // resolve the day's roster without re-querying for them.
   segmentIds: string[]
@@ -67,6 +80,7 @@ const EMPTY: DayRecords = {
   itemsError: null,
   segments: [],
   hotels: [],
+  continuedFromPrev: { items: [], segments: [] },
   segmentIds: [],
   hotelStayIds: [],
 }
@@ -125,8 +139,10 @@ export async function fetchDayRecords(
   const [
     { data: showRows },
     dayItems,
+    continuingItems,
     { data: linkedSegments },
     { data: datedSegments },
+    { data: continuingSegmentRows },
     { data: checkinHotels },
     { data: checkoutHotels },
   ] = await Promise.all([
@@ -137,6 +153,15 @@ export async function fetchDayRecords(
     // and it is the point of the brief: a load-in, a second soundcheck and a
     // press call are the same kind of thing now.
     fetchDayItems(supabase, { tourId, tourDateId }),
+
+    // Items filed on a previous day that break over this day's 04:00 start and
+    // continue into it (REE-124). An instant-window read, kept out of `items`:
+    // this is a second view of those rows on this grid, not a reassignment.
+    fetchContinuingDayItems(supabase, {
+      tourId,
+      tourDateId,
+      broadcastStart: broadcastWindow.start,
+    }),
 
     // Linked segments are date-guarded too, but in JS below rather than here.
     // One day's segments are a handful of rows, and expressing "null or inside
@@ -159,6 +184,21 @@ export async function fetchDayRecords(
       .is('tour_date_id', null)
       .gte('depart_at', transportWindow.start)
       .lt('depart_at', transportWindow.end),
+
+    // Segments that departed on a PREVIOUS broadcast day but whose arrival
+    // reaches past this day's 04:00 start, so they break over the boundary
+    // (REE-124). depart_at before the broadcast start, arrive_at after it, and a
+    // stated arrival (a null arrival cannot span). This is the smallest of the
+    // three continuation reads because transport is already an instant query;
+    // it just looks the other way across the boundary. Deduped below against the
+    // segments already on this day (a 02:00 departure sits in both windows).
+    supabase
+      .from('transport_segments')
+      .select(SEGMENT_SELECT)
+      .eq('tour_id', tourId)
+      .not('arrive_at', 'is', null)
+      .lt('depart_at', broadcastWindow.start)
+      .gt('arrive_at', broadcastWindow.start),
 
     // Hotels are matched on date alone, linked or not. The old shape queried
     // linked stays by tour_date_id and unlinked ones by date, so an edited stay
@@ -214,6 +254,15 @@ export async function fetchDayRecords(
     return departs >= calendarStart && departs < calendarEnd
   }
 
+  // Continuation segments, deduped against the ones already placed on this day.
+  // A segment departing at, say, 02:00 today sits in both the transport window
+  // (its depart_at is inside [date 00:00, date+1 04:00)) and the continuation
+  // window (it departs before 04:00 and arrives after), so it would otherwise be
+  // counted twice: once as this day's own record, once as a continuation. The
+  // day's own placement wins; the continuation view is only for rows filed on a
+  // genuinely earlier day.
+  const continuingSegments = (continuingSegmentRows ?? []).filter((s) => !segMap.has(s.id))
+
   // One entry per card. A same-day check-in and check-out is excluded from the
   // check-out query above, so a stay cannot produce two cards for one event.
   const hotels: DayHotelItem[] = [
@@ -227,6 +276,10 @@ export async function fetchDayRecords(
     itemsError: dayItems.error,
     segments: Array.from(segMap.values()),
     hotels,
+    continuedFromPrev: {
+      items: continuingItems.items,
+      segments: continuingSegments,
+    },
     // Roster: calendar-day segments only, so a next-morning overnight drive that
     // is in `segments` for the grid does not add its passengers to this day.
     segmentIds: Array.from(segMap.values()).filter(onCalendarDay).map((s) => s.id),

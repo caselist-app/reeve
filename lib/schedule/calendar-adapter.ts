@@ -74,6 +74,16 @@ export interface CalendarEvent {
   // Read from day-item-kinds for a day_item; a source-level default otherwise.
   accent: DayItemKind['accent']
   icon: string
+  // Set by the view (buildDayCalendarView), not by this adapter, which stays a
+  // pure instant->instant mapper. A block that breaks over the broadcast-day
+  // boundary (04:00 in the tour zone) is drawn on both days' grids (REE-124):
+  // `continuesAfter` on the day it starts (its grid end runs past the grid
+  // bottom, so it is clamped there with a "continues" tell) and
+  // `continuesBefore` on the day it continues into (a read-only projection of
+  // the same row, clamped to the grid top). Both false/absent on a block that
+  // sits within one broadcast day, which is the normal case.
+  continuesAfter?: boolean
+  continuesBefore?: boolean
 }
 
 // A record with no start instant cannot be placed on a time grid. It is returned

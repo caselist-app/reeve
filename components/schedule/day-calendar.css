@@ -279,6 +279,55 @@
   color: white;
 }
 
+/* A block that breaks over the 04:00 broadcast boundary (REE-124). The same row
+   is drawn on both days: clamped to the grid bottom on the day it starts
+   (.evt-continues-after) and to the grid top on the day it continues into
+   (.evt-continues-before, a read-only projection). The clamped edge is squared
+   off, because a rounded edge reads as the block ending there, and carries a
+   small chevron in the accent hue pointing the way it continues, so the two
+   halves read as one block spanning two grids rather than two truncated blocks.
+   RBC already positions .rbc-event absolutely, so it is the containing block for
+   these pseudo-elements without a position declaration here. */
+.rbc-event.evt-continues-after {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+.rbc-event.evt-continues-before {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+}
+.rbc-event.evt-continues-after::after,
+.rbc-event.evt-continues-before::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  /* Never intercept the click that opens the block's detail panel. */
+  pointer-events: none;
+}
+/* Points down, off the bottom of the start day's grid. */
+.rbc-event.evt-continues-after::after {
+  bottom: 1px;
+  border-top: 4px solid var(--evt-accent);
+}
+/* Points up, back to where it began before the continuation day's grid top. */
+.rbc-event.evt-continues-before::before {
+  top: 1px;
+  border-bottom: 4px solid var(--evt-accent);
+}
+/* On the selected (accent-filled) block the hue chevron would vanish into the
+   fill, so flip it to the same light foreground the selected text uses. */
+.rbc-event.evt-selected.evt-continues-after::after {
+  border-top-color: white;
+}
+.rbc-event.evt-selected.evt-continues-before::before {
+  border-bottom-color: white;
+}
+
 /* Kind accent ramp. Hue from Tailwind's palette variables; tint mixed against
    the current --background so one rule covers light and dark. --evt-text is the
    readable-on-tint version of the hue: the "No time set" rail pills and the
