@@ -298,10 +298,14 @@ describe('day item times that cross midnight', () => {
     })
 
     expect(showDay.lateNight.segments.map((s) => s.id)).toContain(segment.id)
-    // And not in the day's own records, which would double it on one screen.
-    expect(showDay.segments.map((s) => s.id)).not.toContain(segment.id)
-    // The tail does not contribute to the day roster: those people are
-    // travelling on the 15th, whatever day the card is shown on.
+    // REE-113: it is now also in the day's own records, so the step-3 broadcast
+    // grid can render it on the night it follows. No double on screen in this
+    // step: the grid is still calendar-bounded, so RBC filters it off the 14th's
+    // column and it shows only in the tail.
+    expect(showDay.segments.map((s) => s.id)).toContain(segment.id)
+    // The roster still does not count it: those people are travelling on the
+    // 15th, whatever day the card is shown on. segmentIds stays on the calendar
+    // day even though segments now reaches into the next morning.
     expect(showDay.segmentIds).not.toContain(segment.id)
   })
 

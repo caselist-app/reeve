@@ -147,19 +147,29 @@ export async function fetchDayRecords(
   if (!tourDateId) return EMPTY
 
   // Transport is sourced from the broadcast day, not the calendar day (REE-111
-  // step 2). A broadcast day runs [date 04:00, date+1 04:00) in the tour's
-  // timezone, so a 02:00 overnight drive after tonight's show, stored on the
-  // next calendar date, comes back with the night it belongs to rather than the
-  // following day. depart_at is a timestamptz, so this window is derived in the
-  // tour's zone; falls back to UTC when the tour has none, like every other
-  // date-deriving path in the app. Only transport reads from here: day_items
-  // stay fetched by tour_date_id and hotels by their date columns.
+  // step 2). Transport is fetched across the calendar day extended forward to the
+  // next broadcast boundary: [date 00:00, date+1 04:00) in the tour's timezone.
+  // depart_at is a timestamptz, so this is derived in the tour's zone; falls back
+  // to UTC when the tour has none, like every other date-deriving path. Only
+  // transport reads from here: day_items stay fetched by tour_date_id and hotels
+  // by their date columns.
   //
-  // The grid is still bounded to the calendar day in this step, so RBC filters a
-  // past-midnight segment off the column and it keeps showing only in the tail
-  // below. No double display; the grid becomes the authority in step 3, when the
-  // tail is removed.
+  // Two halves, deliberately:
+  //   - the calendar start (date 00:00) keeps this day's OWN pre-dawn departures
+  //     on it. The full broadcast window would start at 04:00 and so drop a 01:30
+  //     drive stored on this date onto the previous night, which is correct only
+  //     once the grid itself is broadcast-aware (step 3). Until then the grid is
+  //     still calendar-bounded, and dropping it here would make it vanish.
+  //   - the broadcast end (date+1 04:00) pulls the next morning's small hours
+  //     onto this day, so a 02:00 overnight drive after tonight's show, stored on
+  //     the next calendar date, lands in `segments` for the step-3 grid to render.
+  //
+  // No double display in this step: the grid is still bounded to the calendar
+  // day, so RBC filters the past-midnight segment off the column and it keeps
+  // showing only in the tail below. The grid becomes the authority in step 3.
+  const dayWindow = localDayWindowUtc(date, timezone ?? 'UTC')
   const broadcastWindow = localBroadcastDayWindowUtc(date, timezone ?? 'UTC')
+  const transportWindow = { start: dayWindow.start, end: broadcastWindow.end }
 
   // The small hours of the next morning. Starts where this day's window ends,
   // which is next-day midnight in the tour's timezone, so the two are adjacent
@@ -212,8 +222,8 @@ export async function fetchDayRecords(
       .select(SEGMENT_SELECT)
       .eq('tour_id', tourId)
       .is('tour_date_id', null)
-      .gte('depart_at', broadcastWindow.start)
-      .lt('depart_at', broadcastWindow.end),
+      .gte('depart_at', transportWindow.start)
+      .lt('depart_at', transportWindow.end),
 
     // Hotels are matched on date alone, linked or not. The old shape queried
     // linked stays by tour_date_id and unlinked ones by date, so an edited stay
@@ -250,10 +260,11 @@ export async function fetchDayRecords(
   // moved to another day kept its stale link and so stayed on this one, showing
   // the new day's time. A segment with no departure time at all keeps its link
   // as the only thing placing it, so it is not filtered out. Guarded by the
-  // broadcast window so a linked 02:00 drive after tonight's show, whose
-  // depart_at is on the next calendar date, is kept rather than dropped.
-  const windowStart = new Date(broadcastWindow.start).getTime()
-  const windowEnd = new Date(broadcastWindow.end).getTime()
+  // transport window (calendar start, broadcast end) so a linked 02:00 drive
+  // after tonight's show, whose depart_at is on the next calendar date, is kept
+  // rather than dropped.
+  const windowStart = new Date(transportWindow.start).getTime()
+  const windowEnd = new Date(transportWindow.end).getTime()
 
   const linkedOnThisDay = (linkedSegments ?? []).filter((s) => {
     if (!s.depart_at) return true
@@ -264,6 +275,21 @@ export async function fetchDayRecords(
   // Deduplicate transport segments by id (linked + unlinked fallback).
   const segMap = new Map<string, DaySegment>()
   for (const s of [...linkedOnThisDay, ...(datedSegments ?? [])]) segMap.set(s.id, s)
+
+  // The roster (segmentIds) answers "who is on this day", and it stays on the
+  // calendar day: a next-morning overnight drive is in `segments` so the step-3
+  // grid can render it, but its passengers are travelling the next date and are
+  // not part of this day's party. A departure inside the calendar day, or a
+  // linked segment with no departure at all (placed by its link), counts. This
+  // preserves the pre-broadcast roster exactly; step 3 revisits it when the grid
+  // becomes broadcast-aware.
+  const calendarStart = new Date(dayWindow.start).getTime()
+  const calendarEnd = new Date(dayWindow.end).getTime()
+  const onCalendarDay = (s: DaySegment): boolean => {
+    if (!s.depart_at) return true
+    const departs = new Date(s.depart_at).getTime()
+    return departs >= calendarStart && departs < calendarEnd
+  }
 
   // One entry per card. A same-day check-in and check-out is excluded from the
   // check-out query above, so a stay cannot produce two cards for one event.
@@ -287,7 +313,9 @@ export async function fetchDayRecords(
     segments: Array.from(segMap.values()),
     hotels,
     lateNight,
-    segmentIds: Array.from(segMap.keys()),
+    // Roster: calendar-day segments only, so a next-morning overnight drive that
+    // is in `segments` for the grid does not add its passengers to this day.
+    segmentIds: Array.from(segMap.values()).filter(onCalendarDay).map((s) => s.id),
     // Deduplicated: a stay checking in and out across this day would otherwise
     // contribute its occupants to the roster twice.
     hotelStayIds: Array.from(new Set(hotels.map((h) => h.id))),
