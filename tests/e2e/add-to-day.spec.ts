@@ -7,6 +7,11 @@ import { readSeed } from './seed'
 // offers: a TIMES row it commits straight onto the grid (load-in), and a BOOK row
 // that opens its own add form (hotel).
 //
+// It runs against the seeded rehearsal day, not the show day, on purpose. The
+// show day carries the 16:00 load-in that revalidate.spec.ts reads with a
+// `.first()`, and a stray 10:00 load-in there would shadow it. The rehearsal day
+// starts empty and no other spec reads its grid.
+//
 // NOT repeat-safe: it commits a day_item and never removes it, the same
 // limitation revalidate.spec.ts:81 has. Do not run it with --repeat-each; every
 // run after the first would find a second Load-in block and report a false
@@ -15,11 +20,11 @@ import { readSeed } from './seed'
 test('the one door adds a timed item and opens a book form', async ({ page }) => {
   const seed = readSeed()
 
-  await page.goto(`/tours/${seed.a.tourId}/schedule?date=${seed.a.date}`)
+  await page.goto(`/tours/${seed.a.tourId}/schedule?date=${seed.a.rehearsalDate}`)
 
-  // The seeded 16:00 load-in, so the assertions below run against a grid that
-  // has actually rendered rather than an empty one that never loaded.
-  await expect(page.getByRole('button', { name: /Load-in/ }).first()).toBeVisible()
+  // The single '+' is the surviving door, and waiting on it proves the day view
+  // has hydrated so the '/' listener is attached before we press it.
+  await expect(page.getByRole('button', { name: 'Add to day' })).toBeVisible()
 
   // '/' opens the typed day-form and autofocuses its input on desktop.
   await page.keyboard.press('/')
@@ -31,8 +36,8 @@ test('the one door adds a timed item and opens a book form', async ({ page }) =>
   await input.fill('load in 10am')
   await page.keyboard.press('Enter')
 
-  // The new block, distinct from the seeded 16:00 one, so this cannot pass on the
-  // load-in that was already there.
+  // The load-in lands on the grid. The empty rehearsal day had none, so this
+  // cannot pass on a block that was already there.
   await expect(
     page.getByRole('button', { name: /Load-in/ }).filter({ hasText: '10:00' }),
   ).toBeVisible()
