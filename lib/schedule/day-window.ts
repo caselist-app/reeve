@@ -21,7 +21,7 @@
 // No luxon here, deliberately: the day boundary is authored on the zone helpers
 // in datetime.ts, not the calendar localizer, per the checked containment rule.
 
-import { addDays, localDayWindowUtc, wallClockToUtc } from '@/lib/schedule/datetime'
+import { addDays, localDateInZone, localDayWindowUtc, wallClockToUtc } from '@/lib/schedule/datetime'
 
 /**
  * Where one working day ends and the next begins, as an hour of the tour-local
@@ -54,6 +54,30 @@ export function localBroadcastDayWindowUtc(
     start: wallClockToUtc(`${date}T${DAY_START_HHMM}`, timezone),
     end: wallClockToUtc(`${addDays(date, 1)}T${DAY_START_HHMM}`, timezone),
   }
+}
+
+/**
+ * The broadcast day, YYYY-MM-DD, a real instant belongs to in the tour timezone.
+ *
+ * The broadcast-day analogue of `localDateInZone`. An instant is on its own
+ * calendar date once it is at or after DAY_START_HOUR, and on the *previous*
+ * date when it falls in the small hours before it: a 01:30 curfew or a 02:00
+ * overnight drive is the tail of the night before, not the head of a new day.
+ *
+ * This is what a drag or resize files a transport_segment by, so a block moved
+ * from 22:00 to 01:30 within one night keeps the same day rather than silently
+ * re-homing to the next calendar date (REE-110). Only a move that crosses the
+ * 04:00 boundary changes the day. Derived by comparing the real instant to the
+ * broadcast-window start, so it is exact across a DST changeover rather than
+ * assuming the offset is a fixed number of hours.
+ */
+export function localBroadcastDateInZone(realIso: string, timezone: string): string {
+  const calendarDate = localDateInZone(realIso, timezone)
+  const broadcastStart = localBroadcastDayWindowUtc(calendarDate, timezone).start
+  if (new Date(realIso).getTime() < new Date(broadcastStart).getTime()) {
+    return addDays(calendarDate, -1)
+  }
+  return calendarDate
 }
 
 /**
