@@ -285,25 +285,25 @@
    "After midnight" icon squares (REE-82) sit on --evt-tint and label with it,
    mixed toward --foreground so it stays legible in both light and dark rather
    than the medium palette shade washing out on a pale tint. */
+/* The generic show items (doors, changeover, load-in, soundcheck, curfew, and
+   the rest of the running order) are the neutral gray now (REE-122). They are
+   the logistics around the performance, so they recede and let the acts carry
+   the colour. */
 .evt-show {
-  --evt-accent: var(--color-purple-500);
-  --evt-tint: color-mix(in oklab, var(--color-purple-500) 14%, var(--background));
-  --evt-text: color-mix(in oklab, var(--color-purple-500) 55%, var(--foreground));
-}
-/* The two performance sets (REE-122). Each has its own hue, distinct from the
-   generic purple 'show' accent and from every other kind, so the acts stand out
-   on the day. The headliner is the bold one in fuchsia; the support act is a
-   neutral gray, which reads as the lesser act and keeps clear of the cool
-   purple/violet family the show items already live in. */
-.evt-headliner {
-  --evt-accent: var(--color-fuchsia-500);
-  --evt-tint: color-mix(in oklab, var(--color-fuchsia-500) 14%, var(--background));
-  --evt-text: color-mix(in oklab, var(--color-fuchsia-500) 55%, var(--foreground));
-}
-.evt-support {
   --evt-accent: var(--color-gray-500);
   --evt-tint: color-mix(in oklab, var(--color-gray-500) 14%, var(--background));
   --evt-text: color-mix(in oklab, var(--color-gray-500) 55%, var(--foreground));
+}
+/* The two performance sets, the support act and the headliner (REE-122). They
+   share the bold purple so the acts stand out as the performance against the
+   gray running order, and purple is used by nothing else on the day now that the
+   show items are gray. Kept as two accent classes rather than one so either act
+   can be recoloured independently later. */
+.evt-headliner,
+.evt-support {
+  --evt-accent: var(--color-purple-500);
+  --evt-tint: color-mix(in oklab, var(--color-purple-500) 14%, var(--background));
+  --evt-text: color-mix(in oklab, var(--color-purple-500) 55%, var(--foreground));
 }
 .evt-transport {
   --evt-accent: var(--color-teal-500);
