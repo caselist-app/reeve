@@ -287,8 +287,8 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
       const Icon = eventIcon(event.icon)
       // Time range only when the end is real. A synthesised end is not a claim
       // about duration (see the adapter), so surfacing it as "10:00 to 10:30"
-      // would invent a window the TM never set; the start alone is shown, and the
-      // dashed bottom edge already says the end is open.
+      // would invent a window the TM never set; the start alone is shown, which
+      // already carries that the end is open.
       const startLabel = localTimeInZone(event.start.toISOString(), timezone)
       const timeLabel = event.syntheticEnd
         ? startLabel
@@ -418,11 +418,7 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
               return { className: 'evt-selection' }
             }
             return {
-              className: cn(
-                accentClassName(event.source, event.accent),
-                // Solid bottom edge for a stated end, dashed for a synthesised one.
-                event.syntheticEnd ? 'evt-soft-end' : 'evt-firm-end',
-              ),
+              className: accentClassName(event.source, event.accent),
             }
           }}
           // Desktop only. RBC's drag addon is mouse-oriented; on mobile every
