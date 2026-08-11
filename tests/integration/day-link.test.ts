@@ -508,4 +508,67 @@ describe('the day link survives an edit', () => {
       expect(segment?.tour_date_id).toBe(fixture.tourDateId)
     })
   })
+
+  // REE-113, broadcast-day grid step 2. Transport is now sourced from the
+  // broadcast day, [date 04:00, date+1 04:00) in the tour timezone, not the
+  // calendar day. So a 02:00 overnight drive after tonight's show, stored on the
+  // next calendar date, comes back with the night it belongs to. The two fetch
+  // paths fail in different ways without the change: the unlinked fallback would
+  // filter it out by depart_at, and the linked date-guard would drop it as a
+  // stale link, so each case is asserted on its own.
+  //
+  // Segments are inserted directly rather than through createTransportSegment:
+  // that action derives tour_date_id from depart_at's calendar date, so it
+  // cannot yet produce either state under test (an unlinked segment with a
+  // departure, the planner's shape; or a segment linked to dayDate but departing
+  // the next morning, which step 3's broadcast-aware create will produce). The
+  // fetch's windowing is what this step changes, so the rows are set up to
+  // exercise it directly.
+  describe('sourcing transport from the broadcast day', () => {
+    // UTC, so the broadcast window is exactly [DATE 04:00Z, NEXT_DAY 04:00Z) and
+    // every departure instant below reads as the wall clock it is written as.
+    beforeEach(async () => {
+      fixture = await createFixture({ date: DATE, timezone: 'UTC' })
+    })
+
+    async function insertSegment(tourDateId: string | null, departAt: string) {
+      const { data, error } = await testDb
+        .from('transport_segments')
+        .insert({ tour_id: fixture.tourId, tour_date_id: tourDateId, mode: 'ground', depart_at: departAt })
+        .select('id')
+        .single()
+      if (error || !data) throw new Error(`could not insert segment: ${error?.message}`)
+      return data.id
+    }
+
+    it('lands an unlinked 02:00 overnight drive on the night it follows', async () => {
+      // No link, stored on the next calendar date, which is the planner's shape.
+      // The old calendar-day fallback filtered it off DATE by depart_at.
+      const id = await insertSegment(null, `${NEXT_DAY}T02:00:00.000Z`)
+
+      const records = await dayRecords(DATE)
+      expect(records.segments.map((s) => s.id)).toContain(id)
+    })
+
+    it('keeps a linked 02:00 overnight drive instead of dropping it on the date guard', async () => {
+      // Linked to DATE but departing in the small hours of NEXT_DAY. The old
+      // [00:00, 24:00) guard rejected this as a stale link; the broadcast window
+      // keeps it, which is the change under test.
+      const id = await insertSegment(fixture.tourDateId, `${NEXT_DAY}T02:00:00.000Z`)
+
+      const records = await dayRecords(DATE)
+      expect(records.segments.map((s) => s.id)).toContain(id)
+    })
+
+    it('leaves a 07:00 next-morning drive on the next broadcast day, not this one', async () => {
+      // Past the 04:00 boundary, so it belongs to NEXT_DAY's night. Checked on
+      // both fetch paths: the unlinked fallback and the linked date-guard.
+      const unlinked = await insertSegment(null, `${NEXT_DAY}T07:00:00.000Z`)
+      const linked = await insertSegment(fixture.tourDateId, `${NEXT_DAY}T07:00:00.000Z`)
+
+      const records = await dayRecords(DATE)
+      expect(records.segments.map((s) => s.id)).not.toContain(unlinked)
+      expect(records.segments.map((s) => s.id)).not.toContain(linked)
+    })
+  })
 })

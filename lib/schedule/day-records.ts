@@ -1,6 +1,7 @@
 import type { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/lib/types/database'
 import { addDays, localDayWindowUtc } from '@/lib/schedule/datetime'
+import { localBroadcastDayWindowUtc } from '@/lib/schedule/day-window'
 import { fetchDayItems, type DayItem } from '@/lib/schedule/day-items'
 
 // Single source of truth for a schedule day's records. The day view used to
@@ -145,12 +146,20 @@ export async function fetchDayRecords(
   // with no row has none either, and typing one adds the day (updateDayNotes).
   if (!tourDateId) return EMPTY
 
-  // The UTC window covering this tour-local day. depart_at is a timestamptz, so
-  // filtering it against `${date}T00:00:00Z` to the next midnight is only
-  // correct for a tour on UTC and silently a day out at the edges for every
-  // other one. Falls back to UTC when the tour has no timezone set, which is
-  // what every other date-deriving path in the app does.
-  const dayWindow = localDayWindowUtc(date, timezone ?? 'UTC')
+  // Transport is sourced from the broadcast day, not the calendar day (REE-111
+  // step 2). A broadcast day runs [date 04:00, date+1 04:00) in the tour's
+  // timezone, so a 02:00 overnight drive after tonight's show, stored on the
+  // next calendar date, comes back with the night it belongs to rather than the
+  // following day. depart_at is a timestamptz, so this window is derived in the
+  // tour's zone; falls back to UTC when the tour has none, like every other
+  // date-deriving path in the app. Only transport reads from here: day_items
+  // stay fetched by tour_date_id and hotels by their date columns.
+  //
+  // The grid is still bounded to the calendar day in this step, so RBC filters a
+  // past-midnight segment off the column and it keeps showing only in the tail
+  // below. No double display; the grid becomes the authority in step 3, when the
+  // tail is removed.
+  const broadcastWindow = localBroadcastDayWindowUtc(date, timezone ?? 'UTC')
 
   // The small hours of the next morning. Starts where this day's window ends,
   // which is next-day midnight in the tour's timezone, so the two are adjacent
@@ -203,8 +212,8 @@ export async function fetchDayRecords(
       .select(SEGMENT_SELECT)
       .eq('tour_id', tourId)
       .is('tour_date_id', null)
-      .gte('depart_at', dayWindow.start)
-      .lt('depart_at', dayWindow.end),
+      .gte('depart_at', broadcastWindow.start)
+      .lt('depart_at', broadcastWindow.end),
 
     // Hotels are matched on date alone, linked or not. The old shape queried
     // linked stays by tour_date_id and unlinked ones by date, so an edited stay
@@ -240,9 +249,11 @@ export async function fetchDayRecords(
   // The date guard the linked query used to be missing entirely. A segment
   // moved to another day kept its stale link and so stayed on this one, showing
   // the new day's time. A segment with no departure time at all keeps its link
-  // as the only thing placing it, so it is not filtered out.
-  const windowStart = new Date(dayWindow.start).getTime()
-  const windowEnd = new Date(dayWindow.end).getTime()
+  // as the only thing placing it, so it is not filtered out. Guarded by the
+  // broadcast window so a linked 02:00 drive after tonight's show, whose
+  // depart_at is on the next calendar date, is kept rather than dropped.
+  const windowStart = new Date(broadcastWindow.start).getTime()
+  const windowEnd = new Date(broadcastWindow.end).getTime()
 
   const linkedOnThisDay = (linkedSegments ?? []).filter((s) => {
     if (!s.depart_at) return true
