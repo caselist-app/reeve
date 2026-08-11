@@ -128,7 +128,16 @@ export function ActivePanel() {
       )
     case 'day-form':
       return (
-        <DayForm tourId={panel.tourId} tourDateId={panel.tourDateId} initialInput={panel.initialInput} />
+        // Keyed on the pre-filled input so highlighting a second slot while the
+        // panel is already open remounts the form onto the new time, rather than
+        // React reusing the instance and keeping the first slot's stale input
+        // state (REE-70). A remount also re-runs the focus effect.
+        <DayForm
+          key={panel.initialInput ?? ''}
+          tourId={panel.tourId}
+          tourDateId={panel.tourDateId}
+          initialInput={panel.initialInput}
+        />
       )
     default:
       return null
