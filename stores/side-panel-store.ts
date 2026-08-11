@@ -41,7 +41,7 @@ type ScheduleDayItem = Pick<
   'id' | 'show_id' | 'kind' | 'title' | 'starts_at' | 'ends_at' | 'location' | 'notes'
 >
 
-// Mirrors AddCategory from components/schedule/add/add-picker.tsx
+// Mirrors AddCategory from components/schedule/add/add-flow.tsx
 type ScheduleAddCategory = 'flight' | 'drive' | 'rail' | 'hotel' | 'show' | 'event'
 
 // Tour-specific context passed when opening a contact panel from the people
