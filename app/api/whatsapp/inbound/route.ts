@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { tasks } from '@trigger.dev/sdk/v3'
 import { redis } from '@/lib/redis'
+import { enqueueWithClaim } from '@/lib/comms/inbound-claim'
 
 // GET: Meta webhook verification handshake.
 // Meta sends this when you first register the webhook URL.
@@ -113,19 +114,6 @@ export async function POST(request: NextRequest) {
         const wamid = message.id as string | undefined
         if (!fromNumber || !body) continue
 
-        // Deduplicate on the Meta message id (wamid) before enqueuing.
-        // Meta redelivers when it does not get a fast 200; SET NX is atomic.
-        // If Redis is down, proceed: dropping an inbound message is worse than
-        // a duplicate job enqueue (the router job has its own second guard).
-        if (wamid) {
-          try {
-            const claimed = await redis.set(`wamid:${wamid}`, '1', { nx: true, ex: 60 * 60 * 24 })
-            if (claimed === null) continue // Already processed this wamid.
-          } catch {
-            // Redis unavailable: proceed and rely on the router-job guard.
-          }
-        }
-
         // Map the sender number to a person across the TM's active tours. The
         // number lives on the contact; a number maps to at most one person per
         // tour (enforced by unique index), but the same contact can be on
@@ -167,36 +155,39 @@ export async function POST(request: NextRequest) {
         const person = sorted[0]
         if (!person) continue  // Should not happen given length check above.
 
-        // Enqueue the router job. The handler does nothing else.
+        // Deduplicate on the Meta message id (wamid), enqueue the router job,
+        // and release the claim if the enqueue throws. Meta redelivers when it
+        // does not get a fast 200; SET NX is atomic. If Redis is down the claim
+        // is skipped and the message proceeds (the router job has its own second
+        // guard). Leaving a claim set on a failed enqueue would make Meta's
+        // retry look like a duplicate and lose the message for the full 24 hour
+        // TTL, so the helper releases it. Same rule the outbound send paths
+        // follow, see lib/comms/notify/index.ts.
+        let enqueued: boolean
         try {
-          await tasks.trigger('whatsapp-router', {
-            tour_id: person.tour_id,
-            person_id: person.id,
-            from_number: fromNumber,
-            body,
-            wamid: wamid ?? null,
+          enqueued = await enqueueWithClaim({
+            claimKey: wamid ? `wamid:${wamid}` : null,
+            claim: (key) => redis.set(key, '1', { nx: true, ex: 60 * 60 * 24 }),
+            release: (key) => redis.del(key),
+            enqueue: () =>
+              tasks.trigger('whatsapp-router', {
+                tour_id: person.tour_id,
+                person_id: person.id,
+                from_number: fromNumber,
+                body,
+                wamid: wamid ?? null,
+              }),
           })
         } catch (err) {
-          // Claim, send, release on failure. The wamid was claimed above, before
-          // this enqueue. Leaving the claim set makes Meta's retry of the same
-          // message look like a duplicate, so the crew member's message is lost
-          // for the full 24 hour TTL and they never get a reply. Same rule the
-          // outbound send paths follow, see lib/comms/notify/index.ts.
-          if (wamid) {
-            try {
-              await redis.del(`wamid:${wamid}`)
-            } catch {
-              // Redis unavailable. The claim expires on its own within 24 hours.
-            }
-          }
-
           // Deliberate non-200. Meta retries, and the claim is now free for the
           // retry to get through, so a transient Trigger.dev outage recovers by
           // itself. Dropping an inbound crew message is worse than a retry, the
-          // same trade-off the Redis guard above makes.
+          // same trade-off the Redis guard makes.
           console.error('whatsapp inbound: enqueue failed', err)
           return NextResponse.json({ error: 'Enqueue failed' }, { status: 500 })
         }
+
+        if (!enqueued) continue // Already processed this wamid.
       }
     }
   }
