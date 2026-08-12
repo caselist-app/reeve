@@ -40,6 +40,7 @@ export async function fetchInbox(supabase: Client, accountId: string): Promise<I
       tours!inner (
         name,
         account_id,
+        timezone,
         artists!inner ( id, name )
       )
     `
@@ -57,6 +58,7 @@ export async function fetchInbox(supabase: Client, accountId: string): Promise<I
   const items: InboxItem[] = (data ?? []).map((row) => {
     const tour = row.tours as unknown as {
       name: string
+      timezone: string | null
       artists: { id: string; name: string }
     }
 
@@ -64,6 +66,7 @@ export async function fetchInbox(supabase: Client, accountId: string): Promise<I
       id: row.id,
       tour_id: row.tour_id,
       tour_name: tour.name,
+      tour_timezone: tour.timezone,
       artist_id: tour.artists.id,
       artist_name: tour.artists.name,
       kind: row.kind,
