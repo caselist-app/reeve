@@ -30,7 +30,7 @@ export async function recordHotelOption(
   // RLS scopes rows by tour, not ids within one payload. Every id here has to
   // be checked against tourId or a person from another account's tour lands in
   // room_assignments and is sent this hotel's details. Same fix as
-  // recordTransportOption; sendRider in lib/actions/documents.ts is the shape.
+  // recordTransportOption; sendDocument in lib/actions/documents.ts is the shape.
   const { data: tour } = await supabase
     .from('tours')
     .select('id')
