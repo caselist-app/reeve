@@ -5,6 +5,7 @@ import { updateContact } from '@/lib/actions/contacts'
 import { addPerson, updatePersonTerms } from '@/lib/actions/people'
 import { createDayItem, updateDayItem, deleteDayItem } from '@/lib/actions/day-items'
 import { updateTourDate } from '@/lib/actions/tour-dates'
+import { updateTransportSegment } from '@/lib/actions/transport'
 import type { ContactForm } from '@/lib/validators/contact'
 
 // The bug this file exists for, in full:
@@ -572,5 +573,80 @@ describe('tour date partial writes', () => {
     expect(result.error).toBeNull()
 
     expect((await readDay())?.notes).toBeNull()
+  })
+})
+
+// The booking reference is the whole output of the V1 travel model: the planner
+// ranks, the TM books off-platform, the reference comes back into Reeve by hand.
+// Two panels write it (the flight detail panel and the Add Flight flow's last
+// step), and both used to ignore updateTransportSegment's result and report
+// "Saved." over a write that failed. The UI fix branches on result.error, so
+// this pins the two halves that branch depends on: a good save reports no error
+// AND the column holds the value, and an unreachable segment reports an error
+// AND writes nothing.
+//
+// Asserting the row, never that the action returned no error, is the rule
+// updateDaySheet broke while returning { error: null } and nulling catering.
+
+describe('transport segment booking reference', () => {
+  let fixture: Fixture
+  let segmentId: string
+
+  // Inserted directly rather than through createTransportSegment, so a bug in
+  // create cannot hide one in update.
+  beforeEach(async () => {
+    fixture = await createFixture()
+
+    const { data, error } = await testDb
+      .from('transport_segments')
+      .insert({
+        tour_id: fixture.tourId,
+        tour_date_id: fixture.tourDateId,
+        mode: 'flight',
+        depart_at: `${fixture.date}T09:00:00.000Z`,
+      })
+      .select('id')
+      .single()
+
+    if (error || !data) throw new Error(`could not seed a transport segment: ${error?.message}`)
+    segmentId = data.id
+  })
+
+  afterEach(async () => {
+    await destroyFixture(fixture)
+  })
+
+  async function readReference(id: string) {
+    const { data } = await testDb
+      .from('transport_segments')
+      .select('booking_reference')
+      .eq('id', id)
+      .single()
+    return data?.booking_reference ?? null
+  }
+
+  it('saves a booking reference and reports success', async () => {
+    const result = await updateTransportSegment(segmentId, { booking_reference: 'ABC123' })
+    expect(result.error).toBeNull()
+
+    // The row, not the return value. { error: null } is exactly what the panels
+    // trusted while the write did nothing, so success is only proven by the
+    // column now holding what the TM typed.
+    expect(await readReference(segmentId)).toBe('ABC123')
+  })
+
+  it('reports an error and writes nothing for a segment it cannot reach', async () => {
+    // In production RLS hides a segment on another account's tour, so the action's
+    // own read returns no row and it stops at "Segment not found." The service-role
+    // harness bypasses RLS, so a segment id that matches no row models the same
+    // unreachable segment: it is the reachable error path, and the one the UI now
+    // branches on to keep the panel open on a failed save.
+    const unreachableId = '00000000-0000-0000-0000-0000000000aa'
+    const result = await updateTransportSegment(unreachableId, { booking_reference: 'NOPE' })
+    expect(result.error).toBeTruthy()
+
+    // Nothing was written anywhere: the seeded segment the caller does own is
+    // untouched, so no stray booking reference leaked onto it.
+    expect(await readReference(segmentId)).toBeNull()
   })
 })

@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useTransition } from 'react'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { updateDayNotes } from '@/lib/actions/tour-dates'
 
@@ -22,10 +23,14 @@ export function NotesTextarea({ tourId, date, initialValue }: NotesTextareaProps
   function handleBlur(e: React.FocusEvent<HTMLTextAreaElement>) {
     const value = e.currentTarget.value
     if (value === lastSaved.current) return
-    lastSaved.current = value
 
     startTransition(async () => {
-      await updateDayNotes(tourId, date, value)
+      const result = await updateDayNotes(tourId, date, value)
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
+      lastSaved.current = value
     })
   }
 
