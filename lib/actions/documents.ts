@@ -1,5 +1,6 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { generateShareToken } from '@/lib/comms/email'
@@ -122,5 +123,35 @@ export async function sendRider(params: SendRiderParams): Promise<SendRiderResul
   await advanceReminderJob.trigger({ ...reminderBase, reminder_index: 1 }, { delay: '3d' })
   await advanceReminderJob.trigger({ ...reminderBase, reminder_index: 2 }, { delay: '7d' })
 
+  // The Documents page renders every document's share log; a share created
+  // from the advance panel or a resend must show up there too.
+  revalidatePath(`/tours/${tourId}/documents`)
+
   return { error: null }
+}
+
+// Resends a document to the same recipient a document_shares row already went
+// to. Reuses sendRider rather than duplicating its insert-and-enqueue logic:
+// a resend is intentionally a brand new share row with its own token, not a
+// mutation of the old one (document_shares is append-mostly).
+export async function resendShare(shareId: string): Promise<SendRiderResult> {
+  await requireUser()
+  const supabase = await createClient()
+
+  // RLS scopes this to the caller's own tour, so no separate ownership check.
+  const { data: share } = await supabase
+    .from('document_shares')
+    .select('tour_id, show_id, document_id, recipient_person_id')
+    .eq('id', shareId)
+    .single()
+
+  if (!share) return { error: 'Share not found.' }
+  if (!share.show_id) return { error: 'This document was not sent for a show.' }
+
+  return sendRider({
+    tourId: share.tour_id,
+    showId: share.show_id,
+    documentId: share.document_id,
+    recipientPersonId: share.recipient_person_id,
+  })
 }

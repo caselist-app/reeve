@@ -1,15 +1,15 @@
-import { ListRow } from '@/components/ui/list-row'
+import { DocumentCard } from '@/components/documents/document-card'
 import { DOC_SECTIONS, sectionForDocType } from '@/lib/documents/doc-types'
-import type { DocumentRow } from '@/lib/documents/queries'
+import type { DocumentRow, DocumentShareRow } from '@/lib/documents/queries'
 
 interface Props {
   documents: DocumentRow[]
+  shares: Record<string, DocumentShareRow[]>
+  sharesError: string | null
   error: string | null
 }
 
-// The Documents page shell (REE-1). Cards render titles only at this stage:
-// no share log, no upload, no detail view yet.
-export function DocumentsView({ documents, error }: Props) {
+export function DocumentsView({ documents, shares, sharesError, error }: Props) {
   if (error) {
     return <p className="text-sm text-destructive">Could not load documents.</p>
   }
@@ -37,9 +37,12 @@ export function DocumentsView({ documents, error }: Props) {
           </p>
           <div className="space-y-2">
             {grouped.get(section.docType)!.map((doc) => (
-              <ListRow key={doc.id}>
-                <p className="text-sm font-medium truncate">{doc.title}</p>
-              </ListRow>
+              <DocumentCard
+                key={doc.id}
+                document={doc}
+                shares={shares[doc.id] ?? []}
+                sharesError={sharesError}
+              />
             ))}
           </div>
         </div>
