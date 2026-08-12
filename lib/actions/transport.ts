@@ -39,7 +39,7 @@ export async function recordTransportOption(
   // from another account's tour attached cleanly to a segment on this one, and
   // boardingPassJob then sent that person real travel details to a real phone
   // number. Verify every id against tourId before writing anything.
-  // sendRider in lib/actions/documents.ts is the reference shape.
+  // sendDocument in lib/actions/documents.ts is the reference shape.
   const { data: tour } = await supabase
     .from('tours')
     .select('id, timezone')

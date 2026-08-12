@@ -4,7 +4,7 @@ import { renderRiderEmail } from '@/lib/comms/templates/rider-email'
 import { redis } from '@/lib/redis'
 
 export type RiderEmailPayload = {
-  // Resolved by sendRider() before enqueue so this job is pure data in / email out.
+  // Resolved by sendDocument() before enqueue so this job is pure data in / email out.
   to: string
   recipient_name: string
   artist_name: string
@@ -16,12 +16,12 @@ export type RiderEmailPayload = {
 }
 
 // Sends the initial rider or advance document email to a venue contact.
-// Enqueued by sendRider() in lib/actions/documents.ts.
+// Enqueued by sendDocument() in lib/actions/documents.ts.
 // sendEmail() writes sent_at to document_shares when share_token is provided.
 //
 // Claim-send-release, matching lib/comms/notify/index.ts: without the claim,
 // a Trigger.dev retry would email the venue contact a second time. Keyed on
-// share_token since sendRider() mints a fresh one per send (a deliberate
+// share_token since sendDocument() mints a fresh one per send (a deliberate
 // resend to a different contact gets its own token and is unaffected).
 export const sendRiderEmailJob = task({
   id: 'send-rider-email',

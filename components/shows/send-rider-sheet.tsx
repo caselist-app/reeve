@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { sendRider } from '@/lib/actions/documents'
+import { sendDocument } from '@/lib/actions/documents'
 
 // Re-exported for existing importers. The shapes themselves live in
 // lib/shows/advance.ts, which server code can import and this file cannot be.
@@ -46,11 +46,11 @@ export function SendRiderSheet({
     setError(null)
 
     startTransition(async () => {
-      const result = await sendRider({
+      const result = await sendDocument({
         tourId,
         showId,
         documentId,
-        recipientPersonId: personId,
+        recipientPersonIds: [personId],
         note: note.trim() || null,
       })
 

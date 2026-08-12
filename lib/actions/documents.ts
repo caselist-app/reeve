@@ -11,26 +11,34 @@ import { uploadDocumentSchema } from '@/lib/validators/documents'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://tourwithreeve.com'
 
-export type SendRiderParams = {
+export type SendDocumentParams = {
   tourId: string
-  showId: string
   documentId: string
-  recipientPersonId: string
+  recipientPersonIds: string[]
+  // Reminders only fire when a show is attached: a tour-level informational
+  // send (e.g. a routing sheet to management) has no advance to chase.
+  showId?: string | null
   // Optional note from the TM appended below the auto-generated body.
   note?: string | null
 }
 
-export type SendRiderResult = {
+export type SendDocumentResult = {
   error: string | null
 }
 
-// Creates a document_shares row and enqueues the rider email job.
-// Each call is a new row with a new token: sending the same doc twice is
-// intentional (e.g. resend to a second contact), so no deduplication here.
-// The share ledger is append-mostly: old rows are never modified or deleted.
-export async function sendRider(params: SendRiderParams): Promise<SendRiderResult> {
+// Creates one document_shares row (and one share_token) per recipient, and
+// enqueues the rider email job for each. Each row is a new token: sending the
+// same doc twice is intentional (e.g. resend to a second contact), so no
+// deduplication here. The share ledger is append-mostly: old rows are never
+// modified or deleted.
+//
+// Brief 39 Part 1 calls this the reference pattern for cross-tour id checks
+// under its old name (sendRider): every id in the payload is verified against
+// tourId before use, because RLS only proves the caller owns tourId, not that
+// the other ids in the payload belong to it.
+export async function sendDocument(params: SendDocumentParams): Promise<SendDocumentResult> {
   const user = await requireUser()
-  const { tourId, showId, documentId, recipientPersonId, note } = params
+  const { tourId, documentId, recipientPersonIds, showId, note } = params
 
   const supabase = await createClient()
 
@@ -44,16 +52,6 @@ export async function sendRider(params: SendRiderParams): Promise<SendRiderResul
 
   if (!tour) return { error: 'Tour not found.' }
 
-  // Verify the show belongs to this tour.
-  const { data: show } = await supabase
-    .from('shows')
-    .select('id')
-    .eq('id', showId)
-    .eq('tour_id', tourId)
-    .single()
-
-  if (!show) return { error: 'Show not found.' }
-
   // Fetch document (must belong to this tour).
   const { data: doc } = await supabase
     .from('documents')
@@ -64,66 +62,109 @@ export async function sendRider(params: SendRiderParams): Promise<SendRiderResul
 
   if (!doc) return { error: 'Document not found.' }
 
-  // Fetch recipient (must belong to this tour).
-  const { data: personRow } = await supabase
+  // Verify the show belongs to this tour, only when one was given.
+  if (showId) {
+    const { data: show } = await supabase
+      .from('shows')
+      .select('id')
+      .eq('id', showId)
+      .eq('tour_id', tourId)
+      .single()
+
+    if (!show) return { error: 'Show not found.' }
+  }
+
+  // Guard the empty array: an empty .in() is a round trip that can only
+  // return nothing.
+  if (recipientPersonIds.length === 0) return { error: 'Select at least one recipient.' }
+
+  // Fetch every recipient in one query, scoped to this tour, then assert the
+  // returned count equals the requested count so a person from another tour
+  // is caught rather than silently dropped from the send.
+  const { data: peopleRows } = await supabase
     .from('people')
     .select('id, contacts(name, contact_email)')
-    .eq('id', recipientPersonId)
     .eq('tour_id', tourId)
-    .single()
+    .in('id', recipientPersonIds)
+
+  const distinctIds = new Set(recipientPersonIds)
+  if ((peopleRows?.length ?? 0) !== distinctIds.size) {
+    return { error: 'One or more recipients are not on this tour.' }
+  }
 
   // Identity (name, email) lives on the contact.
-  const person = personRow
-    ? {
-        id: personRow.id,
-        ...((personRow.contacts as { name: string; contact_email: string | null } | null) ?? {
-          name: '',
-          contact_email: null,
-        }),
-      }
-    : null
+  const people = (peopleRows ?? []).map((row) => ({
+    id: row.id,
+    ...((row.contacts as { name: string; contact_email: string | null } | null) ?? {
+      name: '',
+      contact_email: null,
+    }),
+  }))
 
-  if (!person) return { error: 'Person not found.' }
-  if (!person.contact_email) return { error: `${person.name} does not have an email address on file.` }
+  const missingEmail = people.find((person) => !person.contact_email)
+  if (missingEmail) {
+    return { error: `${missingEmail.name} does not have an email address on file.` }
+  }
 
-  const shareToken = generateShareToken()
-  const shareUrl = `${APP_URL}/a/${shareToken}`
-
-  // Insert the share row before enqueuing so the job can write sent_at to it.
-  // show_id is stored so the acknowledge API can locate the correct show_advance row.
-  const { data: newShare, error: insertError } = await supabase
+  // Insert one share row per recipient, each with its own token, before
+  // enqueuing so the job can write sent_at to it. show_id is stored so the
+  // acknowledge API can locate the correct show_advance row.
+  const { data: newShares, error: insertError } = await supabase
     .from('document_shares')
-    .insert({
-      tour_id: tourId,
-      show_id: showId,
-      document_id: documentId,
-      recipient_person_id: recipientPersonId,
-      channel: 'email',
-      share_token: shareToken,
+    .insert(
+      people.map((person) => ({
+        tour_id: tourId,
+        show_id: showId ?? null,
+        document_id: documentId,
+        recipient_person_id: person.id,
+        channel: 'email',
+        share_token: generateShareToken(),
+      }))
+    )
+    .select('id, recipient_person_id, share_token')
+
+  if (insertError || !newShares || newShares.length !== people.length) {
+    return { error: insertError?.message ?? 'Failed to create shares.' }
+  }
+
+  const peopleById = new Map(people.map((person) => [person.id, person]))
+
+  // Enqueue the Trigger.dev job for each recipient and return immediately.
+  // The job writes sent_at to its share row after Resend confirms delivery.
+  await Promise.all(
+    newShares.map((share) => {
+      const person = peopleById.get(share.recipient_person_id)
+      if (!person?.contact_email) return Promise.resolve()
+
+      const shareUrl = `${APP_URL}/a/${share.share_token}`
+
+      return sendRiderEmailJob.trigger({
+        to: person.contact_email,
+        recipient_name: person.name,
+        artist_name: tour.artists?.name ?? tour.name,
+        artist_slug: tour.artists?.slug ?? null,
+        document_title: doc.title,
+        share_token: share.share_token,
+        share_url: shareUrl,
+        note: note ?? null,
+      })
     })
-    .select('id')
-    .single()
+  )
 
-  if (insertError || !newShare) return { error: insertError?.message ?? 'Failed to create share.' }
-
-  // Enqueue the Trigger.dev job and return immediately.
-  // The job writes sent_at to the share row after Resend confirms delivery.
-  await sendRiderEmailJob.trigger({
-    to: person.contact_email,
-    recipient_name: person.name,
-    artist_name: tour.artists?.name ?? tour.name,
-    artist_slug: tour.artists?.slug ?? null,
-    document_title: doc.title,
-    share_token: shareToken,
-    share_url: shareUrl,
-    note: note ?? null,
-  })
-
-  // Schedule advance reminders. The job re-checks acknowledged_at before
-  // sending, so these are safe to enqueue eagerly.
-  const reminderBase = { tour_id: tourId, document_share_id: newShare.id }
-  await advanceReminderJob.trigger({ ...reminderBase, reminder_index: 1 }, { delay: '3d' })
-  await advanceReminderJob.trigger({ ...reminderBase, reminder_index: 2 }, { delay: '7d' })
+  // Schedule advance reminders, only when this send is attached to a show.
+  // The job re-checks acknowledged_at before sending, so these are safe to
+  // enqueue eagerly.
+  if (showId) {
+    await Promise.all(
+      newShares.map((share) => {
+        const reminderBase = { tour_id: tourId, document_share_id: share.id }
+        return Promise.all([
+          advanceReminderJob.trigger({ ...reminderBase, reminder_index: 1 }, { delay: '3d' }),
+          advanceReminderJob.trigger({ ...reminderBase, reminder_index: 2 }, { delay: '7d' }),
+        ])
+      })
+    )
+  }
 
   // The Documents page renders every document's share log; a share created
   // from the advance panel or a resend must show up there too.
@@ -133,10 +174,10 @@ export async function sendRider(params: SendRiderParams): Promise<SendRiderResul
 }
 
 // Resends a document to the same recipient a document_shares row already went
-// to. Reuses sendRider rather than duplicating its insert-and-enqueue logic:
-// a resend is intentionally a brand new share row with its own token, not a
-// mutation of the old one (document_shares is append-mostly).
-export async function resendShare(shareId: string): Promise<SendRiderResult> {
+// to. Reuses sendDocument rather than duplicating its insert-and-enqueue
+// logic: a resend is intentionally a brand new share row with its own token,
+// not a mutation of the old one (document_shares is append-mostly).
+export async function resendShare(shareId: string): Promise<SendDocumentResult> {
   await requireUser()
   const supabase = await createClient()
 
@@ -150,11 +191,11 @@ export async function resendShare(shareId: string): Promise<SendRiderResult> {
   if (!share) return { error: 'Share not found.' }
   if (!share.show_id) return { error: 'This document was not sent for a show.' }
 
-  return sendRider({
+  return sendDocument({
     tourId: share.tour_id,
     showId: share.show_id,
     documentId: share.document_id,
-    recipientPersonId: share.recipient_person_id,
+    recipientPersonIds: [share.recipient_person_id],
   })
 }
 
