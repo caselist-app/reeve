@@ -42,7 +42,7 @@ export async function recordTransportOption(
   // sendRider in lib/actions/documents.ts is the reference shape.
   const { data: tour } = await supabase
     .from('tours')
-    .select('id')
+    .select('id, timezone')
     .eq('id', tourId)
     .eq('account_id', user.id)
     .single()
@@ -79,10 +79,25 @@ export async function recordTransportOption(
   const sourceProvider =
     typeof rawObj?.provider === 'string' ? rawObj.provider : null
 
+  // Same rule as createTransportSegment: the departure decides the day, and a
+  // date with no tour_dates row gets one. Left unresolved, a booked option
+  // whose departure fell on a date the tour had no other record for was never
+  // added to the Dates sidebar, so there was no page a TM could open to see it
+  // (fetchDayRecords returns nothing for a date with no tour_dates row before
+  // it even queries transport). It then surfaced only as the clamped
+  // continuation on the day its arrival reached into, reading as a same-day
+  // block that started at the top of that grid (REE-158).
+  const localDate = localDateInZone(option.depart_at, tour.timezone ?? 'UTC')
+  const resolved = await resolveTourDateId(supabase, tourId, localDate, {
+    dayType: 'travel',
+  })
+  if (resolved.id === null) return { error: resolved.error }
+
   const { data: segment, error: segmentError } = await supabase
     .from('transport_segments')
     .insert({
       tour_id: tourId,
+      tour_date_id: resolved.id,
       mode: option.mode,
       origin: option.leg_ref
         ? `${option.leg_ref.slice(0, 3)} (hub)` // best-effort; adapters can enrich
@@ -122,9 +137,6 @@ export async function recordTransportOption(
 
   void bustTourContextCache(tourId)
   revalidatePath(`/tours/${tourId}/transport`)
-  // The planner writes no tour_date_id, so the segment reaches the day timeline
-  // through the unlinked date-match query rather than through a link. It still
-  // renders there, and /transport was the only route being invalidated.
   revalidatePath(`/tours/${tourId}/schedule`)
 
   return { error: null, segmentId: segment.id }
