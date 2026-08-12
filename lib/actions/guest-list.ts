@@ -302,6 +302,11 @@ export async function approveGuestEntry(
   if (outcome.error) return { error: outcome.error }
 
   revalidatePath(`/tours/${tourId}/schedule`)
+  // The Inbox item detail route (brief 53, REE-152) is a second surface that
+  // can call this, alongside the guest list panel. resolveGuestRequestAttention
+  // already dropped the row inside decideGuestEntry; this just makes the
+  // /inbox list route's own server data catch up on next visit.
+  revalidatePath('/inbox')
 
   return {
     error: null,
@@ -328,6 +333,7 @@ export async function declineGuestEntry(
   if (outcome.error) return { error: outcome.error }
 
   revalidatePath(`/tours/${tourId}/schedule`)
+  revalidatePath('/inbox')
 
   return { error: null, alreadyDecided: outcome.alreadyDecided }
 }
