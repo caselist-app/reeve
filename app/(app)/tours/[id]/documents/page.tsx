@@ -16,7 +16,7 @@ export default async function DocumentsPage({
   const user = await requireUser()
   const supabase = await createClient()
 
-  const { tour, documents, error } = await fetchDocumentsPage(supabase, id, user.id)
+  const { tour, documents, shares, sharesError, error } = await fetchDocumentsPage(supabase, id, user.id)
 
   if (!tour) redirect('/')
 
@@ -30,7 +30,7 @@ export default async function DocumentsPage({
         description={description}
         actions={<UploadDocumentButton tourId={id} />}
       />
-      <DocumentsView documents={documents} error={error} />
+      <DocumentsView documents={documents} shares={shares} sharesError={sharesError} error={error} />
     </PageLayout>
   )
 }
