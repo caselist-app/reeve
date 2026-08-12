@@ -1,15 +1,16 @@
 import type { createClient } from '@/lib/supabase/server'
+import type { ExtractionProposal } from '@/lib/ai/extract'
 
 // The single-item read behind the Inbox item detail route (brief 53, REE-152).
 // Scoped by account the same way fetchInbox scopes the list (lib/inbox/query.ts):
 // tours!inner so a filter on tours.account_id actually filters, per CLAUDE.md's
 // "a filter on an embedded table needs !inner".
 //
-// Only guest_request has a subject resolver today. Any other kind (currently
-// just email_extraction) comes back with item set and subject null, and the
-// route renders a plain fallback rather than a 404: a real backfilled row
-// already exists in production and a TM can click it before that kind gets its
-// own view.
+// guest_request and email_extraction each have a subject resolver (REE-154
+// added the second). Any other kind comes back with item set and subject
+// null, and the route renders a plain fallback rather than a 404: a real
+// backfilled row already exists in production and a TM can click it before
+// that kind gets its own view.
 
 type Client = Awaited<ReturnType<typeof createClient>>
 
@@ -56,9 +57,24 @@ export interface GuestRequestSubject {
   allotment: { used: number; allowed: number } | null
 }
 
+// The extraction detail subject (REE-154): the forwarded email plus its
+// proposed rows, read straight off forwarded_emails. proposed_rows is nullable
+// (extraction can fail before ever calling the model), so a null reads as the
+// same empty proposal runExtraction itself falls back to on failure.
+export interface ExtractionSubject {
+  forwardedEmailId: string
+  status: string
+  fromAddress: string | null
+  subjectLine: string | null
+  bodyText: string | null
+  proposal: ExtractionProposal
+}
+
+const EMPTY_PROPOSAL: ExtractionProposal = { shows: [], transport_segments: [], hotel_stays: [] }
+
 export interface InboxItemResult {
   item: InboxItemDetail | null
-  subject: GuestRequestSubject | null
+  subject: GuestRequestSubject | ExtractionSubject | null
   // The one exception to "producers create rows and producers resolve them"
   // (brief 53): related_id points at a row that is no longer there. True only
   // when the read itself succeeded and came back empty, never on a failed read.
@@ -129,15 +145,50 @@ export async function fetchInboxItem(
     resolved_at: data.resolved_at,
   }
 
-  if (item.kind !== 'guest_request' || item.related_table !== 'guest_list_entries' || !item.related_id) {
-    return { item, subject: null, danglingPointer: false, error: null }
+  if (item.kind === 'guest_request' && item.related_table === 'guest_list_entries' && item.related_id) {
+    const { subject, error: subjectError } = await fetchGuestRequestSubject(supabase, item.related_id)
+    if (subjectError) return { item, subject: null, danglingPointer: false, error: subjectError }
+    if (!subject) return { item, subject: null, danglingPointer: true, error: null }
+    return { item, subject, danglingPointer: false, error: null }
   }
 
-  const { subject, error: subjectError } = await fetchGuestRequestSubject(supabase, item.related_id)
-  if (subjectError) return { item, subject: null, danglingPointer: false, error: subjectError }
-  if (!subject) return { item, subject: null, danglingPointer: true, error: null }
+  if (item.kind === 'email_extraction' && item.related_table === 'forwarded_emails' && item.related_id) {
+    const { subject, error: subjectError } = await fetchExtractionSubject(supabase, item.related_id)
+    if (subjectError) return { item, subject: null, danglingPointer: false, error: subjectError }
+    if (!subject) return { item, subject: null, danglingPointer: true, error: null }
+    return { item, subject, danglingPointer: false, error: null }
+  }
 
-  return { item, subject, danglingPointer: false, error: null }
+  return { item, subject: null, danglingPointer: false, error: null }
+}
+
+// The email plus its proposed rows, read straight off forwarded_emails. A
+// gone row (deleted, or from another tour) comes back as no row and no error,
+// same dangling-pointer shape as fetchGuestRequestSubject.
+async function fetchExtractionSubject(
+  supabase: Client,
+  forwardedEmailId: string,
+): Promise<{ subject: ExtractionSubject | null; error: string | null }> {
+  const { data, error } = await supabase
+    .from('forwarded_emails')
+    .select('id, from_address, subject, body_text, extraction_status, proposed_rows')
+    .eq('id', forwardedEmailId)
+    .maybeSingle()
+
+  if (error) return { subject: null, error: error.message }
+  if (!data) return { subject: null, error: null }
+
+  return {
+    subject: {
+      forwardedEmailId: data.id,
+      status: data.extraction_status,
+      fromAddress: data.from_address,
+      subjectLine: data.subject,
+      bodyText: data.body_text,
+      proposal: (data.proposed_rows as ExtractionProposal | null) ?? EMPTY_PROPOSAL,
+    },
+    error: null,
+  }
 }
 
 // The entry, its show and its requester, in one read: guest_list_entries has a

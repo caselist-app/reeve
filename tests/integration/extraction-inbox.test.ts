@@ -20,10 +20,12 @@ vi.mock('@/lib/ai/extract', () => ({
 import { extractEmailForward } from '@/lib/ai/extract'
 import { runExtraction } from '@/trigger/jobs/extract-forward'
 import { confirmExtraction, discardExtraction } from '@/lib/actions/extractions'
+import type { ExtractionKeep } from '@/lib/validators/extraction'
 
 const mockedExtract = vi.mocked(extractEmailForward)
 
 const EMPTY_PROPOSAL: ExtractionProposal = { shows: [], transport_segments: [], hotel_stays: [] }
+const NO_KEEP: ExtractionKeep = { shows: [], transport_segments: [], hotel_stays: [] }
 
 async function seedForwardedEmail(tourId: string, subject = 'Advance details') {
   const { data, error } = await testDb
@@ -119,7 +121,7 @@ describe('extraction as a producer', () => {
     })
     expect((await attentionForForward(forwardedEmailId))[0].resolved_at).toBeNull()
 
-    const result = await confirmExtraction(forwardedEmailId, EMPTY_PROPOSAL)
+    const result = await confirmExtraction(forwardedEmailId, NO_KEEP)
     expect(result.error).toBeNull()
 
     const items = await attentionForForward(forwardedEmailId)
@@ -156,13 +158,20 @@ describe('extraction as a producer', () => {
       bodyText: 'Load-in 10:00, curfew 23:00.',
     })
 
-    // shows is empty (no RPC write to reach), but transport_segments is
-    // missing, so confirmExtraction throws when it gets to `.filter` on it,
-    // after the optimistic lock write has already happened: a genuine
-    // exception partway through, not a caught, returned error.
-    const malformed = { shows: [], hotel_stays: [] } as unknown as ExtractionProposal
+    // A malformed row, not a malformed argument: confirmExtraction reads
+    // proposed_rows itself now (REE-154), so the way to reach a genuine
+    // exception after the optimistic lock is to plant one in the row the TM
+    // kept. Index 0 is in range, so narrowExtractionProposal picks it
+    // cleanly; confirmExtraction only breaks once it tries `show.date` on the
+    // null it kept, deep in the shows loop, well after the lock write.
+    await testDb
+      .from('forwarded_emails')
+      .update({ proposed_rows: { shows: [null], transport_segments: [], hotel_stays: [] } })
+      .eq('id', forwardedEmailId)
 
-    await expect(confirmExtraction(forwardedEmailId, malformed)).rejects.toThrow()
+    const keep: ExtractionKeep = { shows: [0], transport_segments: [], hotel_stays: [] }
+
+    await expect(confirmExtraction(forwardedEmailId, keep)).rejects.toThrow()
 
     const items = await attentionForForward(forwardedEmailId)
     expect(items).toHaveLength(1)

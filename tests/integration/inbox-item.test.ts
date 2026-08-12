@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { testDb } from './test-db'
 import { createFixture, destroyFixture, type Fixture } from './fixture'
-import { fetchInboxItem } from '@/lib/inbox/item'
+import { fetchInboxItem, type GuestRequestSubject } from '@/lib/inbox/item'
 import { approveGuestEntry } from '@/lib/actions/guest-list'
 
 // REE-152. fetchInboxItem is the single-item read behind the Inbox item
@@ -78,15 +78,18 @@ describe('fetchInboxItem', () => {
     expect(item!.tour_id).toBe(fixture.tourId)
 
     expect(subject).not.toBeNull()
+    // kind === 'guest_request' here, so subject is a GuestRequestSubject, not
+    // the ExtractionSubject REE-154 added alongside it.
+    const guestSubject = subject as GuestRequestSubject
     // The entry.
-    expect(subject!.firstName).toBe('Sam')
-    expect(subject!.lastName).toBe('Reed')
-    expect(subject!.numTickets).toBe(2)
+    expect(guestSubject.firstName).toBe('Sam')
+    expect(guestSubject.lastName).toBe('Reed')
+    expect(guestSubject.numTickets).toBe(2)
     // The show.
-    expect(subject!.showId).toBe(fixture.showId)
-    expect(subject!.venueName).toBe('Test Venue')
+    expect(guestSubject.showId).toBe(fixture.showId)
+    expect(guestSubject.venueName).toBe('Test Venue')
     // The requester.
-    expect(subject!.requesterName).toBe('Test Crew')
+    expect(guestSubject.requesterName).toBe('Test Crew')
   })
 
   it('an item whose related_id points at a deleted entry returns the item with a null subject rather than throwing', async () => {

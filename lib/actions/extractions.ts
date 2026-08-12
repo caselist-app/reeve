@@ -7,24 +7,33 @@ import type { ExtractionProposal } from '@/lib/ai/extract'
 import { bustTourContextCache } from '@/lib/ai/context'
 import { createDayItem } from '@/lib/actions/day-items'
 import { resolveAttentionItem } from '@/lib/actions/inbox'
+import { extractionKeepSchema, narrowExtractionProposal, type ExtractionKeep } from '@/lib/validators/extraction'
 
 export type ExtractionActionState = { error: string | null }
 
-// Reads proposed_rows from a forwarded_emails row and inserts the confirmed
-// data into the appropriate spine tables. Nothing lands in the spine until
-// this function is called with the TM's edited and confirmed values.
-// After writing, sets extraction_status = 'confirmed'.
+const EMPTY_PROPOSAL: ExtractionProposal = { shows: [], transport_segments: [], hotel_stays: [] }
+
+// Reads proposed_rows from a forwarded_emails row and inserts the rows the TM
+// kept into the appropriate spine tables. `keep` names indices into
+// proposed_rows, not row data: the TM edits nothing in this pass, only keeps
+// or discards each proposed row (REE-154), so the server, not the caller, is
+// the one source of truth for what a kept row actually contains. Nothing
+// lands in the spine until this function is called. After writing, sets
+// extraction_status = 'confirmed'.
 export async function confirmExtraction(
   forwardedEmailId: string,
-  confirmed: ExtractionProposal
+  keep: ExtractionKeep
 ): Promise<ExtractionActionState> {
   await requireUser()
   const supabase = await createClient()
 
+  const parsedKeep = extractionKeepSchema.safeParse(keep)
+  if (!parsedKeep.success) return { error: 'That selection is not valid.' }
+
   // RLS check: owns_tour on forwarded_emails enforces ownership.
   const { data: forwarded } = await supabase
     .from('forwarded_emails')
-    .select('id, tour_id, extraction_status')
+    .select('id, tour_id, extraction_status, proposed_rows')
     .eq('id', forwardedEmailId)
     .single()
 
@@ -32,6 +41,12 @@ export async function confirmExtraction(
   if (forwarded.extraction_status === 'confirmed') return { error: 'Already confirmed.' }
 
   const tourId = forwarded.tour_id
+  const proposed = (forwarded.proposed_rows as ExtractionProposal | null) ?? EMPTY_PROPOSAL
+
+  const narrowed = narrowExtractionProposal(proposed, parsedKeep.data)
+  if (narrowed.proposal === null) return { error: narrowed.error }
+
+  const confirmed = narrowed.proposal
 
   // Optimistic lock: claim the row before inserting any spine data.
   // A concurrent second click will hit the 'Already confirmed.' guard above.

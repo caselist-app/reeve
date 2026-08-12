@@ -8,15 +8,15 @@ import { relativeLabel } from '@/lib/inbox/format'
 import { PageLayout } from '@/components/layout/page-layout'
 import { PageHeader } from '@/components/layout/page-header'
 import { GuestRequestItem } from '@/components/inbox/guest-request-item'
+import { ExtractionItem } from '@/components/inbox/extraction-item'
 import { ClearFromInboxButton } from '@/components/inbox/clear-from-inbox-button'
 
-// The item detail route (brief 53, REE-152): reads one attention_items row,
-// scoped to the account the same way the list scopes it (fetchInbox), then
-// branches on kind. Only guest_request has a dedicated view today
-// (components/inbox/guest-request-item.tsx); every other kind falls back to a
-// plain rendering of title and detail rather than a 404, because a real
-// backfilled email_extraction row already exists in production and a TM can
-// click it before that kind gets its own view.
+// The item detail route (brief 53, REE-152, REE-154): reads one
+// attention_items row, scoped to the account the same way the list scopes it
+// (fetchInbox), then branches on kind. guest_request and email_extraction
+// each have a dedicated view; every other kind falls back to a plain
+// rendering of title and detail rather than a 404, so a TM can still click a
+// backfilled row of a kind that has not got its own view yet.
 export default async function InboxItemPage({
   params,
 }: {
@@ -63,8 +63,10 @@ export default async function InboxItemPage({
                 relatedId={item.related_id as string}
               />
             </div>
-          ) : item.kind === 'guest_request' && subject ? (
+          ) : item.kind === 'guest_request' && subject && 'entryId' in subject ? (
             <GuestRequestItem tourId={item.tour_id} subject={subject} />
+          ) : item.kind === 'email_extraction' && subject && 'forwardedEmailId' in subject ? (
+            <ExtractionItem subject={subject} />
           ) : (
             <div className="space-y-2">
               {item.detail && <p className="text-sm text-muted-foreground">{item.detail}</p>}
