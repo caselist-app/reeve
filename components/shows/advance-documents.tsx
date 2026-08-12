@@ -126,7 +126,7 @@ export function AdvanceDocuments({
 
   const handleResend = useCallback(
     (dept: DepartmentShareData) => {
-      // Re-open the send panel so the TM picks the recipient for resend.
+      // Re-open the send panel so the TM picks the recipients for resend.
       openSendPanel(dept)
     },
     [openSendPanel]

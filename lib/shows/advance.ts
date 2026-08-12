@@ -25,10 +25,13 @@ export type SendableDocument = {
   doc_type: string
 }
 
+// Not every person on this list is actually contactable: a person with no
+// contact_email is still listed (the send panel greys them out rather than
+// hiding them), so contact_email is nullable here.
 export type ContactablePerson = {
   id: string
   name: string
-  contact_email: string
+  contact_email: string | null
 }
 
 /** One document_shares row, shaped for the UI. */

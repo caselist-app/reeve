@@ -74,14 +74,20 @@ describe('the advance panel gets real data', () => {
       })
     })
 
-    it('excludes a crew member with no email address', async () => {
-      // The inverse case, and the reason the filter exists at all. Without it a
-      // person with no email reaches the picker and the send fails later, at
-      // the point where a TM believes a rider has gone out.
+    it('includes a crew member with no email address, with a null contact_email', async () => {
+      // REE-6: the send panel lists every tour person and greys out anyone
+      // without an email rather than hiding them, so a TM can see who still
+      // needs an address before they can be sent to. Filtering them out here
+      // would put that decision back in the query, invisibly.
       const { data, error } = await getShowAdvance(fixture.tourId, fixture.showId)
       if (error) throw new Error(`could not load the advance: ${error}`)
 
-      expect(data?.people).toEqual([])
+      expect(data?.people).toHaveLength(1)
+      expect(data?.people[0]).toMatchObject({
+        id: fixture.personId,
+        name: 'Test Crew',
+        contact_email: null,
+      })
     })
   })
 

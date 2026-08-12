@@ -10,7 +10,7 @@ const BulkAdd = dynamic(() => import('@/components/people/bulk-add').then((m) =>
 const AddPersonPanel = dynamic(() => import('@/components/people/add-person-panel').then((m) => m.AddPersonPanel), { ssr: false })
 const ContactSheet = dynamic(() => import('@/components/roster/contact-sheet').then((m) => m.ContactSheet), { ssr: false })
 const ContactPanel = dynamic(() => import('@/components/roster/contact-panel').then((m) => m.ContactPanel), { ssr: false })
-const SendRiderSheet = dynamic(() => import('@/components/shows/send-rider-sheet').then((m) => m.SendRiderSheet), { ssr: false })
+const SendDocumentSheet = dynamic(() => import('@/components/shows/send-document-sheet').then((m) => m.SendDocumentSheet), { ssr: false })
 const VenuePanel = dynamic(() => import('@/components/schedule/panels/venue-panel').then((m) => m.VenuePanel), { ssr: false })
 const AdvancePanel = dynamic(() => import('@/components/schedule/panels/advance-panel').then((m) => m.AdvancePanel), { ssr: false })
 const GuestListPanel = dynamic(() => import('@/components/schedule/panels/guest-list-panel').then((m) => m.GuestListPanel), { ssr: false })
@@ -85,9 +85,10 @@ export function ActivePanel() {
       )
     case 'send-rider':
       return (
-        <SendRiderSheet
+        <SendDocumentSheet
           tourId={panel.tourId}
           showId={panel.showId}
+          shows={panel.shows}
           departmentLabel={panel.departmentLabel}
           documents={panel.documents}
           people={panel.people}
