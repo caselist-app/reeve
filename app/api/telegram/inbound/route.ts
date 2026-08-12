@@ -175,7 +175,7 @@ async function handleLinking(
 
   const { data: linkToken } = await admin
     .from('telegram_link_tokens')
-    .select('contact_id, expires_at, used_at')
+    .select('contact_id, account_id, expires_at, used_at')
     .eq('token', token)
     .maybeSingle()
 
@@ -184,6 +184,31 @@ async function handleLinking(
 
   if (isExpired || !linkToken) {
     await sendTelegramMessage({ chatId, text: LINK_EXPIRED_MESSAGE })
+    return
+  }
+
+  // A token with no contact links the account holder to their own chat, rather
+  // than a crew member's. Generated from account settings (REE-132), it writes
+  // accounts.telegram_chat_id so Reeve can message the TM directly. No per-tour
+  // uniqueness trigger applies: this is the account's own Telegram, not a crew
+  // identity shared across a tour's roster.
+  if (linkToken.contact_id === null) {
+    const { error: accountError } = await admin
+      .from('accounts')
+      .update({ telegram_chat_id: chatId })
+      .eq('id', linkToken.account_id)
+
+    if (accountError) {
+      await sendTelegramMessage({ chatId, text: LINK_EXPIRED_MESSAGE })
+      return
+    }
+
+    await admin
+      .from('telegram_link_tokens')
+      .update({ used_at: new Date().toISOString() })
+      .eq('token', token)
+
+    await sendTelegramMessage({ chatId, text: "You're connected. Reeve will message you here." })
     return
   }
 
