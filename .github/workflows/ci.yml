@@ -499,21 +499,17 @@ jobs:
       # explain it.
       # `vercel pull` normally discovers the project link by calling Vercel's
       # API (GET /v2/user, GET /teams/:id, then GET /v9/projects/:id) and
-      # refuses to proceed unless all three succeed. Debugged 2026-08-12: the
+      # refuses to proceed unless all three succeed. In this CI setup the
       # third call, the one that actually returns the project settings we
-      # need, succeeded on its own, but the first two 404/403'd and the CLI
-      # threw its generic "Could not retrieve Project Settings" regardless.
-      # Per Vercel's own docs (vercel.com/docs/errors/error-list#cannot-load-project-settings)
-      # that combination is the team's two-factor enforcement policy blocking
-      # the token's account on team-scoped calls while project-scoped calls
-      # still succeed; the fix was enabling 2FA on the account that issued
-      # VERCEL_TOKEN, not anything in this file.
+      # need, succeeds on its own (confirmed via --debug), but the first two
+      # 404/403 anyway and the CLI throws its generic "Could not retrieve
+      # Project Settings" regardless of the project call having worked. Known
+      # class of Vercel CLI bug: https://github.com/vercel/vercel/issues/10874.
       #
-      # Writing .vercel/project.json ourselves still skips most of that
-      # discovery path (kept even after the 2FA fix, since GET /v2/user and
-      # GET /teams/:id have no reason to run at all when the two IDs are
-      # already known), leaving less surface for this class of error to
-      # resurface on a future token or account change.
+      # Writing .vercel/project.json ourselves skips that discovery path
+      # entirely. The CLI reads org/project IDs straight off disk instead of
+      # asking its API to confirm them, which is the same file `vercel link`
+      # writes locally and is not subject to the bug above.
       - name: Link the Vercel project
         run: |
           mkdir -p .vercel
@@ -524,12 +520,6 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-      # VERCEL_ORG_ID/VERCEL_PROJECT_ID are deliberately not set here. Either
-      # of those present in the environment makes the CLI use its API-based
-      # discovery flow instead of the .vercel/project.json written above,
-      # which is the exact flow that hits the bug explained on that step:
-      # confirmed by this step failing identically to before even after the
-      # file was written correctly, because those two were still set here too.
       - name: Pull Vercel environment, build, and deploy
         run: |
           npx vercel@58.9.5 pull --yes --environment=production --token="$VERCEL_TOKEN"
@@ -537,3 +527,5 @@ jobs:
           npx vercel@58.9.5 deploy --prebuilt --prod --token="$VERCEL_TOKEN"
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
