@@ -203,6 +203,22 @@ The panel is a single text input over `buildAddOptions` (`lib/schedule/add-optio
 
 **Transport and Hotels** are not top-level nav items. They are accessible via the gear icon settings panel in the sidebar header. The primary nav is: Schedule, People, Settings (gear).
 
+## The Inbox and the producer contract (Brief 53)
+
+The Inbox (`/inbox`, `attention_items`) is the account-level queue of everything waiting on the TM, across every tour: a guest request, a forwarded email that needs review, later an expiring passport or a routing conflict. It has one rule above the others: **the Inbox never invents a decision, and it never clears one itself.** A row leaves the queue only when the thing it points at is actually resolved. There is no general dismiss.
+
+**Read and resolved are two separate states. Do not collapse them.** `read_at` means the TM has opened the item; `resolved_at` means the underlying decision is made. Reading is never deciding: a TM can open a guest request in the morning and approve it the week of the show, and it has to stay in the queue the whole time. The badge on the sidebar counts open (unresolved) items, not unread ones, for the same reason. Setting `resolved_at` on open is exactly the classic inbox bug this rule exists to prevent.
+
+**Producers create rows and producers resolve them.** Each item kind (`guest_request`, `email_extraction`, and any future kind) is written and cleared by its own owning code, never by generic Inbox code. The one exception is a dangling pointer, a row whose `related_id` no longer resolves to anything: no producer will ever come back for that one, so `resolveAttentionItem` is called directly from the Inbox UI in that single case.
+
+**A producer resolves after the underlying write succeeds, never before.** Resolve first and a failed action leaves a resolved item with the work still undone and nothing on screen saying so. This is the same claim-then-release shape as the comms send pattern, for the same reason: `decideGuestEntry` and `confirmExtraction` both call `resolveAttentionItem` only once their own write has committed.
+
+**The row holds a headline and a pointer, never a payload.** `attention_items` carries `title`, `detail`, `related_table`, `related_id`, and nothing else describing the thing itself. The real data stays in its own typed table with its own constraints and its own RLS; the item's detail view fetches it on open. Do not add a JSON column, and do not widen the table to hold a guest's name or a flight number as structured fields. This is the one place a polymorphic pointer is the right shape, and it stays that way.
+
+**The decision lives where the decision is.** A single decision belongs on the item itself, in the main view. A set of sub-decisions belongs in the side panel. A guest request is one call, so Approve and Decline are first-level buttons on the row. An extraction is a set of proposed rows, each needing its own yes or no, so the email renders in the main view and the proposed rows render in the side panel with keep or discard on each. This is the rule that decides the shape of every future item type; read it before adding one.
+
+`resolveAttentionItem(relatedTable, relatedId)` (`lib/actions/inbox.ts`) calls `revalidatePath('/inbox')` after clearing the row, and nothing in `check:conventions` checks that a producer did the same. Rule 2 (revalidate on a schedule write) only fires on writes to `SCHEDULE_TABLES`, and `attention_items` is deliberately not in that list: it renders nothing on the schedule day view. A producer that forgets `revalidatePath('/inbox')` after its resolve passes typecheck, lint and build, and the row simply sits in the queue, done, until a reload. This is a review item, not a build failure.
+
 ## Panel and card visual language (applies everywhere, no exceptions)
 
 The card token is:
