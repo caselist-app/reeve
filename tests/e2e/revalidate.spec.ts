@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { E2E_SEEDED_LOAD_IN_LOCAL } from '../integration/fixture'
+import { testDb } from '../integration/test-db'
 import { readSeed } from './seed'
 
 // The edit-then-look-somewhere-else class. This has shipped three separate
@@ -125,6 +126,76 @@ test('a renamed tour updates in the sidebar and does not snap back', async ({ pa
   await page.getByLabel('Tour name').fill(seed.a.tourName)
   await page.getByRole('button', { name: 'Save changes' }).click()
   await expect(page.getByLabel('Tour name')).toHaveValue(seed.a.tourName)
+})
+
+// The Inbox badge (REE-151). Its whole reason to exist is the same class as the
+// rest of this file, one boundary further out: the count is rendered in the app
+// layout, above every route, so a resolve happening in the guest list panel (on
+// the schedule route) cannot revalidate or refresh it into repainting (REE-65,
+// REE-131). The badge instead reads an optimistic override written by whoever
+// resolved the item (stores/inbox-count-store.ts).
+//
+// A /guest request normally arrives over WhatsApp or Telegram
+// (handleGuestRequest, REE-133), which this suite has no channel to drive
+// through a browser, so the precondition (one open attention_items row) is
+// inserted directly. Everything downstream, reading the row and deciding it, is
+// the browser doing what a TM would do.
+//
+// Cleanup is the decide step itself: approving resolves the attention item for
+// good (resolved_at is set), the same way guest-list.spec.ts's soft-deleted row
+// stays out of every future count. Nothing is left "requested" for a repeat run
+// to trip over.
+test('the Inbox badge tracks read without moving and decide without a reload', async ({ page }) => {
+  const seed = readSeed()
+
+  const { data: entry, error: entryError } = await testDb
+    .from('guest_list_entries')
+    .insert({
+      tour_id: seed.a.tourId,
+      show_id: seed.a.showId,
+      first_name: 'Nav',
+      last_name: 'Badge',
+      status: 'requested',
+      request_channel: 'telegram',
+      requested_by_person_id: seed.a.personId,
+    })
+    .select('id')
+    .single()
+  if (entryError || !entry) throw new Error(`could not seed guest request: ${entryError?.message}`)
+
+  const { error: attentionError } = await testDb.from('attention_items').insert({
+    tour_id: seed.a.tourId,
+    kind: 'guest_request',
+    title: 'Guest request: Nav Badge for Test Venue',
+    related_table: 'guest_list_entries',
+    related_id: entry.id,
+  })
+  if (attentionError) throw new Error(`could not seed attention item: ${attentionError.message}`)
+
+  // The badge, scoped to the desktop rail's Inbox link (the mobile drawer's copy
+  // is unmounted while its Sheet is closed, so this is the only one in the DOM).
+  // No count in the app touches attention_items except this spec, so 1 is the
+  // real total, not an assumption about ordering.
+  const badge = page.locator('a[href="/inbox"] span').filter({ hasText: /^\d+$/ })
+
+  await page.goto('/inbox')
+  await expect(badge).toHaveText('1')
+
+  await page.getByRole('button', { name: /Guest request: Nav Badge/ }).click()
+
+  // Read is not decided: the badge counts open items, not unread ones
+  // (REE-148), so marking this one read must not move it.
+  await expect(badge).toHaveText('1')
+
+  await page.goto(`/tours/${seed.a.tourId}/schedule?date=${seed.a.date}`)
+  await page.getByRole('button', { name: /Guest list/ }).click()
+  await page.getByRole('button', { name: 'Approve' }).click()
+
+  // No reload anywhere past this point. Approving resolves the attention item
+  // (resolveGuestRequestAttention, called from decideGuestEntry), and the badge
+  // has to reflect that through the client store, not a revalidate across the
+  // panel/layout boundary.
+  await expect(badge).toBeHidden()
 })
 
 // Scoped to the Dates navigation landmark, which is the @secondaryPanel slot

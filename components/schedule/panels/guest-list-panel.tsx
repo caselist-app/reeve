@@ -25,6 +25,7 @@ import {
 } from '@/lib/actions/guest-list'
 import { allotmentLines, summarise, waitingPhrase } from '@/lib/schedule/guest-list-summary'
 import { useGuestCounts } from '@/stores/guest-list-count-store'
+import { useInboxCountStore, selectOpenCount } from '@/stores/inbox-count-store'
 import { guestTypeLabel, passTypeLabel } from '@/lib/guest-list/vocabulary'
 import { toDatetimeLocal, fromDatetimeLocal } from '@/lib/schedule/datetime'
 import { cn } from '@/lib/utils'
@@ -287,6 +288,20 @@ function GuestGroup({
   )
 }
 
+// Approving or declining a requested entry resolves its Inbox row
+// (resolveGuestRequestAttention, called from decideGuestEntry), so the badge
+// in the sidebar needs to drop by one. That badge is server-rendered above
+// this panel's route, so the panel cannot revalidate or refresh it (REE-65,
+// REE-131); it writes the decrement into the shared store instead, stamped
+// with the server count the sidebar last rendered (serverCount), which is
+// what lets the badge accept it as still current. See
+// stores/inbox-count-store.ts.
+function decrementInboxCount() {
+  const { serverCount, override, setOverride } = useInboxCountStore.getState()
+  const current = selectOpenCount(serverCount, override)
+  setOverride(serverCount, current - 1)
+}
+
 function GuestRow({
   entry,
   tourId,
@@ -306,15 +321,31 @@ function GuestRow({
   // count into the guest count store. No server refresh: the block updates from
   // that store, not a revalidate across the panel/route boundary (REE-65).
   function approve() {
+    setSendNote(null)
     startTransition(async () => {
-      await approveGuestEntry(tourId, entry.id)
+      const result = await approveGuestEntry(tourId, entry.id)
+      if (result.error) {
+        setSendNote(result.error)
+        return
+      }
+      // alreadyDecided means the entry was not 'requested' any more when the
+      // action ran (e.g. decided from Telegram in the same moment), so
+      // resolveGuestRequestAttention never ran and the badge already
+      // accounted for it.
+      if (!result.alreadyDecided) decrementInboxCount()
       onChanged()
     })
   }
 
   function decline() {
+    setSendNote(null)
     startTransition(async () => {
-      await declineGuestEntry(tourId, entry.id)
+      const result = await declineGuestEntry(tourId, entry.id)
+      if (result.error) {
+        setSendNote(result.error)
+        return
+      }
+      if (!result.alreadyDecided) decrementInboxCount()
       onChanged()
     })
   }
@@ -429,19 +460,30 @@ function GuestListSettings({
   const [cutoff, setCutoff] = useState(toDatetimeLocal(cutoffAt, timezone))
   const [pending, startTransition] = useTransition()
   const [saved, setSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   function saveCutoff() {
     setSaved(false)
+    setError(null)
     startTransition(async () => {
-      await setGuestListCutoff(showId, fromDatetimeLocal(cutoff, timezone) ?? null)
+      const result = await setGuestListCutoff(showId, fromDatetimeLocal(cutoff, timezone) ?? null)
+      if (result.error) {
+        setError(result.error)
+        return
+      }
       setSaved(true)
       onChanged()
     })
   }
 
   function toggleLock(next: boolean) {
+    setError(null)
     startTransition(async () => {
-      await setGuestListLock(showId, next)
+      const result = await setGuestListLock(showId, next)
+      if (result.error) {
+        setError(result.error)
+        return
+      }
       onChanged()
     })
   }
@@ -477,6 +519,8 @@ function GuestListSettings({
         </Label>
         <Switch checked={locked} disabled={pending} onCheckedChange={toggleLock} />
       </div>
+
+      {error && <p className="text-[11px] text-destructive">{error}</p>}
     </section>
   )
 }

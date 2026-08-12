@@ -10,7 +10,7 @@ const BulkAdd = dynamic(() => import('@/components/people/bulk-add').then((m) =>
 const AddPersonPanel = dynamic(() => import('@/components/people/add-person-panel').then((m) => m.AddPersonPanel), { ssr: false })
 const ContactSheet = dynamic(() => import('@/components/roster/contact-sheet').then((m) => m.ContactSheet), { ssr: false })
 const ContactPanel = dynamic(() => import('@/components/roster/contact-panel').then((m) => m.ContactPanel), { ssr: false })
-const SendRiderSheet = dynamic(() => import('@/components/shows/send-rider-sheet').then((m) => m.SendRiderSheet), { ssr: false })
+const SendDocumentSheet = dynamic(() => import('@/components/shows/send-document-sheet').then((m) => m.SendDocumentSheet), { ssr: false })
 const VenuePanel = dynamic(() => import('@/components/schedule/panels/venue-panel').then((m) => m.VenuePanel), { ssr: false })
 const AdvancePanel = dynamic(() => import('@/components/schedule/panels/advance-panel').then((m) => m.AdvancePanel), { ssr: false })
 const GuestListPanel = dynamic(() => import('@/components/schedule/panels/guest-list-panel').then((m) => m.GuestListPanel), { ssr: false })
@@ -23,6 +23,10 @@ const HotelPanel = dynamic(() => import('@/components/schedule/panels/hotel-pane
 const AddFlow = dynamic(() => import('@/components/schedule/add/add-flow').then((m) => m.AddFlow), { ssr: false })
 // REE-22: the typed one-line fast path, beside the AddFlow category picker.
 const DayForm = dynamic(() => import('@/components/schedule/day-form').then((m) => m.DayForm), { ssr: false })
+// REE-154: the extraction detail view's row review panel.
+const ExtractionRowsPanel = dynamic(() => import('@/components/inbox/extraction-rows-panel').then((m) => m.ExtractionRowsPanel), { ssr: false })
+// REE-3: the manual document upload panel.
+const UploadDocumentPanel = dynamic(() => import('@/components/documents/upload-document-panel').then((m) => m.UploadDocumentPanel), { ssr: false })
 
 // Renders the correct panel content based on the active descriptor.
 // Mounted inside AppContent, which handles the slide-in animation and
@@ -81,9 +85,10 @@ export function ActivePanel() {
       )
     case 'send-rider':
       return (
-        <SendRiderSheet
+        <SendDocumentSheet
           tourId={panel.tourId}
           showId={panel.showId}
+          shows={panel.shows}
           departmentLabel={panel.departmentLabel}
           documents={panel.documents}
           people={panel.people}
@@ -167,6 +172,18 @@ export function ActivePanel() {
           timezone={panel.timezone}
           initialInput={panel.initialInput}
         />
+      )
+    case 'extraction-rows':
+      return (
+        <ExtractionRowsPanel
+          forwardedEmailId={panel.forwardedEmailId}
+          subjectLine={panel.subjectLine}
+          proposal={panel.proposal}
+        />
+      )
+    case 'upload-document':
+      return (
+        <UploadDocumentPanel tourId={panel.tourId} onSuccess={panel.onSuccess} />
       )
     default:
       return null

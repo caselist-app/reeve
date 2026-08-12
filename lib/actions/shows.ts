@@ -465,16 +465,13 @@ export async function getShowAdvance(
       .eq('show_id', showId)
       .order('created_at', { ascending: true }),
 
-    // contacts!inner, and the filter on the embedded column, not on people.
-    // This used to read `.not('contact_email', 'is', null)` against people,
-    // which has no such column, so PostgREST rejected it and the recipient
-    // list came back empty on every render. Nothing surfaced the error, so
-    // "Send to venue" has never had anyone to send to.
+    // Every person on the tour, contact_email or not: the send panel lists
+    // everyone and greys out anyone without an email rather than hiding them,
+    // so a TM can see who they still need an address for.
     supabase
       .from('people')
-      .select('id, contacts!inner(name, contact_email)')
-      .eq('tour_id', tourId)
-      .not('contacts.contact_email', 'is', null),
+      .select('id, contacts(name, contact_email)')
+      .eq('tour_id', tourId),
   ])
 
   // A failed read must not render as an empty result. An empty document list
@@ -511,15 +508,13 @@ export async function getShowAdvance(
     }),
   )
 
-  const contactablePeople = (people ?? [])
-    .map((p) => {
-      const c = p.contacts as { name: string; contact_email: string | null } | null
-      return { id: p.id, name: c?.name ?? '', contact_email: c?.contact_email ?? null }
-    })
-    .filter((p): p is ContactablePerson => !!p.contact_email)
+  const sendablePeople: ContactablePerson[] = (people ?? []).map((p) => {
+    const c = p.contacts as { name: string; contact_email: string | null } | null
+    return { id: p.id, name: c?.name ?? '', contact_email: c?.contact_email ?? null }
+  })
 
   return {
-    data: { advance: advance ?? null, departments, people: contactablePeople },
+    data: { advance: advance ?? null, departments, people: sendablePeople },
     error: null,
   }
 }

@@ -6,24 +6,37 @@ import { createClient } from '@/lib/supabase/server'
 import type { ExtractionProposal } from '@/lib/ai/extract'
 import { bustTourContextCache } from '@/lib/ai/context'
 import { createDayItem } from '@/lib/actions/day-items'
+import { resolveAttentionItem } from '@/lib/actions/inbox'
+import { resolveTourDateId } from '@/lib/schedule/day-link'
+import { localDateInZone } from '@/lib/schedule/datetime'
+import type { TablesInsert } from '@/lib/types/database'
+import { extractionKeepSchema, narrowExtractionProposal, type ExtractionKeep } from '@/lib/validators/extraction'
 
 export type ExtractionActionState = { error: string | null }
 
-// Reads proposed_rows from a forwarded_emails row and inserts the confirmed
-// data into the appropriate spine tables. Nothing lands in the spine until
-// this function is called with the TM's edited and confirmed values.
-// After writing, sets extraction_status = 'confirmed'.
+const EMPTY_PROPOSAL: ExtractionProposal = { shows: [], transport_segments: [], hotel_stays: [] }
+
+// Reads proposed_rows from a forwarded_emails row and inserts the rows the TM
+// kept into the appropriate spine tables. `keep` names indices into
+// proposed_rows, not row data: the TM edits nothing in this pass, only keeps
+// or discards each proposed row (REE-154), so the server, not the caller, is
+// the one source of truth for what a kept row actually contains. Nothing
+// lands in the spine until this function is called. After writing, sets
+// extraction_status = 'confirmed'.
 export async function confirmExtraction(
   forwardedEmailId: string,
-  confirmed: ExtractionProposal
+  keep: ExtractionKeep
 ): Promise<ExtractionActionState> {
   await requireUser()
   const supabase = await createClient()
 
+  const parsedKeep = extractionKeepSchema.safeParse(keep)
+  if (!parsedKeep.success) return { error: 'That selection is not valid.' }
+
   // RLS check: owns_tour on forwarded_emails enforces ownership.
   const { data: forwarded } = await supabase
     .from('forwarded_emails')
-    .select('id, tour_id, extraction_status')
+    .select('id, tour_id, extraction_status, proposed_rows')
     .eq('id', forwardedEmailId)
     .single()
 
@@ -31,15 +44,28 @@ export async function confirmExtraction(
   if (forwarded.extraction_status === 'confirmed') return { error: 'Already confirmed.' }
 
   const tourId = forwarded.tour_id
+  const proposed = (forwarded.proposed_rows as ExtractionProposal | null) ?? EMPTY_PROPOSAL
 
-  // Optimistic lock: claim the row before inserting any spine data.
-  // A concurrent second click will hit the 'Already confirmed.' guard above.
-  // On failure below, reset to 'pending' so the TM can retry.
+  const narrowed = narrowExtractionProposal(proposed, parsedKeep.data)
+  if (narrowed.proposal === null) return { error: narrowed.error }
+
+  const confirmed = narrowed.proposal
+
+  // Optimistic lock: claim the row before inserting any spine data, compare-
+  // and-swap against the status this call just read. By the time a TM
+  // confirms, that status is 'extracted' (or 'failed', if they are confirming
+  // an empty proposal after a failed run), never 'pending': runExtraction has
+  // already moved it on before an attention item, and therefore a review
+  // panel, can exist at all. A hardcoded .eq('extraction_status', 'pending')
+  // here matched zero rows for every real confirm and left the row stuck at
+  // its pre-confirm status forever, caught by extraction-confirm.test.ts. A
+  // concurrent second click still hits the 'Already confirmed.' guard above,
+  // or loses this CAS if it reads before the first call's update lands.
   const { error: lockError } = await supabase
     .from('forwarded_emails')
     .update({ extraction_status: 'confirmed' })
     .eq('id', forwardedEmailId)
-    .eq('extraction_status', 'pending')
+    .eq('extraction_status', forwarded.extraction_status)
 
   if (lockError) return { error: lockError.message }
 
@@ -108,14 +134,48 @@ export async function confirmExtraction(
     }
   }
 
-  // Transport segments: batch insert in a single round trip.
-  // status='planned' is correct here: the TM confirmed the booking exists,
-  // but 'booked' is set only after they enter a reference number in the UI.
+  // Transport segments. status='planned' is correct here: the TM confirmed the
+  // booking exists, but 'booked' is set only after they enter a reference
+  // number in the UI.
+  //
+  // Each departure resolves (and creates, dayType 'travel') the day it lands
+  // on, the same rule createTransportSegment already follows. Left
+  // unresolved, a segment's tour_date_id stayed null and the date itself was
+  // never added to the tour's date list, so a departure with nothing else on
+  // it (an evening coach the night before the first show, forwarded as a
+  // booking confirmation) had no page a TM could ever open: fetchDayRecords
+  // returns nothing for a date with no tour_dates row before it even queries
+  // transport. It then surfaced only as the clamped continuation on whichever
+  // later day its arrival reached into, reading as a same-day block that
+  // started at the top of that grid (REE-158). resolveTourDateId is
+  // idempotent, so two segments departing on the same date each just read
+  // back the row the first one created rather than racing to insert it twice.
   const segments = confirmed.transport_segments.filter((s) => !!s.mode)
   if (segments.length > 0) {
-    const { error } = await supabase.from('transport_segments').insert(
-      segments.map((seg) => ({
+    const { data: tourRow } = await supabase
+      .from('tours')
+      .select('timezone')
+      .eq('id', tourId)
+      .single()
+    const timezone = tourRow?.timezone ?? 'UTC'
+
+    const rows: TablesInsert<'transport_segments'>[] = []
+    for (const seg of segments) {
+      let tourDateId: string | null = null
+      if (seg.depart_at) {
+        const localDate = localDateInZone(seg.depart_at, timezone)
+        const resolved = await resolveTourDateId(supabase, tourId, localDate, {
+          dayType: 'travel',
+        })
+        if (resolved.id === null) {
+          errors.push(`Segments (${seg.origin ?? seg.mode}): ${resolved.error}`)
+          continue
+        }
+        tourDateId = resolved.id
+      }
+      rows.push({
         tour_id: tourId,
+        tour_date_id: tourDateId,
         mode: seg.mode!,
         origin: seg.origin ?? null,
         destination: seg.destination ?? null,
@@ -125,9 +185,13 @@ export async function confirmExtraction(
         vehicle_or_flight_no: seg.vehicle_or_flight_no ?? null,
         booking_reference: seg.booking_reference ?? null,
         status: 'planned',
-      }))
-    )
-    if (error) errors.push(`Segments: ${error.message}`)
+      })
+    }
+
+    if (rows.length > 0) {
+      const { error } = await supabase.from('transport_segments').insert(rows)
+      if (error) errors.push(`Segments: ${error.message}`)
+    }
   }
 
   // Hotel stays: batch insert in a single round trip.
@@ -164,15 +228,25 @@ export async function confirmExtraction(
   revalidatePath(`/tours/${tourId}/hotels`)
 
   if (errors.length > 0) {
-    // Roll back the optimistic lock so the TM can retry.
+    // Roll back the optimistic lock to the status this call found the row in
+    // (almost always 'extracted'), not a hardcoded 'pending', so a retry finds
+    // it back in the reviewable state rather than looking like it is still
+    // being processed.
     await supabase
       .from('forwarded_emails')
-      .update({ extraction_status: 'pending' })
+      .update({ extraction_status: forwarded.extraction_status })
       .eq('id', forwardedEmailId)
     return { error: errors.join(' | ') }
   }
 
   void bustTourContextCache(tourId)
+
+  // Resolves the Inbox row last, after every spine write above has succeeded:
+  // rule 3 of brief 53 is that a producer resolves after its own write
+  // succeeds, never before. Anything throwing earlier in this function (or the
+  // errors.length branch above returning first) leaves this unreached, so the
+  // item stays open and the TM sees the confirm did not fully land.
+  await resolveAttentionItem('forwarded_emails', forwardedEmailId)
 
   return { error: null }
 }
@@ -199,6 +273,10 @@ export async function discardExtraction(
     .eq('id', forwardedEmailId)
 
   if (error) return { error: error.message }
+
+  // Same rule as confirmExtraction: resolve only after the write above has
+  // actually landed.
+  await resolveAttentionItem('forwarded_emails', forwardedEmailId)
 
   return { error: null }
 }

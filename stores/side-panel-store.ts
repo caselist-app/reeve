@@ -2,13 +2,16 @@
 
 import { create } from 'zustand'
 import type { Tables } from '@/lib/types/database'
+import type { ExtractionProposal } from '@/lib/ai/extract'
 
 // Inline types to avoid circular imports with component files.
 type PersonType = 'artist' | 'crew' | 'management' | 'support'
 
-// Mirrors SendableDocument and ContactablePerson from components/shows/send-rider-sheet.tsx
+// Mirrors SendableDocument, ContactablePerson and SendableShow from
+// components/shows/send-document-sheet.tsx
 type SendableDocument = { id: string; title: string; doc_type: string }
-type ContactablePerson = { id: string; name: string; contact_email: string }
+type ContactablePerson = { id: string; name: string; contact_email: string | null }
+type SendableShow = { id: string; label: string }
 
 // ShowDaySheet is gone. Brief 42: a show's times are day_items rows and are
 // edited one at a time through the 'day-item' descriptor below. The rest of a
@@ -101,7 +104,11 @@ export type PanelDescriptor =
   | {
       type: 'send-rider'
       tourId: string
-      showId: string
+      // Fixed and hidden from the picker when the caller already knows the
+      // show (the advance panel). Undefined for a tour-level send, where the
+      // panel shows the show picker, defaulting to "No show".
+      showId?: string
+      shows?: SendableShow[]
       departmentLabel: string
       documents: SendableDocument[]
       people: ContactablePerson[]
@@ -200,6 +207,23 @@ export type PanelDescriptor =
       // Absent when opened from the '+' picker or the '/' shortcut, where the
       // input starts empty.
       initialInput?: string
+    }
+  // REE-154: the extraction detail view's row review panel. Carries the full
+  // proposal as a snapshot, the same shape as 'day-item'/'transport'/'hotel'
+  // above, rather than the panel re-fetching it: extraction-item.tsx already
+  // has it from fetchInboxItem's subject resolver, so a second round trip
+  // would buy nothing.
+  | {
+      type: 'extraction-rows'
+      forwardedEmailId: string
+      subjectLine: string | null
+      proposal: ExtractionProposal
+    }
+  // REE-3: the manual document upload panel, opened from the Documents page.
+  | {
+      type: 'upload-document'
+      tourId: string
+      onSuccess: () => void
     }
 
 // The subset of PanelDescriptor that day-calendar.tsx can open: the variants

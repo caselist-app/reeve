@@ -10,6 +10,7 @@ import {
   Search,
   Contact,
   UserCog,
+  Inbox,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { TourSelector } from '@/components/nav/tour-selector'
@@ -17,6 +18,7 @@ import { TourSettingsPanel } from '@/components/nav/tour-settings-panel'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useCommandPalette } from '@/stores/command-palette-store'
 import { useTourNameStore } from '@/stores/tour-name-store'
+import { useInboxCountStore, selectOpenCount } from '@/stores/inbox-count-store'
 
 interface Tour {
   id: string
@@ -44,10 +46,9 @@ interface SidebarProps {
    *  collapses and has no such conflict) needs no changes. */
   settingsOpen?: boolean
   onSettingsOpenChange?: (open: boolean) => void
-  /** Emails waiting to be reviewed, keyed by tour id, fetched server-side in
-   *  app/(app)/layout.tsx. Keyed rather than scalar because the active tour is
-   *  derived from the pathname here, on the client. */
-  extractionsAwaitingReview?: Record<string, number>
+  /** Account-wide count of open (unresolved) attention_items, fetched
+   *  server-side in app/(app)/layout.tsx. Feeds the Inbox badge (REE-151). */
+  openItemCount?: number
 }
 
 const TOUR_NAV = [
@@ -67,13 +68,28 @@ export function Sidebar({
   setCollapsed = () => {},
   settingsOpen: settingsOpenProp,
   onSettingsOpenChange,
-  extractionsAwaitingReview,
+  openItemCount = 0,
 }: SidebarProps) {
   const pathname = usePathname()
   const { openPalette } = useCommandPalette()
   const [localSettingsOpen, setLocalSettingsOpen] = useState(false)
   const settingsOpen = settingsOpenProp ?? localSettingsOpen
   const setSettingsOpen = onSettingsOpenChange ?? setLocalSettingsOpen
+
+  // The badge reads an optimistic override on top of the server count, rather
+  // than the server count alone, because a resolve happening below this
+  // layout (e.g. approving a guest request in the guest list panel) cannot
+  // reliably repaint this component by revalidating or refreshing across that
+  // boundary (REE-65, REE-131). setServerCount mirrors the prop into the
+  // store so a resolver elsewhere knows what basedOn to stamp its override
+  // with, without prop-drilling the count into every place that can resolve
+  // an item. See stores/inbox-count-store.ts.
+  const setServerCount = useInboxCountStore((s) => s.setServerCount)
+  const inboxCountOverride = useInboxCountStore((s) => s.override)
+  useEffect(() => {
+    setServerCount(openItemCount)
+  }, [openItemCount, setServerCount])
+  const inboxCount = selectOpenCount(openItemCount, inboxCountOverride)
 
   const tourIdMatch = pathname.match(/\/tours\/([^/]+)/)
   const pathTourId = tourIdMatch?.[1] ?? null
@@ -113,6 +129,7 @@ export function Sidebar({
     setSettingsOpen(true)
   }
 
+  const isInbox = pathname.startsWith('/inbox')
   const isRoster = pathname.startsWith('/roster')
   const isAccount = pathname.startsWith('/settings')
 
@@ -132,7 +149,7 @@ export function Sidebar({
         <TourSelector tours={tours} activeTourId={activeTourId} collapsed={collapsed} />
       </div>
 
-      {/* Top nav: Search + Roster */}
+      {/* Top nav: Search, Inbox, Roster, Account */}
       <div className={cn('pb-2', collapsed ? 'px-2' : 'px-3')}>
         <nav className="space-y-0.5">
           {collapsed ? (
@@ -164,6 +181,51 @@ export function Sidebar({
                 ⌘K
               </kbd>
             </button>
+          )}
+
+          {/* Everything waiting on the TM, across every tour and every artist
+              (brief 53, "one place to look"). Account-level, so it sits in this
+              unconditional block rather than the tour nav below. */}
+          {collapsed ? (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Link
+                  href="/inbox"
+                  className={itemClass(isInbox)}
+                  style={isInbox ? undefined : { color: 'var(--sidebar-muted-foreground)' }}
+                  aria-label={inboxCount > 0 ? `Inbox, ${inboxCount} open` : 'Inbox'}
+                >
+                  <span className="relative flex">
+                    <Inbox className="h-3.5 w-3.5 shrink-0" />
+                    {inboxCount > 0 && (
+                      <span
+                        aria-hidden="true"
+                        className="absolute -right-1 -top-1 h-1.5 w-1.5 rounded-full bg-primary"
+                      />
+                    )}
+                  </span>
+                </Link>
+              </TooltipTrigger>
+              <TooltipContent side="right">{inboxCount > 0 ? `Inbox (${inboxCount})` : 'Inbox'}</TooltipContent>
+            </Tooltip>
+          ) : (
+            <Link
+              href="/inbox"
+              className={itemClass(isInbox)}
+              style={isInbox ? undefined : { color: 'var(--sidebar-muted-foreground)' }}
+            >
+              <Inbox className="h-3.5 w-3.5 shrink-0" />
+              Inbox
+              {inboxCount > 0 && (
+                <span
+                  className="ml-auto rounded border px-1 py-0.5 text-[10px] leading-none tabular-nums"
+                  style={{ borderColor: 'var(--sidebar-border)', color: 'var(--sidebar-muted-foreground)' }}
+                  aria-label={`${inboxCount} open`}
+                >
+                  {inboxCount}
+                </span>
+              )}
+            </Link>
           )}
 
           {collapsed ? (
@@ -295,7 +357,6 @@ export function Sidebar({
       {activeTourId && (
         <TourSettingsPanel
           tourId={activeTourId}
-          extractionsAwaitingReview={extractionsAwaitingReview?.[activeTourId] ?? 0}
           isOpen={settingsOpen}
           onClose={() => setSettingsOpen(false)}
         />

@@ -93,6 +93,7 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
   const isMobile = useIsMobile()
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
   const [dayInfoOpen, setDayInfoOpen] = useState(false)
 
   // REE-89: one door into a day. The '+', the '/' shortcut and the mobile FAB
@@ -148,9 +149,20 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
   async function handleDeleteConfirm() {
     if (!dayMeta) return
     setDeleting(true)
-    await deleteTourDate(dayMeta.tourDateId)
+    setDeleteError(null)
+    const result = await deleteTourDate(dayMeta.tourDateId)
+    if (result.error) {
+      setDeleting(false)
+      setDeleteError(result.error)
+      return
+    }
     // Navigate to schedule root. The sidebar will show the next available day.
     router.push(`/tours/${addContext.tourId}/schedule`)
+  }
+
+  function handleDeleteDialogOpenChange(open: boolean) {
+    setDeleteDialogOpen(open)
+    if (!open) setDeleteError(null)
   }
 
   const toolbar = (
@@ -231,7 +243,7 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
       </div>
 
       {/* Delete confirmation */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <AlertDialog open={deleteDialogOpen} onOpenChange={handleDeleteDialogOpenChange}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete this day?</AlertDialogTitle>
@@ -240,6 +252,7 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
               rehearsals, transport, hotels, and events. This cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
           <AlertDialogFooter>
             <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
             <AlertDialogAction

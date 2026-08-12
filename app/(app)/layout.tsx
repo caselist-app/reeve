@@ -6,6 +6,7 @@ import { MobileNavDrawer } from '@/components/layout/mobile-nav-drawer'
 import { AppContent } from '@/components/layout/app-content'
 import { LazyCommandPalette } from '@/components/nav/lazy-command-palette'
 import { Toaster } from '@/components/ui/sonner'
+import { fetchOpenItemCount } from '@/lib/inbox/query'
 
 const DEFAULT_SIDEBAR_WIDTH = 220
 const MIN_SIDEBAR_WIDTH = 180
@@ -25,21 +26,19 @@ export default async function AppLayout({
   const user = await requireUser()
   const supabase = await createClient()
 
-  // Tours for the selector, and the count of emails waiting to be reviewed on
-  // each one, for the Extractions badge in the tour settings panel. Independent
-  // queries, so they run together rather than in two waves. forwarded_emails is
-  // scoped by owns_tour(tour_id) in RLS, so it needs no tour filter of its own.
-  const [{ data: toursRaw }, { data: awaitingReview }] = await Promise.all([
+  // Tours for the selector, and the account-wide open-item count for the
+  // Inbox badge (REE-151). A waiting email extraction is one of the kinds
+  // that count covers now (REE-154 moved its review surface into the Inbox),
+  // so it no longer needs a query of its own here. Independent queries, so
+  // they run together rather than in a wave.
+  const [{ data: toursRaw }, { count: openItemCount }] = await Promise.all([
     supabase
       .from('tours')
       .select('id, name, status, artist_id, artists(name)')
       .eq('account_id', user.id)
       .neq('status', 'archived')
       .order('created_at', { ascending: false }),
-    supabase
-      .from('forwarded_emails')
-      .select('tour_id')
-      .eq('extraction_status', 'extracted'),
+    fetchOpenItemCount(supabase, user.id),
   ])
 
   const tours = (toursRaw ?? []).map((t) => ({
@@ -48,11 +47,6 @@ export default async function AppLayout({
     artist_id: t.artist_id,
     artist_name: t.artists?.name ?? t.name,
   }))
-
-  const extractionsAwaitingReview: Record<string, number> = {}
-  for (const row of awaitingReview ?? []) {
-    extractionsAwaitingReview[row.tour_id] = (extractionsAwaitingReview[row.tour_id] ?? 0) + 1
-  }
 
   // Read persisted sidebar width from cookie so the server renders it correctly
   // on first paint without a layout shift.
@@ -81,7 +75,7 @@ export default async function AppLayout({
           initialWidth={sidebarWidth}
           initialCollapsed={isCollapsed}
           lastTourId={lastTourId}
-          extractionsAwaitingReview={extractionsAwaitingReview}
+          openItemCount={openItemCount ?? 0}
         />
       </div>
 
@@ -89,7 +83,7 @@ export default async function AppLayout({
       <MobileNavDrawer
         tours={tours ?? []}
         lastTourId={lastTourId}
-        extractionsAwaitingReview={extractionsAwaitingReview}
+        openItemCount={openItemCount ?? 0}
       />
 
       {/* AppContent owns the main card, the secondary panel, and the side panel. */}
