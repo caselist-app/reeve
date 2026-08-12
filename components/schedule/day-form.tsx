@@ -12,6 +12,7 @@ import { useEntityForm } from '@/hooks/use-entity-form'
 import { createDayItem } from '@/lib/actions/day-items'
 import { getCustomDayItemTitles } from '@/lib/actions/day-item-titles'
 import { buildAddOptions, addOptionPreview, type AddOption } from '@/lib/schedule/add-options'
+import { parseDayItem } from '@/lib/schedule/parse-day-item'
 
 interface DayFormProps {
   tourId: string
@@ -116,6 +117,12 @@ export function DayForm({ tourId, tourDateId, date, timezone, initialInput }: Da
   // this form with the typed line intact, so the detour into the flight form
   // does not lose what the TM had started typing (REE-88).
   function openBook(option: Extract<AddOption, { action: 'open' }>) {
+    // Carry the time off the typed or click-seeded line into the book form, so a
+    // drive added after clicking 2pm departs at 2pm rather than the form's old
+    // hardcoded 9am (REE-140). The parser reads the same 'HH:MM' start a commit
+    // row shows; the category word only lands in the residual title, which the
+    // book form ignores, so 'drive 2pm' and a click-seeded '2:00pm' both give 14:00.
+    const initialClock = parseDayItem(input).best.startClock ?? undefined
     openSidePanel({
       type: 'add-to-day',
       tourId,
@@ -123,6 +130,7 @@ export function DayForm({ tourId, tourDateId, date, timezone, initialInput }: Da
       date,
       timezone,
       category: option.category,
+      initialClock,
       onBack: () =>
         openSidePanel({ type: 'day-form', tourId, tourDateId, date, timezone, initialInput: input }),
     })
