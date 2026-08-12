@@ -91,6 +91,42 @@ export async function fetchDayItems(
 }
 
 /**
+ * Items that started before a broadcast-day boundary but end after it: a day_item
+ * whose interval breaks over the 04:00 boundary and so belongs on the grid of the
+ * day it spills into as well as its home day (REE-123).
+ *
+ * Filtered on the instant pair, not the link, because this is a read-only second
+ * view: the item is owned and edited on its home day (its tour_date_id), and
+ * shown on the spill day clamped to the grid top. `ends_at` null is excluded by
+ * `.gt`, deliberately: a point with no end cannot span. `boundary` is the day's
+ * broadcast start, a UTC instant from localBroadcastDayWindowUtc.
+ *
+ * Not wrapped in the DayItemsResult error contract: a spanning read that fails
+ * drops a second view of a record still shown on its home day, so it degrades to
+ * "not shown on the spill day" rather than to the empty-day lie the home read
+ * guards against. Logged, and returns an empty list.
+ */
+export async function fetchSpanningDayItems(
+  supabase: Client,
+  { tourId, boundary }: { tourId: string; boundary: string },
+): Promise<DayItem[]> {
+  const { data, error } = await supabase
+    .from('day_items')
+    .select(DAY_ITEM_SELECT)
+    .eq('tour_id', tourId)
+    .lt('starts_at', boundary)
+    .gt('ends_at', boundary)
+    .order('starts_at', { ascending: true })
+
+  if (error) {
+    console.error('[day-items] could not read spanning items:', error.message)
+    return []
+  }
+
+  return data ?? []
+}
+
+/**
  * One show's items, in running order.
  *
  * For the crew-facing surfaces, which answer for a show rather than for a day:

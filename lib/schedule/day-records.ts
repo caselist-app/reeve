@@ -2,7 +2,7 @@ import type { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/lib/types/database'
 import { addDays, localDayWindowUtc } from '@/lib/schedule/datetime'
 import { localBroadcastDayWindowUtc } from '@/lib/schedule/day-window'
-import { fetchDayItems, type DayItem } from '@/lib/schedule/day-items'
+import { fetchDayItems, fetchSpanningDayItems, type DayItem } from '@/lib/schedule/day-items'
 
 // Single source of truth for a schedule day's records. The day view used to
 // fetch this set two to three times per navigation (the page for panel data,
@@ -77,6 +77,23 @@ export interface LateNight {
   segments: DaySegment[]
 }
 
+// Blocks that started on an EARLIER broadcast day but continue into this one: an
+// overnight drive that departed last night, or a day_item spanning the 04:00
+// boundary (REE-123). A block that breaks over two days shows on both, and this
+// is the incoming half: the day it spills into. The outgoing half (a block that
+// starts on this day and runs past the boundary) needs no fetch, because it is
+// already on this day's grid and the view just clamps it to the bottom.
+//
+// A read-only second view, the way the retired transport tail was: these rows are
+// owned and edited on their home day (their own tour_date_id / departure day) and
+// drawn here clamped to the grid top. Kept OUT of `segments`, `items` and the
+// roster deliberately, so "which day is this on" keeps one answer and today's
+// party count is not inflated by people who are mid-journey from yesterday.
+export interface Continuation {
+  segments: DaySegment[]
+  items: DayItem[]
+}
+
 export interface DayRecords {
   shows: DayShow[]
   items: DayItem[]                // every time on this day, ordered as shown
@@ -87,6 +104,7 @@ export interface DayRecords {
   segments: DaySegment[]          // deduped union of tour_date-linked and date-matched
   hotels: DayHotelItem[]          // check-ins and check-outs falling on this day
   lateNight: LateNight            // next morning's small hours, shown as this day's tail
+  continuation: Continuation      // blocks spilling in from an earlier broadcast day
   // Ids of the segments and hotels on this day, used by the info panel to
   // resolve the day's roster without re-querying for them.
   segmentIds: string[]
@@ -100,6 +118,7 @@ const EMPTY: DayRecords = {
   segments: [],
   hotels: [],
   lateNight: { segments: [] },
+  continuation: { segments: [], items: [] },
   segmentIds: [],
   hotelStayIds: [],
 }
@@ -194,6 +213,8 @@ export async function fetchDayRecords(
     { data: checkinHotels },
     { data: checkoutHotels },
     { data: lateSegmentRows },
+    { data: spanningSegmentRows },
+    spanningItems,
   ] = await Promise.all([
     supabase.from('shows').select(SHOW_SELECT).eq('tour_id', tourId).eq('tour_date_id', tourDateId),
 
@@ -254,6 +275,26 @@ export async function fetchDayRecords(
       .eq('tour_id', tourId)
       .gte('depart_at', nextDayWindow.start)
       .lt('depart_at', lateNightEnd),
+
+    // Continuation: a transport segment that departed BEFORE this broadcast day
+    // began but arrives after its 04:00 start, so it breaks over the boundary and
+    // must show on this day too, clamped to the grid top (REE-123). Filtered on
+    // the depart/arrive instants, not the link: this is a read-only second view,
+    // and the segment is still owned by, and fetched for, its departure day.
+    // arrive_at null is excluded by .gt, because a departure with no arrival has
+    // no interval to span. The upper bound is open: a multi-day drive whose
+    // arrival is days out still spills through this whole day.
+    supabase
+      .from('transport_segments')
+      .select(SEGMENT_SELECT)
+      .eq('tour_id', tourId)
+      .lt('depart_at', broadcastWindow.start)
+      .gt('arrive_at', broadcastWindow.start),
+
+    // The day_item equivalent of the same spillover, scoped by the broadcast
+    // start. Its own helper, so the error handling (drop the second view, keep
+    // the home read intact) lives with the other day_item reads.
+    fetchSpanningDayItems(supabase, { tourId, boundary: broadcastWindow.start }),
   ])
 
   // The date guard the linked query used to be missing entirely. A segment
@@ -306,6 +347,18 @@ export async function fetchDayRecords(
     segments: lateSegmentRows ?? [],
   }
 
+  // Continuation spillover, deduped against the home sets. A pre-dawn departure
+  // (a 02:00 drive on this calendar date, before the 04:00 boundary) matches both
+  // the home window and the spanning query; it is a home record of this day, so
+  // the home copy wins and the spanning copy is dropped. The view then decides,
+  // from grid geometry, whether each remaining spillover clamps to the top.
+  const homeSegmentIds = new Set(segMap.keys())
+  const homeItemIds = new Set(dayItems.items.map((i) => i.id))
+  const continuation: Continuation = {
+    segments: (spanningSegmentRows ?? []).filter((s) => !homeSegmentIds.has(s.id)),
+    items: spanningItems.filter((i) => !homeItemIds.has(i.id)),
+  }
+
   return {
     shows: showRows ?? [],
     items: dayItems.items,
@@ -313,6 +366,7 @@ export async function fetchDayRecords(
     segments: Array.from(segMap.values()),
     hotels,
     lateNight,
+    continuation,
     // Roster: calendar-day segments only, so a next-morning overnight drive that
     // is in `segments` for the grid does not add its passengers to this day.
     segmentIds: Array.from(segMap.values()).filter(onCalendarDay).map((s) => s.id),

@@ -107,6 +107,15 @@ export function buildDayCalendarView(
     { timezone },
   )
 
+  // Continuation spillover: blocks owned by an earlier broadcast day that reach
+  // into this one (REE-123). Optional on DayRecords so older callers and test
+  // fixtures that predate the field still type-check; absent means none.
+  const continuation = records.continuation ?? { segments: [], items: [] }
+  const { events: continuationReal } = toCalendarEvents(
+    { items: continuation.items, segments: continuation.segments, hotels: [] },
+    { timezone },
+  )
+
   // The grid renders the literal calendar day [dayDate 00:00, +1 00:00), which is
   // exactly the broadcast day once shifted. An event belongs on the grid when its
   // shifted start falls in that window; otherwise it is off-window and railed.
@@ -114,20 +123,54 @@ export function buildDayCalendarView(
   const gridStart = new Date(window.start).getTime()
   const gridEnd = new Date(window.end).getTime()
 
-  const events: CalendarEvent[] = []
-  const outsideDay: CalendarEvent[] = []
+  // Placed by event id, so a record that arrives as both a home event and a
+  // continuation candidate (a pre-dawn departure the fetch could not fully
+  // disambiguate) is only drawn once, with the home copy winning.
+  const placed = new Map<string, CalendarEvent>()
+  const railed: CalendarEvent[] = []
   for (const real of realEvents) {
     const grid = toGridEvent(real, timezone)
     const startMs = grid.start.getTime()
     if (startMs >= gridStart && startMs < gridEnd) {
-      events.push(grid)
+      // A home event that runs past the grid bottom into the next broadcast day is
+      // left un-clamped: RBC clamps its rendered height to the grid, and leaving
+      // start/end real keeps drag and resize (fromDropOrResize's duration maths)
+      // correct. Only the flag is added, for the "continues" edge affordance.
+      placed.set(grid.id, { ...grid, continuesAfter: grid.end.getTime() > gridEnd })
     } else {
-      outsideDay.push(grid)
+      railed.push(grid)
     }
   }
 
+  // Continuation events start on an earlier broadcast day, so their shifted start
+  // is before gridStart and RBC would filter them off the column. Clamp the start
+  // to the grid top so they render, and mark them read-only: the home day owns the
+  // edit, and a drag here would move a block by a day. Skipped when already placed
+  // as a home event, or when the shifted interval does not actually reach into
+  // this grid day (a spillover that stops before 04:00 belongs only to its own
+  // night, and is the pre-dawn case the home path already rails).
+  for (const real of continuationReal) {
+    if (placed.has(real.id)) continue
+    const grid = toGridEvent(real, timezone)
+    const startMs = grid.start.getTime()
+    const endMs = grid.end.getTime()
+    const intersects = endMs > gridStart && startMs < gridEnd
+    if (!intersects || startMs >= gridStart) continue
+    placed.set(grid.id, {
+      ...grid,
+      start: new Date(gridStart),
+      continuesBefore: true,
+      continuesAfter: endMs > gridEnd,
+      readOnly: true,
+    })
+  }
+
+  // A railed home event that a continuation copy has since placed (the pre-dawn
+  // overlap) is dropped from the rail, so it is not both a block and a list item.
+  const outsideDay = railed.filter((e) => !placed.has(e.id))
+
   return {
-    events,
+    events: Array.from(placed.values()),
     unpositioned,
     outsideDay,
     errorMessage: records.itemsError ? COULD_NOT_LOAD_MESSAGE : null,

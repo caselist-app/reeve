@@ -71,6 +71,17 @@ export interface CalendarEvent {
   // True means `end` was invented by this adapter and must not be persisted as a
   // stated end. See fromDropOrResize.
   syntheticEnd: boolean
+  // Set by the view (buildDayCalendarView), never the adapter, from grid
+  // geometry: a block whose interval breaks over this broadcast day's boundary
+  // (REE-123). continuesBefore means it started on an earlier broadcast day and
+  // reaches into this one, so it is clamped to the grid top and shown here as a
+  // read-only projection (its home day owns the edit). continuesAfter means it
+  // runs past the grid bottom into the next broadcast day. readOnly gates drag,
+  // resize and the write path off, because a continuation is not on its home day.
+  // All default false; the adapter leaves them unset.
+  continuesBefore?: boolean
+  continuesAfter?: boolean
+  readOnly?: boolean
   // Read from day-item-kinds for a day_item; a source-level default otherwise.
   accent: DayItemKind['accent']
   icon: string

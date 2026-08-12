@@ -263,6 +263,54 @@
     -2px -1px 4px color-mix(in oklab, var(--foreground) 14%, transparent);
 }
 
+/* A block that breaks over a broadcast-day boundary (REE-123). The grid renders
+   one broadcast night [04:00, +1 04:00), so an overnight drive or a day_item that
+   runs past the boundary is one record shown on two days: clamped to the grid
+   bottom on the day it starts (continues-after) and to the grid top on the day it
+   spills into (continues-before, drawn read-only). The spilling edge is squared
+   off and carries a soft fade, so it reads as carrying on past the grid rather
+   than ending cleanly at it. position: relative anchors the fade; the chip body
+   already sits above it. */
+.rbc-event.evt-continues-after {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  position: relative;
+}
+.rbc-event.evt-continues-before {
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  position: relative;
+}
+/* The fade itself, a short gradient from the tint to transparent at the spilling
+   edge. A pseudo-element rather than a background layer so it composes over the
+   kind tint without replacing it, and pointer-events off so it never eats a
+   click on the block underneath. */
+.rbc-event.evt-continues-after::after,
+.rbc-event.evt-continues-before::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 0.75rem;
+  pointer-events: none;
+}
+.rbc-event.evt-continues-after::after {
+  bottom: 0;
+  background: linear-gradient(to bottom, transparent, var(--evt-tint));
+}
+.rbc-event.evt-continues-before::after {
+  top: 0;
+  background: linear-gradient(to top, transparent, var(--evt-tint));
+}
+/* A continuation projection: the same record shown on the day it spilled into,
+   owned and editable only on its home day. Muted a touch and its cursor is the
+   default arrow, not a grab, so it reads as informational rather than draggable.
+   The click still opens the record's panel (on its real times), so the cursor is
+   a pointer on hover, set by the button inside. */
+.rbc-event.evt-continuation {
+  opacity: 0.9;
+}
+
 /* Selected: the block whose detail panel is open (REE-109). It fills solid with
    the kind's accent and flips its text white, the way the Notion reference does,
    so the open item reads as picked out rather than just tinted. Placed after the
