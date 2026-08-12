@@ -6,6 +6,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
@@ -44,6 +45,10 @@ interface PanelDeleteMenuProps {
   // Accessible label for the trigger, since the button is icon-only.
   triggerLabel: string
   onConfirm: () => Promise<string | null>
+  // Non-destructive items rendered above the delete item, separated from it, for
+  // panels that hang a second action off the same three-dots menu (e.g. the guest
+  // list's per-row "Send confirmation"). The caller passes DropdownMenuItem nodes.
+  extraItems?: React.ReactNode
 }
 
 export function PanelDeleteMenu({
@@ -54,6 +59,7 @@ export function PanelDeleteMenu({
   dialogDescription,
   triggerLabel,
   onConfirm,
+  extraItems,
 }: PanelDeleteMenuProps) {
   const [open, setOpen] = useState(false)
   const [pending, setPending] = useState(false)
@@ -88,6 +94,8 @@ export function PanelDeleteMenu({
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-44">
+          {extraItems}
+          {extraItems && <DropdownMenuSeparator />}
           <DropdownMenuItem
             onClick={() => setOpen(true)}
             className="text-destructive focus:text-destructive"
