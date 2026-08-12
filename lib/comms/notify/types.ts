@@ -5,6 +5,7 @@ import type { MorningMessageData } from '@/lib/comms/templates/morning-message'
 import type { BoardingPassNotificationData } from '@/lib/comms/templates/boarding-pass'
 import type { OpenerData, ShowInfoData, CateringData, WrapData } from '@/lib/comms/templates/day-blocks'
 import type { GuestRequestNotificationData } from '@/lib/comms/templates/guest-request-notification'
+import type { DoorsNudgeData } from '@/lib/comms/templates/guest-list-doors-nudge'
 
 // A notification can leave on one or more of these. SMS was retired; new
 // channels slot in by extending this union and the adapters.
@@ -26,6 +27,7 @@ export type NotificationType =
   | 'wrap'
   | 'flight_status_alert'
   | 'guest_request'
+  | 'guest_list_doors_nudge'
 
 // The data each notification type renders from. Entries are added as each type
 // is built; the registry is keyed off this, so adding a type here forces the
@@ -47,6 +49,11 @@ export interface NotificationDataMap {
   // registry renderer is reused by the producer rather than dispatched through
   // notify(). Telegram only for now, same as flight_status_alert.
   guest_request: GuestRequestNotificationData
+  // Brief 52, step 10 (REE-137): the hourly before-doors nudge when guest
+  // requests are still waiting. Sent to the account holder's Telegram
+  // (notifyAccount), same reasoning as guest_request and flight_status_alert:
+  // a real-time nudge, not a formal document, so no email() renderer.
+  guest_list_doors_nudge: DoorsNudgeData
 }
 
 export type ImplementedType = keyof NotificationDataMap
