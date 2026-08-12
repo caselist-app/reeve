@@ -153,6 +153,11 @@ export interface E2eSeed {
     hotelStayId: string
     rehearsalId: string
     rehearsalDate: string
+    // A pending guest_request attention_items row on account A's seeded show,
+    // for /inbox/{itemId} (REE-152). Its own guest_list_entries row, not one
+    // shared with anything else in the suite, so the smoke spec can open it
+    // without another spec's writes changing what it sees.
+    itemId: string
     // A second tour on the SAME account, in Pacific/Auckland, with one positioned
     // day_item. This is what tests/e2e/timezone.spec.ts opens from a Europe/London
     // browser to prove the calendar renders in the tour zone, not the browser's.
@@ -268,8 +273,82 @@ export async function createE2eSeed(): Promise<E2eSeed> {
     throw new Error(`seed: could not create rehearsal: ${rehearsalError?.message}`)
   }
 
+  // A guest request plus the attention_items row REE-134's producer would have
+  // written for it, so the smoke spec has a real /inbox/{itemId} to open
+  // (REE-152). On its OWN show, not account A's main seeded show: guest-list.
+  // spec.ts asserts that show's guest list "starts empty: no other spec adds a
+  // guest to this show". The attention_items row is inserted already resolved,
+  // so it never counts as an open item: revalidate.spec.ts's Inbox badge spec
+  // asserts an exact open count of 1, "no count in the app touches
+  // attention_items except this spec". fetchInboxItem reads by id regardless
+  // of resolved_at, so the smoke spec can still open this route.
+  const inboxItemDate = nextDay(rehearsalDate)
+  const { data: inboxTourDate, error: inboxTourDateError } = await testDb
+    .from('tour_dates')
+    .insert({ tour_id: a.tourId, date: inboxItemDate, day_type: 'show' })
+    .select('id')
+    .single()
+  if (inboxTourDateError || !inboxTourDate) {
+    throw new Error(`seed: could not create inbox item tour_date: ${inboxTourDateError?.message}`)
+  }
+
+  const { data: inboxShow, error: inboxShowError } = await testDb
+    .from('shows')
+    .insert({
+      tour_id: a.tourId,
+      tour_date_id: inboxTourDate.id,
+      date: inboxItemDate,
+      venue_name: 'Seeded Inbox Venue',
+    })
+    .select('id')
+    .single()
+  if (inboxShowError || !inboxShow) {
+    throw new Error(`seed: could not create inbox item show: ${inboxShowError?.message}`)
+  }
+
+  const { data: guestEntry, error: guestEntryError } = await testDb
+    .from('guest_list_entries')
+    .insert({
+      tour_id: a.tourId,
+      show_id: inboxShow.id,
+      first_name: 'Sam',
+      last_name: 'Reed',
+      email: 'sam.reed@example.test',
+      num_tickets: 2,
+      request_channel: 'app',
+      requested_by_person_id: a.personId,
+      status: 'requested',
+    })
+    .select('id')
+    .single()
+  if (guestEntryError || !guestEntry) {
+    throw new Error(`seed: could not create guest entry: ${guestEntryError?.message}`)
+  }
+
+  const { data: item, error: itemError } = await testDb
+    .from('attention_items')
+    .insert({
+      tour_id: a.tourId,
+      kind: 'guest_request',
+      title: 'Guest request: Sam Reed for Seeded Inbox Venue',
+      related_table: 'guest_list_entries',
+      related_id: guestEntry.id,
+      resolved_at: new Date().toISOString(),
+    })
+    .select('id')
+    .single()
+  if (itemError || !item) throw new Error(`seed: could not create attention item: ${itemError?.message}`)
+
   return {
-    a: { ...a, hotelStayId: stay.id, rehearsalId: rehearsal.id, rehearsalDate, zoned, zonedDst },
+    a: {
+      ...a,
+      hotelStayId: stay.id,
+      rehearsalId: rehearsal.id,
+      rehearsalDate,
+      zoned,
+      zonedDst,
+      itemId: item.id,
+    },
     b,
   }
 }

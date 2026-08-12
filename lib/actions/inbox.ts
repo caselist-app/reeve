@@ -1,5 +1,6 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 
@@ -26,5 +27,36 @@ export async function markAttentionItemRead(id: string): Promise<InboxActionStat
     .is('read_at', null)
 
   if (error) return { error: error.message }
+  return { error: null }
+}
+
+// The one exception to "producers create rows and producers resolve them"
+// (brief 53): a dangling pointer, where related_id no longer resolves to
+// anything, is a row no producer will ever come back to resolve. This is the
+// only place in the app that calls it directly from the UI; every other
+// caller is a producer's own decide path (e.g. decideGuestEntry), resolving
+// after its write succeeds, never before (rule 3 of the brief).
+//
+// Takes the pointer, not the item's own id: a producer knows what it just
+// wrote and does not know the attention_items row's id. `.is('resolved_at',
+// null)` makes a second call a no-op.
+export async function resolveAttentionItem(
+  relatedTable: string,
+  relatedId: string,
+): Promise<InboxActionState> {
+  await requireUser()
+  const supabase = await createClient()
+
+  const { error } = await supabase
+    .from('attention_items')
+    .update({ resolved_at: new Date().toISOString() })
+    .eq('related_table', relatedTable)
+    .eq('related_id', relatedId)
+    .is('resolved_at', null)
+
+  if (error) return { error: error.message }
+
+  revalidatePath('/inbox')
+
   return { error: null }
 }
