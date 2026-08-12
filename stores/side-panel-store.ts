@@ -172,6 +172,12 @@ export type PanelDescriptor =
       date: string
       timezone: string
       category: ScheduleAddCategory
+      // The wall-clock time the TM selected on the day, 'HH:MM' in the tour zone,
+      // carried from the day form's typed or click-seeded line (REE-140). Seeds
+      // the book form's departure/check-in default so a drive added after
+      // clicking 2pm departs at 2pm, not the old hardcoded 9am. Absent when the
+      // line carried no time, where the form keeps its own default.
+      initialClock?: string
       onBack: () => void
     }
   // REE-22, REE-88: the one door into a day. One text input over buildAddOptions,

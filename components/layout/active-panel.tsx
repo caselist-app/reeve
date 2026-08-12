@@ -149,6 +149,7 @@ export function ActivePanel() {
           date={panel.date}
           timezone={panel.timezone}
           category={panel.category}
+          initialClock={panel.initialClock}
           onBack={panel.onBack}
         />
       )

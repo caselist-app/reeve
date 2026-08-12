@@ -26,6 +26,10 @@ interface AddFlowProps {
   date: string
   timezone: string
   category: AddCategory
+  // The wall-clock time the TM selected on the day, 'HH:MM' in the tour zone,
+  // carried from the day form (REE-140). Seeds the book form's departure or
+  // check-in default. Absent when the line carried no time.
+  initialClock?: string
   // Leaves this form and reopens the category picker. Supplied by the
   // side panel descriptor, since that has to coordinate with the popover
   // or bottom-sheet state day-view-client.tsx owns.
@@ -42,9 +46,9 @@ const CATEGORY_TITLES: Record<AddCategory, string> = {
 // Renders the form for a pre-selected category, on PanelShell like every
 // other schedule panel. The picker itself lives in the popover/sheet in
 // DayViewClient; this component never shows it.
-export function AddFlow({ tourId, tourDateId, date, timezone, category, onBack }: AddFlowProps) {
+export function AddFlow({ tourId, tourDateId, date, timezone, category, initialClock, onBack }: AddFlowProps) {
   const { close } = useSidePanel()
-  const formProps = { tourId, tourDateId, date, timezone, onBack, onSuccess: close }
+  const formProps = { tourId, tourDateId, date, timezone, initialClock, onBack, onSuccess: close }
 
   return (
     <PanelShell title={CATEGORY_TITLES[category]}>
