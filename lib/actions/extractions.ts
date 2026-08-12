@@ -7,6 +7,9 @@ import type { ExtractionProposal } from '@/lib/ai/extract'
 import { bustTourContextCache } from '@/lib/ai/context'
 import { createDayItem } from '@/lib/actions/day-items'
 import { resolveAttentionItem } from '@/lib/actions/inbox'
+import { resolveTourDateId } from '@/lib/schedule/day-link'
+import { localDateInZone } from '@/lib/schedule/datetime'
+import type { TablesInsert } from '@/lib/types/database'
 import { extractionKeepSchema, narrowExtractionProposal, type ExtractionKeep } from '@/lib/validators/extraction'
 
 export type ExtractionActionState = { error: string | null }
@@ -131,14 +134,48 @@ export async function confirmExtraction(
     }
   }
 
-  // Transport segments: batch insert in a single round trip.
-  // status='planned' is correct here: the TM confirmed the booking exists,
-  // but 'booked' is set only after they enter a reference number in the UI.
+  // Transport segments. status='planned' is correct here: the TM confirmed the
+  // booking exists, but 'booked' is set only after they enter a reference
+  // number in the UI.
+  //
+  // Each departure resolves (and creates, dayType 'travel') the day it lands
+  // on, the same rule createTransportSegment already follows. Left
+  // unresolved, a segment's tour_date_id stayed null and the date itself was
+  // never added to the tour's date list, so a departure with nothing else on
+  // it (an evening coach the night before the first show, forwarded as a
+  // booking confirmation) had no page a TM could ever open: fetchDayRecords
+  // returns nothing for a date with no tour_dates row before it even queries
+  // transport. It then surfaced only as the clamped continuation on whichever
+  // later day its arrival reached into, reading as a same-day block that
+  // started at the top of that grid (REE-158). resolveTourDateId is
+  // idempotent, so two segments departing on the same date each just read
+  // back the row the first one created rather than racing to insert it twice.
   const segments = confirmed.transport_segments.filter((s) => !!s.mode)
   if (segments.length > 0) {
-    const { error } = await supabase.from('transport_segments').insert(
-      segments.map((seg) => ({
+    const { data: tourRow } = await supabase
+      .from('tours')
+      .select('timezone')
+      .eq('id', tourId)
+      .single()
+    const timezone = tourRow?.timezone ?? 'UTC'
+
+    const rows: TablesInsert<'transport_segments'>[] = []
+    for (const seg of segments) {
+      let tourDateId: string | null = null
+      if (seg.depart_at) {
+        const localDate = localDateInZone(seg.depart_at, timezone)
+        const resolved = await resolveTourDateId(supabase, tourId, localDate, {
+          dayType: 'travel',
+        })
+        if (resolved.id === null) {
+          errors.push(`Segments (${seg.origin ?? seg.mode}): ${resolved.error}`)
+          continue
+        }
+        tourDateId = resolved.id
+      }
+      rows.push({
         tour_id: tourId,
+        tour_date_id: tourDateId,
         mode: seg.mode!,
         origin: seg.origin ?? null,
         destination: seg.destination ?? null,
@@ -148,9 +185,13 @@ export async function confirmExtraction(
         vehicle_or_flight_no: seg.vehicle_or_flight_no ?? null,
         booking_reference: seg.booking_reference ?? null,
         status: 'planned',
-      }))
-    )
-    if (error) errors.push(`Segments: ${error.message}`)
+      })
+    }
+
+    if (rows.length > 0) {
+      const { error } = await supabase.from('transport_segments').insert(rows)
+      if (error) errors.push(`Segments: ${error.message}`)
+    }
   }
 
   // Hotel stays: batch insert in a single round trip.
