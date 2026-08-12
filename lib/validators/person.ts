@@ -1,7 +1,5 @@
 import { z } from 'zod'
-
-// E.164: + followed by country code (1 non-zero digit) and 6-14 more digits.
-const e164Regex = /^\+[1-9]\d{6,14}$/
+import { E164_REGEX, normalizeWhatsappNumber } from '@/lib/phone'
 
 // Optional and nullable are different states and both are needed. See the note
 // at the top of lib/validators/contact.ts for the rule, and
@@ -33,10 +31,12 @@ export const personSchema = z.object({
   // Independent of the operational channel: email serves a different purpose
   // (formal riders and advancing documents), not the day-to-day stream.
   email_enabled: z.boolean().optional(),
-  // An emptied input arrives as null. Only a non-empty value has to be E.164.
+  // An emptied input arrives as null. A non-empty value is normalized (gaps
+  // stripped, a leading 0 swapped for a +) before validation, matching
+  // contactSchema, which this schema is kept in step with field for field.
   whatsapp_number: z.preprocess(
-    (v) => (v === '' ? null : v),
-    z.string().regex(e164Regex, 'Enter a number in E.164 format, e.g. +447700900123').nullable().optional()
+    (v) => (typeof v === 'string' ? (v === '' ? null : normalizeWhatsappNumber(v)) : v),
+    z.string().regex(E164_REGEX, 'Enter a number in E.164 format, e.g. +447700900123').nullable().optional()
   ),
   sms_number: optionalText,
   emergency_contact_name: optionalText,
