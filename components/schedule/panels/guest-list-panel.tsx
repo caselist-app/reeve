@@ -25,6 +25,7 @@ import {
 } from '@/lib/actions/guest-list'
 import { allotmentLines, summarise, waitingPhrase } from '@/lib/schedule/guest-list-summary'
 import { useGuestCounts } from '@/stores/guest-list-count-store'
+import { useInboxCountStore, selectOpenCount } from '@/stores/inbox-count-store'
 import { guestTypeLabel, passTypeLabel } from '@/lib/guest-list/vocabulary'
 import { toDatetimeLocal, fromDatetimeLocal } from '@/lib/schedule/datetime'
 import { cn } from '@/lib/utils'
@@ -287,6 +288,20 @@ function GuestGroup({
   )
 }
 
+// Approving or declining a requested entry resolves its Inbox row
+// (resolveGuestRequestAttention, called from decideGuestEntry), so the badge
+// in the sidebar needs to drop by one. That badge is server-rendered above
+// this panel's route, so the panel cannot revalidate or refresh it (REE-65,
+// REE-131); it writes the decrement into the shared store instead, stamped
+// with the server count the sidebar last rendered (serverCount), which is
+// what lets the badge accept it as still current. See
+// stores/inbox-count-store.ts.
+function decrementInboxCount() {
+  const { serverCount, override, setOverride } = useInboxCountStore.getState()
+  const current = selectOpenCount(serverCount, override)
+  setOverride(serverCount, current - 1)
+}
+
 function GuestRow({
   entry,
   tourId,
@@ -313,6 +328,11 @@ function GuestRow({
         setSendNote(result.error)
         return
       }
+      // alreadyDecided means the entry was not 'requested' any more when the
+      // action ran (e.g. decided from Telegram in the same moment), so
+      // resolveGuestRequestAttention never ran and the badge already
+      // accounted for it.
+      if (!result.alreadyDecided) decrementInboxCount()
       onChanged()
     })
   }
@@ -325,6 +345,7 @@ function GuestRow({
         setSendNote(result.error)
         return
       }
+      if (!result.alreadyDecided) decrementInboxCount()
       onChanged()
     })
   }

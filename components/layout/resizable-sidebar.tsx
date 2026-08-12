@@ -24,6 +24,9 @@ interface ResizableSidebarProps {
   /** Emails waiting to be reviewed, keyed by tour id. Fed to the settings
    *  panel's Extractions badge. */
   extractionsAwaitingReview?: Record<string, number>
+  /** Account-wide count of open (unresolved) attention_items, for the Inbox
+   *  badge (REE-151). */
+  openItemCount?: number
 }
 
 export function ResizableSidebar({
@@ -32,6 +35,7 @@ export function ResizableSidebar({
   initialCollapsed,
   lastTourId = null,
   extractionsAwaitingReview,
+  openItemCount,
 }: ResizableSidebarProps) {
   const { collapsed, setCollapsed, toggleCollapsed } = useSidebarCollapsed(initialCollapsed)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -91,6 +95,7 @@ export function ResizableSidebar({
         settingsOpen={settingsOpen}
         onSettingsOpenChange={setSettingsOpen}
         extractionsAwaitingReview={extractionsAwaitingReview}
+        openItemCount={openItemCount}
       />
 
       {/* Drag handle on the right edge. Mouse-only; hidden on touch and while collapsed. */}

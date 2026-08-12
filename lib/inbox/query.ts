@@ -82,3 +82,25 @@ export async function fetchInbox(supabase: Client, accountId: string): Promise<I
 
   return { items, error: null }
 }
+
+export interface InboxCountResult {
+  count: number
+  error: string | null
+}
+
+// A head-count of the exact rows fetchInbox returns, for the nav badge
+// (REE-151). Its own query rather than items.length off a full fetchInbox
+// call, so the layout, which runs on every request under (app), is not
+// pulling down and discarding every open item's detail just to render a
+// number in the sidebar. Same filters as fetchInbox, so the two never
+// disagree about what counts as open.
+export async function fetchOpenItemCount(supabase: Client, accountId: string): Promise<InboxCountResult> {
+  const { count, error } = await supabase
+    .from('attention_items')
+    .select('id, tours!inner ( account_id )', { count: 'exact', head: true })
+    .is('resolved_at', null)
+    .eq('tours.account_id', accountId)
+
+  if (error) return { count: 0, error: error.message }
+  return { count: count ?? 0, error: null }
+}

@@ -6,6 +6,7 @@ import { MobileNavDrawer } from '@/components/layout/mobile-nav-drawer'
 import { AppContent } from '@/components/layout/app-content'
 import { LazyCommandPalette } from '@/components/nav/lazy-command-palette'
 import { Toaster } from '@/components/ui/sonner'
+import { fetchOpenItemCount } from '@/lib/inbox/query'
 
 const DEFAULT_SIDEBAR_WIDTH = 220
 const MIN_SIDEBAR_WIDTH = 180
@@ -25,11 +26,12 @@ export default async function AppLayout({
   const user = await requireUser()
   const supabase = await createClient()
 
-  // Tours for the selector, and the count of emails waiting to be reviewed on
-  // each one, for the Extractions badge in the tour settings panel. Independent
-  // queries, so they run together rather than in two waves. forwarded_emails is
+  // Tours for the selector, the count of emails waiting to be reviewed on each
+  // one for the Extractions badge in the tour settings panel, and the
+  // account-wide open-item count for the Inbox badge (REE-151). Independent
+  // queries, so they run together rather than in waves. forwarded_emails is
   // scoped by owns_tour(tour_id) in RLS, so it needs no tour filter of its own.
-  const [{ data: toursRaw }, { data: awaitingReview }] = await Promise.all([
+  const [{ data: toursRaw }, { data: awaitingReview }, { count: openItemCount }] = await Promise.all([
     supabase
       .from('tours')
       .select('id, name, status, artist_id, artists(name)')
@@ -40,6 +42,7 @@ export default async function AppLayout({
       .from('forwarded_emails')
       .select('tour_id')
       .eq('extraction_status', 'extracted'),
+    fetchOpenItemCount(supabase, user.id),
   ])
 
   const tours = (toursRaw ?? []).map((t) => ({
@@ -82,6 +85,7 @@ export default async function AppLayout({
           initialCollapsed={isCollapsed}
           lastTourId={lastTourId}
           extractionsAwaitingReview={extractionsAwaitingReview}
+          openItemCount={openItemCount ?? 0}
         />
       </div>
 
@@ -90,6 +94,7 @@ export default async function AppLayout({
         tours={tours ?? []}
         lastTourId={lastTourId}
         extractionsAwaitingReview={extractionsAwaitingReview}
+        openItemCount={openItemCount ?? 0}
       />
 
       {/* AppContent owns the main card, the secondary panel, and the side panel. */}
