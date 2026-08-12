@@ -628,6 +628,21 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
           step={15}
           timeslots={4}
           toolbar={false}
+          // Without this, RBC's own TimeGrid reclassifies any event whose
+          // start and end land on different calendar days as an all-day
+          // event (its default `showMultiDayTimes` is false), and silently
+          // routes it into the all-day banner row above the grid instead of
+          // positioning it in the time grid at all (REE-158). Every
+          // continuesAfter block is, by definition, exactly that: its grid
+          // instant starts today and its grid instant ends tomorrow, since
+          // that is the whole point of the broadcast-day shift. The banner
+          // row itself is hidden (`.rbc-time-header { display: none }` in
+          // day-calendar.css, written when nothing was ever expected to land
+          // there), so a misrouted block did not just draw in the wrong
+          // place, it drew somewhere invisible. This keeps every timed event
+          // in the grid, positioned by cascadeLayout, regardless of which
+          // calendar day its start and end fall on.
+          showMultiDayTimes
           // Broadcast-day gutter labels (04:00..03:00) and a grid-shifted now,
           // so RBC's own hairline and hour labels match the synthetic grid.
           formats={formats}
