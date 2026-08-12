@@ -102,11 +102,17 @@ function BookingReferenceField({ segment }: { segment: Segment }) {
   const [pending, startTransition] = useTransition()
   const [value, setValue] = useState(segment.booking_reference ?? '')
   const [saved, setSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   function handleSave() {
     setSaved(false)
+    setError(null)
     startTransition(async () => {
-      await updateTransportSegment(segment.id, { booking_reference: value || null })
+      const result = await updateTransportSegment(segment.id, { booking_reference: value || null })
+      if (result.error) {
+        setError(result.error)
+        return
+      }
       setSaved(true)
     })
   }
@@ -117,7 +123,7 @@ function BookingReferenceField({ segment }: { segment: Segment }) {
       <div className="flex gap-2">
         <Input
           value={value}
-          onChange={(e) => { setValue(e.target.value); setSaved(false) }}
+          onChange={(e) => { setValue(e.target.value); setSaved(false); setError(null) }}
           placeholder="ABC123"
           className="h-7 text-xs"
         />
@@ -125,7 +131,11 @@ function BookingReferenceField({ segment }: { segment: Segment }) {
           {pending ? 'Saving...' : 'Save'}
         </Button>
       </div>
-      {saved && <p className="text-[11px] text-muted-foreground">Saved.</p>}
+      {error ? (
+        <p className="text-[11px] text-destructive">{error}</p>
+      ) : saved ? (
+        <p className="text-[11px] text-muted-foreground">Saved.</p>
+      ) : null}
     </div>
   )
 }

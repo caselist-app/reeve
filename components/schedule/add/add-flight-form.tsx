@@ -248,9 +248,14 @@ export function AddFlightForm({ tourId, tourDateId, date, timezone, onBack, onSu
   }
 
   function handleSaveReference() {
+    setError(null)
     startTransition(async () => {
       if (segmentId && bookingRef) {
-        await updateTransportSegment(segmentId, { booking_reference: bookingRef })
+        const result = await updateTransportSegment(segmentId, { booking_reference: bookingRef })
+        if (result.error) {
+          setError(result.error)
+          return
+        }
         router.refresh()
       }
       onSuccess()
@@ -854,6 +859,7 @@ export function AddFlightForm({ tourId, tourDateId, date, timezone, onBack, onSu
             className="h-7 text-xs"
           />
         </div>
+        {error && <p className="text-xs text-destructive">{error}</p>}
         <Button type="button" size="sm" disabled={pending} onClick={handleSaveReference} className="w-full">
           {pending ? 'Saving...' : bookingRef ? 'Save and close' : 'Skip'}
         </Button>
