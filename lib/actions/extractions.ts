@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import type { ExtractionProposal } from '@/lib/ai/extract'
 import { bustTourContextCache } from '@/lib/ai/context'
 import { createDayItem } from '@/lib/actions/day-items'
+import { resolveAttentionItem } from '@/lib/actions/inbox'
 
 export type ExtractionActionState = { error: string | null }
 
@@ -174,6 +175,13 @@ export async function confirmExtraction(
 
   void bustTourContextCache(tourId)
 
+  // Resolves the Inbox row last, after every spine write above has succeeded:
+  // rule 3 of brief 53 is that a producer resolves after its own write
+  // succeeds, never before. Anything throwing earlier in this function (or the
+  // errors.length branch above returning first) leaves this unreached, so the
+  // item stays open and the TM sees the confirm did not fully land.
+  await resolveAttentionItem('forwarded_emails', forwardedEmailId)
+
   return { error: null }
 }
 
@@ -199,6 +207,10 @@ export async function discardExtraction(
     .eq('id', forwardedEmailId)
 
   if (error) return { error: error.message }
+
+  // Same rule as confirmExtraction: resolve only after the write above has
+  // actually landed.
+  await resolveAttentionItem('forwarded_emails', forwardedEmailId)
 
   return { error: null }
 }
