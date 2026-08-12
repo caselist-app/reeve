@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from 'react'
 import { Pencil } from 'lucide-react'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { updateDayTitle } from '@/lib/actions/tour-dates'
 
@@ -28,9 +29,13 @@ export function EditableDayTitle({ tourDateId, customTitle, derivedTitle }: Edit
     setCustom(trimmed)
     setEditing(false)
     if (trimmed === lastSaved.current) return
-    lastSaved.current = trimmed
     startTransition(async () => {
-      await updateDayTitle(tourDateId, trimmed || null)
+      const result = await updateDayTitle(tourDateId, trimmed || null)
+      if (result.error) {
+        toast.error(result.error)
+        return
+      }
+      lastSaved.current = trimmed
     })
   }
 
