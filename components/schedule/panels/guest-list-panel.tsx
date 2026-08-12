@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, useTransition } from 'react'
 import { Lock } from 'lucide-react'
 import { PanelShell } from '@/components/layout/panel-shell'
 import { PanelDeleteMenu } from '@/components/schedule/panels/panel-delete-menu'
+import { DropdownMenuItem } from '@/components/ui/dropdown-menu'
 import { ListRow } from '@/components/ui/list-row'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -130,6 +131,7 @@ export function GuestListPanel({ tourId, showId, venueName }: GuestListPanelProp
             countSuffix={waiting.length > 0 ? waitingPhrase(waiting.length) : undefined}
             entries={waiting}
             tourId={tourId}
+            showId={showId}
             onChanged={refresh}
           />
 
@@ -138,6 +140,7 @@ export function GuestListPanel({ tourId, showId, venueName }: GuestListPanelProp
             count={approved.length}
             entries={approved}
             tourId={tourId}
+            showId={showId}
             onChanged={refresh}
             action={<SendConfirmations showId={showId} disabled={approved.length === 0} />}
           />
@@ -148,6 +151,7 @@ export function GuestListPanel({ tourId, showId, venueName }: GuestListPanelProp
               count={declined.length}
               entries={declined}
               tourId={tourId}
+              showId={showId}
               onChanged={refresh}
             />
           )}
@@ -249,6 +253,7 @@ function GuestGroup({
   countSuffix,
   entries,
   tourId,
+  showId,
   onChanged,
   action,
 }: {
@@ -257,6 +262,7 @@ function GuestGroup({
   countSuffix?: string
   entries: Entry[]
   tourId: string
+  showId: string
   onChanged: () => void
   action?: React.ReactNode
 }) {
@@ -273,7 +279,7 @@ function GuestGroup({
       ) : (
         <div className="space-y-1.5">
           {entries.map((entry) => (
-            <GuestRow key={entry.id} entry={entry} tourId={tourId} onChanged={onChanged} />
+            <GuestRow key={entry.id} entry={entry} tourId={tourId} showId={showId} onChanged={onChanged} />
           ))}
         </div>
       )}
@@ -284,13 +290,17 @@ function GuestGroup({
 function GuestRow({
   entry,
   tourId,
+  showId,
   onChanged,
 }: {
   entry: Entry
   tourId: string
+  showId: string
   onChanged: () => void
 }) {
   const [pending, startTransition] = useTransition()
+  const [sending, startSend] = useTransition()
+  const [sendNote, setSendNote] = useState<string | null>(null)
 
   // onChanged re-reads the panel's list, which also writes the day-info block's
   // count into the guest count store. No server refresh: the block updates from
@@ -305,6 +315,20 @@ function GuestRow({
   function decline() {
     startTransition(async () => {
       await declineGuestEntry(tourId, entry.id)
+      onChanged()
+    })
+  }
+
+  // The per-row send, the same action as the bulk button with this one id. The
+  // action and the job both re-check approved/has-email/not-yet-notified, so a
+  // guest with no email or one already told is a no-op with a note, not a resend.
+  function sendConfirmation() {
+    setSendNote(null)
+    startSend(async () => {
+      const result = await sendGuestConfirmations(showId, [entry.id])
+      if (result.error) setSendNote(result.error)
+      else if (result.count === 0) setSendNote(entry.email ? 'Already sent.' : 'No email on file.')
+      else setSendNote('Sent.')
       onChanged()
     })
   }
@@ -327,6 +351,7 @@ function GuestRow({
       <span className="min-w-0 flex-1">
         <span className="block truncate text-sm font-medium">{guestName(entry)}</span>
         <span className="block truncate text-xs text-muted-foreground">{guestDetail(entry)}</span>
+        {sendNote && <span className="block truncate text-[11px] text-muted-foreground">{sendNote}</span>}
       </span>
       {entry.status === 'requested' && (
         <span className="flex shrink-0 items-center gap-1">
@@ -346,6 +371,16 @@ function GuestRow({
         dialogTitle="Remove this name?"
         dialogDescription="This takes them off the door. The record of who asked is kept. This cannot be undone."
         onConfirm={remove}
+        extraItems={
+          // Only an approved, not-yet-told guest can be sent to. A second send to
+          // an already-notified entry is a no-op by design (the action filters on
+          // notified_at), so a "Resend" item would lie: it is omitted instead.
+          entry.status === 'approved' && !entry.notified_at ? (
+            <DropdownMenuItem disabled={sending} onSelect={sendConfirmation}>
+              Send confirmation
+            </DropdownMenuItem>
+          ) : undefined
+        }
       />
     </ListRow>
   )

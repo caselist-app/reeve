@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { tasks } from '@trigger.dev/sdk/v3'
+import { guestConfirmationSendJob } from '@/trigger/jobs/guest-confirmation-send'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import {
@@ -459,10 +459,11 @@ export async function setGuestListLock(
 }
 
 // Enqueues the confirmation send. Omitting entryIds means everyone approved with
-// an email and no notified_at. The job writes notified_at only after the send
-// returns, so a failed send retries rather than looking sent. This action just
-// resolves the target set and hands it off; the send job is a later step of the
-// brief.
+// an email and no notified_at; the approved row's ... menu passes a single id for
+// a per-row send. The job writes notified_at only after the send returns, so a
+// failed send retries rather than looking sent. This action resolves the target
+// set (so the button's count is right) and hands it to guestConfirmationSendJob,
+// which re-checks the same filter at send time.
 export async function sendGuestConfirmations(
   showId: string,
   entryIds?: string[],
@@ -498,7 +499,7 @@ export async function sendGuestConfirmations(
   const ids = (targets ?? []).map((row) => row.id)
   if (ids.length === 0) return { error: null, count: 0 }
 
-  await tasks.trigger('guest-confirmation-send', { showId, entryIds: ids })
+  await guestConfirmationSendJob.trigger({ showId, entryIds: ids })
 
   revalidatePath(`/tours/${show.tour_id}/schedule`)
 
