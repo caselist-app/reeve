@@ -7,24 +7,33 @@ import type { ExtractionProposal } from '@/lib/ai/extract'
 import { bustTourContextCache } from '@/lib/ai/context'
 import { createDayItem } from '@/lib/actions/day-items'
 import { resolveAttentionItem } from '@/lib/actions/inbox'
+import { extractionKeepSchema, narrowExtractionProposal, type ExtractionKeep } from '@/lib/validators/extraction'
 
 export type ExtractionActionState = { error: string | null }
 
-// Reads proposed_rows from a forwarded_emails row and inserts the confirmed
-// data into the appropriate spine tables. Nothing lands in the spine until
-// this function is called with the TM's edited and confirmed values.
-// After writing, sets extraction_status = 'confirmed'.
+const EMPTY_PROPOSAL: ExtractionProposal = { shows: [], transport_segments: [], hotel_stays: [] }
+
+// Reads proposed_rows from a forwarded_emails row and inserts the rows the TM
+// kept into the appropriate spine tables. `keep` names indices into
+// proposed_rows, not row data: the TM edits nothing in this pass, only keeps
+// or discards each proposed row (REE-154), so the server, not the caller, is
+// the one source of truth for what a kept row actually contains. Nothing
+// lands in the spine until this function is called. After writing, sets
+// extraction_status = 'confirmed'.
 export async function confirmExtraction(
   forwardedEmailId: string,
-  confirmed: ExtractionProposal
+  keep: ExtractionKeep
 ): Promise<ExtractionActionState> {
   await requireUser()
   const supabase = await createClient()
 
+  const parsedKeep = extractionKeepSchema.safeParse(keep)
+  if (!parsedKeep.success) return { error: 'That selection is not valid.' }
+
   // RLS check: owns_tour on forwarded_emails enforces ownership.
   const { data: forwarded } = await supabase
     .from('forwarded_emails')
-    .select('id, tour_id, extraction_status')
+    .select('id, tour_id, extraction_status, proposed_rows')
     .eq('id', forwardedEmailId)
     .single()
 
@@ -32,15 +41,28 @@ export async function confirmExtraction(
   if (forwarded.extraction_status === 'confirmed') return { error: 'Already confirmed.' }
 
   const tourId = forwarded.tour_id
+  const proposed = (forwarded.proposed_rows as ExtractionProposal | null) ?? EMPTY_PROPOSAL
 
-  // Optimistic lock: claim the row before inserting any spine data.
-  // A concurrent second click will hit the 'Already confirmed.' guard above.
-  // On failure below, reset to 'pending' so the TM can retry.
+  const narrowed = narrowExtractionProposal(proposed, parsedKeep.data)
+  if (narrowed.proposal === null) return { error: narrowed.error }
+
+  const confirmed = narrowed.proposal
+
+  // Optimistic lock: claim the row before inserting any spine data, compare-
+  // and-swap against the status this call just read. By the time a TM
+  // confirms, that status is 'extracted' (or 'failed', if they are confirming
+  // an empty proposal after a failed run), never 'pending': runExtraction has
+  // already moved it on before an attention item, and therefore a review
+  // panel, can exist at all. A hardcoded .eq('extraction_status', 'pending')
+  // here matched zero rows for every real confirm and left the row stuck at
+  // its pre-confirm status forever, caught by extraction-confirm.test.ts. A
+  // concurrent second click still hits the 'Already confirmed.' guard above,
+  // or loses this CAS if it reads before the first call's update lands.
   const { error: lockError } = await supabase
     .from('forwarded_emails')
     .update({ extraction_status: 'confirmed' })
     .eq('id', forwardedEmailId)
-    .eq('extraction_status', 'pending')
+    .eq('extraction_status', forwarded.extraction_status)
 
   if (lockError) return { error: lockError.message }
 
@@ -165,10 +187,13 @@ export async function confirmExtraction(
   revalidatePath(`/tours/${tourId}/hotels`)
 
   if (errors.length > 0) {
-    // Roll back the optimistic lock so the TM can retry.
+    // Roll back the optimistic lock to the status this call found the row in
+    // (almost always 'extracted'), not a hardcoded 'pending', so a retry finds
+    // it back in the reviewable state rather than looking like it is still
+    // being processed.
     await supabase
       .from('forwarded_emails')
-      .update({ extraction_status: 'pending' })
+      .update({ extraction_status: forwarded.extraction_status })
       .eq('id', forwardedEmailId)
     return { error: errors.join(' | ') }
   }

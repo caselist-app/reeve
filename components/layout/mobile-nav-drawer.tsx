@@ -16,9 +16,6 @@ interface Tour {
 interface MobileNavDrawerProps {
   tours: Tour[]
   lastTourId?: string | null
-  /** Emails waiting to be reviewed, keyed by tour id. Fed to the settings
-   *  panel's Extractions badge. */
-  extractionsAwaitingReview?: Record<string, number>
   /** Account-wide count of open (unresolved) attention_items, for the Inbox
    *  badge (REE-151). */
   openItemCount?: number
@@ -27,7 +24,7 @@ interface MobileNavDrawerProps {
 // Renders the Sidebar inside a left-side Sheet on mobile. Controlled by
 // useMobileNav so the hamburger in MobileTopBar can open it. Closes
 // automatically whenever the pathname changes (i.e. the user navigated).
-export function MobileNavDrawer({ tours, lastTourId, extractionsAwaitingReview, openItemCount }: MobileNavDrawerProps) {
+export function MobileNavDrawer({ tours, lastTourId, openItemCount }: MobileNavDrawerProps) {
   const { isOpen, close } = useMobileNav()
   const pathname = usePathname()
 
@@ -46,7 +43,6 @@ export function MobileNavDrawer({ tours, lastTourId, extractionsAwaitingReview, 
           <Sidebar
             tours={tours}
             lastTourId={lastTourId}
-            extractionsAwaitingReview={extractionsAwaitingReview}
             openItemCount={openItemCount}
           />
         </SheetPrimitive.Content>

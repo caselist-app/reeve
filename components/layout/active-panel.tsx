@@ -23,6 +23,8 @@ const HotelPanel = dynamic(() => import('@/components/schedule/panels/hotel-pane
 const AddFlow = dynamic(() => import('@/components/schedule/add/add-flow').then((m) => m.AddFlow), { ssr: false })
 // REE-22: the typed one-line fast path, beside the AddFlow category picker.
 const DayForm = dynamic(() => import('@/components/schedule/day-form').then((m) => m.DayForm), { ssr: false })
+// REE-154: the extraction detail view's row review panel.
+const ExtractionRowsPanel = dynamic(() => import('@/components/inbox/extraction-rows-panel').then((m) => m.ExtractionRowsPanel), { ssr: false })
 
 // Renders the correct panel content based on the active descriptor.
 // Mounted inside AppContent, which handles the slide-in animation and
@@ -166,6 +168,14 @@ export function ActivePanel() {
           date={panel.date}
           timezone={panel.timezone}
           initialInput={panel.initialInput}
+        />
+      )
+    case 'extraction-rows':
+      return (
+        <ExtractionRowsPanel
+          forwardedEmailId={panel.forwardedEmailId}
+          subjectLine={panel.subjectLine}
+          proposal={panel.proposal}
         />
       )
     default:

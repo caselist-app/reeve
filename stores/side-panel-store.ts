@@ -2,6 +2,7 @@
 
 import { create } from 'zustand'
 import type { Tables } from '@/lib/types/database'
+import type { ExtractionProposal } from '@/lib/ai/extract'
 
 // Inline types to avoid circular imports with component files.
 type PersonType = 'artist' | 'crew' | 'management' | 'support'
@@ -200,6 +201,17 @@ export type PanelDescriptor =
       // Absent when opened from the '+' picker or the '/' shortcut, where the
       // input starts empty.
       initialInput?: string
+    }
+  // REE-154: the extraction detail view's row review panel. Carries the full
+  // proposal as a snapshot, the same shape as 'day-item'/'transport'/'hotel'
+  // above, rather than the panel re-fetching it: extraction-item.tsx already
+  // has it from fetchInboxItem's subject resolver, so a second round trip
+  // would buy nothing.
+  | {
+      type: 'extraction-rows'
+      forwardedEmailId: string
+      subjectLine: string | null
+      proposal: ExtractionProposal
     }
 
 // The subset of PanelDescriptor that day-calendar.tsx can open: the variants

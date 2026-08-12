@@ -46,10 +46,6 @@ interface SidebarProps {
    *  collapses and has no such conflict) needs no changes. */
   settingsOpen?: boolean
   onSettingsOpenChange?: (open: boolean) => void
-  /** Emails waiting to be reviewed, keyed by tour id, fetched server-side in
-   *  app/(app)/layout.tsx. Keyed rather than scalar because the active tour is
-   *  derived from the pathname here, on the client. */
-  extractionsAwaitingReview?: Record<string, number>
   /** Account-wide count of open (unresolved) attention_items, fetched
    *  server-side in app/(app)/layout.tsx. Feeds the Inbox badge (REE-151). */
   openItemCount?: number
@@ -72,7 +68,6 @@ export function Sidebar({
   setCollapsed = () => {},
   settingsOpen: settingsOpenProp,
   onSettingsOpenChange,
-  extractionsAwaitingReview,
   openItemCount = 0,
 }: SidebarProps) {
   const pathname = usePathname()
@@ -362,7 +357,6 @@ export function Sidebar({
       {activeTourId && (
         <TourSettingsPanel
           tourId={activeTourId}
-          extractionsAwaitingReview={extractionsAwaitingReview?.[activeTourId] ?? 0}
           isOpen={settingsOpen}
           onClose={() => setSettingsOpen(false)}
         />
