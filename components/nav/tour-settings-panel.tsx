@@ -20,7 +20,7 @@ const SETTINGS_NAV = [
   { key: 'people',      href: (id: string) => `/tours/${id}/people`,      label: 'People',        icon: Users },
   { key: 'transport',   href: (id: string) => `/tours/${id}/transport`,   label: 'Transport',     icon: Plane },
   { key: 'hotels',      href: (id: string) => `/tours/${id}/hotels`,      label: 'Hotels',        icon: Building2 },
-  { key: 'documents',   href: (id: string) => `/tours/${id}/settings`,    label: 'Documents',     icon: FileText },
+  { key: 'documents',   href: (id: string) => `/tours/${id}/documents`,   label: 'Documents',     icon: FileText },
   { key: 'whatsapp',    href: (id: string) => `/tours/${id}/settings`,    label: 'WhatsApp',      icon: MessageCircle },
   { key: 'settings',    href: (id: string) => `/tours/${id}/settings`,    label: 'Tour settings', icon: Settings },
 ] as const

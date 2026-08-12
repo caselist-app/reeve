@@ -90,3 +90,45 @@ describe('the retired routes have no links left', () => {
     expect(RETIRED_EXTRACTIONS_ROUTE.test('`/tours/${tourId}/extractions`')).toBe(true)
   })
 })
+
+// REE-7: the gear menu's `documents` entry pointed at `/tours/${id}/settings`
+// instead of its own route, so Documents silently landed on Settings. The old
+// brief blamed SECTION_ROUTE in components/nav/sidebar.tsx, which only holds
+// `schedule` and `people` and was never the culprit.
+//
+// `whatsapp` is deliberately not covered here: the tour settings page's Crew
+// comms section (morning messages, crew Q&A) is the real WhatsApp config
+// today, so that entry pointing at /settings is not the bug this guards
+// against.
+describe('the settings nav has no mislabelled settings link', () => {
+  const panelPath = join('components', 'nav', 'tour-settings-panel.tsx')
+  const source = readFileSync(panelPath, 'utf8')
+
+  // Entries that legitimately resolve to the settings route today.
+  const ALLOWED_ON_SETTINGS = ['settings', 'whatsapp']
+
+  const SETTINGS_ROUTE = /\/tours\/\$\{[^}]+\}\/settings`/
+
+  it('found the SETTINGS_NAV block to check', () => {
+    expect(source).toMatch(/const SETTINGS_NAV = \[/)
+  })
+
+  it('has no non-settings nav entry pointing at the settings route', () => {
+    const navBlockMatch = source.match(/const SETTINGS_NAV = \[([\s\S]*?)\] as const/)
+    expect(navBlockMatch).not.toBeNull()
+    const navBlock = navBlockMatch![1]
+
+    const entryLines = navBlock.split('\n').filter((line) => line.trim().startsWith('{ key:'))
+    expect(entryLines.length).toBeGreaterThan(0)
+
+    const offenders: string[] = []
+    for (const line of entryLines) {
+      const keyMatch = line.match(/key:\s*'([^']+)'/)
+      const key = keyMatch?.[1] ?? ''
+      if (ALLOWED_ON_SETTINGS.includes(key)) continue
+      if (SETTINGS_ROUTE.test(line)) offenders.push(line.trim())
+    }
+
+    expect(offenders).toEqual([])
+  })
+})
