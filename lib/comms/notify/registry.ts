@@ -7,6 +7,9 @@ import {
   cateringTemplateName, cateringBodyParams, cateringTelegram,
   wrapTemplateName, wrapBodyParams, wrapTelegram,
 } from '@/lib/comms/templates/day-blocks'
+import {
+  guestRequestBody, guestRequestButtons, guestRequestEmailSubject,
+} from '@/lib/comms/templates/guest-request-notification'
 import type { ImplementedType, NotificationDataMap, NotificationDef } from './types'
 
 // One entry per implemented notification type. Typed as a full record over
@@ -54,6 +57,24 @@ export const registry: Registry = {
   flight_status_alert: {
     timeCritical: true,
     telegram: (d) => ({ body: d.message }),
+  },
+
+  // Brief 52, step 7 (REE-134): a /guest request for the TM to approve or
+  // decline. Telegram only for now (same reasoning as flight_status_alert):
+  // whatsapp() would need an approved Meta template outside the 24h window, which
+  // the brief says not to block on. The email() renderer supplies a subject for
+  // the later digest path; nothing dispatches it yet. The two buttons carry
+  // gl:a:<entryId> / gl:d:<entryId>, the callback the decide core reads.
+  guest_request: {
+    timeCritical: false,
+    telegram: (d) => ({
+      body: guestRequestBody(d),
+      buttons: guestRequestButtons(d.entryId),
+    }),
+    email: (d) => ({
+      subject: guestRequestEmailSubject(d),
+      html: `<p>${guestRequestBody(d).replace(/\n/g, '<br>')}</p>`,
+    }),
   },
 
   // --- Show-day blocks (WhatsApp/Telegram only: no email() renderer) ---

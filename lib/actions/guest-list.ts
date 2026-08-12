@@ -12,6 +12,7 @@ import {
   guestListLockSchema,
 } from '@/lib/validators/guest-list'
 import { decideGuestEntry, type OverAllotment } from '@/lib/guest-list/decide'
+import { resolveGuestRequestAttention } from '@/lib/guest-list/attention'
 import { definedOnly } from '@/lib/forms/write-row'
 import type { Tables, TablesInsert, TablesUpdate } from '@/lib/types/database'
 import type { z } from 'zod'
@@ -353,6 +354,9 @@ export async function removeGuestEntry(entryId: string): Promise<GuestListAction
     .eq('id', entryId)
 
   if (error) return { error: error.message }
+
+  // A removed request is off the list, so drop its Inbox row too.
+  await resolveGuestRequestAttention(supabase, { tourId: existing.tour_id, entryId })
 
   revalidatePath(`/tours/${existing.tour_id}/schedule`)
 
