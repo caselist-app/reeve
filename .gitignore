@@ -170,5 +170,3 @@ mobile-dayview-redesign-spec.md
 # first background session will force a worktree again. Recreate the file rather
 # than working in the worktree.
 .claude/
-.vercel
-.env*
