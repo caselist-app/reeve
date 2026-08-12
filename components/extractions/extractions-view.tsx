@@ -111,9 +111,14 @@ function ExtractionCard({ extraction, onDone }: { extraction: Extraction; onDone
   }
 
   function handleDiscard() {
+    setError(null)
     startTransition(async () => {
-      await discardExtraction(extraction.id)
-      onDone()
+      const result = await discardExtraction(extraction.id)
+      if (result.error) {
+        setError(result.error)
+      } else {
+        onDone()
+      }
     })
   }
 
