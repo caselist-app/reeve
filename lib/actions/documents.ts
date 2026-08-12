@@ -3,9 +3,11 @@
 import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { generateShareToken } from '@/lib/comms/email'
 import { sendRiderEmailJob } from '@/trigger/jobs/send-rider-email'
 import { advanceReminderJob } from '@/trigger/jobs/advance-reminder'
+import { uploadDocumentSchema } from '@/lib/validators/documents'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://tourwithreeve.com'
 
@@ -154,4 +156,118 @@ export async function resendShare(shareId: string): Promise<SendRiderResult> {
     documentId: share.document_id,
     recipientPersonId: share.recipient_person_id,
   })
+}
+
+export type UploadDocumentState = { error: string | null }
+
+// Matches the documents bucket's allowed_mime_types
+// (supabase/migrations/20260610130000_documents_storage_bucket.sql).
+const ALLOWED_MIME_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
+// Matches the bucket's file_size_limit.
+const MAX_FILE_BYTES = 10 * 1024 * 1024
+
+// Keeps only what is safe in a Storage path segment. Everything else becomes
+// a dash, so a filename with spaces, unicode or path separators in it cannot
+// alter the path shape the {tourId}/{docType}/... prefix depends on.
+function safeFilename(name: string): string {
+  const base = name.split(/[/\\]/).pop() || 'file'
+  const cleaned = base.replace(/[^a-zA-Z0-9._-]+/g, '-').slice(0, 150)
+  return cleaned || 'file'
+}
+
+// Uploads a new version of a tour document. Flow: verify ownership, validate
+// the file, flip every existing row for this tour_id/doc_type to
+// is_current = false, upload to Storage, then insert the new row as current.
+//
+// The is_current flip runs BEFORE the insert, never after: with it after, a
+// window exists where two rows for the same doc_type both read is_current,
+// which is the exact "which one is current" ambiguity the flag exists to
+// prevent. tests/integration/documents-store.test.ts is red against the
+// reversed order.
+//
+// No upsert on the Storage write: the documents bucket has no UPDATE policy
+// (that is a later brief's work), and it does not need one, because the path
+// is unique per version.
+export async function uploadDocument(
+  tourId: string,
+  formData: FormData
+): Promise<UploadDocumentState> {
+  const user = await requireUser()
+  const supabase = await createClient()
+
+  const { data: tour } = await supabase
+    .from('tours')
+    .select('id')
+    .eq('id', tourId)
+    .eq('account_id', user.id)
+    .single()
+
+  if (!tour) return { error: 'Tour not found.' }
+
+  const parsed = uploadDocumentSchema.safeParse({
+    docType: formData.get('doc_type'),
+    title: formData.get('title'),
+  })
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid input.' }
+  const { docType, title } = parsed.data
+
+  const file = formData.get('file') as File | null
+  if (!file || file.size === 0) return { error: 'No file provided.' }
+  if (!ALLOWED_MIME_TYPES.includes(file.type)) {
+    return { error: 'Only PDF, JPEG, PNG or WebP files are accepted.' }
+  }
+  if (file.size > MAX_FILE_BYTES) return { error: 'File must be under 10 MB.' }
+
+  const admin = createAdminClient()
+
+  // Next version for this tour's doc_type is one past the highest version on
+  // record, current or not: old rows are kept rather than deleted, so this is
+  // the only source of truth for "how many versions has this doc_type had."
+  const { data: latest, error: latestError } = await admin
+    .from('documents')
+    .select('version')
+    .eq('tour_id', tourId)
+    .eq('doc_type', docType)
+    .order('version', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  if (latestError) return { error: latestError.message }
+
+  const version = (latest?.version ?? 0) + 1
+  // The tour id must be the first path segment: the bucket policy is
+  // owns_tour((storage.foldername(name))[1]::uuid).
+  const storagePath = `${tourId}/${docType}/v${version}_${safeFilename(file.name)}`
+
+  // Flip the old rows to not-current before anything about the new one exists,
+  // so there is never a moment with two current rows for this doc_type.
+  const { error: flipError } = await admin
+    .from('documents')
+    .update({ is_current: false, updated_at: new Date().toISOString() })
+    .eq('tour_id', tourId)
+    .eq('doc_type', docType)
+    .eq('is_current', true)
+  if (flipError) return { error: flipError.message }
+
+  const bytes = await file.arrayBuffer()
+  const { error: uploadError } = await admin.storage
+    .from('documents')
+    .upload(storagePath, bytes, {
+      contentType: file.type,
+      upsert: false,
+    })
+  if (uploadError) return { error: uploadError.message }
+
+  const { error: insertError } = await admin.from('documents').insert({
+    tour_id: tourId,
+    doc_type: docType,
+    title,
+    version,
+    storage_path: storagePath,
+    is_current: true,
+  })
+  if (insertError) return { error: insertError.message }
+
+  revalidatePath(`/tours/${tourId}/documents`)
+
+  return { error: null }
 }

@@ -25,6 +25,8 @@ const AddFlow = dynamic(() => import('@/components/schedule/add/add-flow').then(
 const DayForm = dynamic(() => import('@/components/schedule/day-form').then((m) => m.DayForm), { ssr: false })
 // REE-154: the extraction detail view's row review panel.
 const ExtractionRowsPanel = dynamic(() => import('@/components/inbox/extraction-rows-panel').then((m) => m.ExtractionRowsPanel), { ssr: false })
+// REE-3: the manual document upload panel.
+const UploadDocumentPanel = dynamic(() => import('@/components/documents/upload-document-panel').then((m) => m.UploadDocumentPanel), { ssr: false })
 
 // Renders the correct panel content based on the active descriptor.
 // Mounted inside AppContent, which handles the slide-in animation and
@@ -177,6 +179,10 @@ export function ActivePanel() {
           subjectLine={panel.subjectLine}
           proposal={panel.proposal}
         />
+      )
+    case 'upload-document':
+      return (
+        <UploadDocumentPanel tourId={panel.tourId} onSuccess={panel.onSuccess} />
       )
     default:
       return null
