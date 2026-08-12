@@ -48,14 +48,21 @@ export async function confirmExtraction(
 
   const confirmed = narrowed.proposal
 
-  // Optimistic lock: claim the row before inserting any spine data.
-  // A concurrent second click will hit the 'Already confirmed.' guard above.
-  // On failure below, reset to 'pending' so the TM can retry.
+  // Optimistic lock: claim the row before inserting any spine data, compare-
+  // and-swap against the status this call just read. By the time a TM
+  // confirms, that status is 'extracted' (or 'failed', if they are confirming
+  // an empty proposal after a failed run), never 'pending': runExtraction has
+  // already moved it on before an attention item, and therefore a review
+  // panel, can exist at all. A hardcoded .eq('extraction_status', 'pending')
+  // here matched zero rows for every real confirm and left the row stuck at
+  // its pre-confirm status forever, caught by extraction-confirm.test.ts. A
+  // concurrent second click still hits the 'Already confirmed.' guard above,
+  // or loses this CAS if it reads before the first call's update lands.
   const { error: lockError } = await supabase
     .from('forwarded_emails')
     .update({ extraction_status: 'confirmed' })
     .eq('id', forwardedEmailId)
-    .eq('extraction_status', 'pending')
+    .eq('extraction_status', forwarded.extraction_status)
 
   if (lockError) return { error: lockError.message }
 
@@ -180,10 +187,13 @@ export async function confirmExtraction(
   revalidatePath(`/tours/${tourId}/hotels`)
 
   if (errors.length > 0) {
-    // Roll back the optimistic lock so the TM can retry.
+    // Roll back the optimistic lock to the status this call found the row in
+    // (almost always 'extracted'), not a hardcoded 'pending', so a retry finds
+    // it back in the reviewable state rather than looking like it is still
+    // being processed.
     await supabase
       .from('forwarded_emails')
-      .update({ extraction_status: 'pending' })
+      .update({ extraction_status: forwarded.extraction_status })
       .eq('id', forwardedEmailId)
     return { error: errors.join(' | ') }
   }
