@@ -58,7 +58,7 @@ The rule for anything new: if a client component is not visible on first paint a
 
 ## Data model rules enforced at the component layer
 
-- Never duplicate `dietary` or `allergies` anywhere except the `contacts` table. `components/roster/contact-sheet.tsx` is the canonical add/edit form for this. `components/people/person-sheet.tsx` is likely dead code duplicating this responsibility, confirm before building on it.
+- Never duplicate `dietary` or `allergies` anywhere except the `contacts` table. `components/roster/contact-sheet.tsx` is the canonical add/edit form for this.
 - Tour-scoped pay terms (`per_diem_rate`, `daily_wage_rate`) live on `crew_detail`, not `contacts`. `contacts` only has `default_*` rate fields (defaults for a new tour, not the operational rate). Don't confuse the two.
 - `transport_segment.status` is never set to `booked` from a form directly. It only advances after a TM pastes a confirmation reference through a dedicated action (see `hotel-stay-detail.tsx`'s `confirmHotelBooking` for the reference pattern, applied identically to hotels). `transport-panel.tsx` renders `status` read-only, follow that.
 - Planner components (`option-row.tsx`, `hotel-option-card.tsx`, `freeform-planner.tsx`, `hotel-workspace.tsx`) never display or sort by price. Infeasible options are dimmed and flagged, never hidden. "Book" is always an external link; "Record" is always the in-app write of a `planned` row.
@@ -68,7 +68,7 @@ The rule for anything new: if a client component is not visible on first paint a
 
 - There are now four different datetime approaches in the schedule panels and they are not interchangeable. `transport-panel.tsx` uses `fromDatetimeLocal`/`toDatetimeLocal` (a real instant the TM picks a date and time for). `day-item-panel.tsx` uses `localTimeInZone` and posts a bare `HH:MM`, because an item's day is its `tour_date_id` and the action builds the instant, so offering a date input there would be a control the action deliberately cannot honour. `hotel-panel.tsx` uses plain date/time strings (naive local columns, correctly). `rehearsal-form.tsx` is naive and non-tz-aware, which is a bug rather than a pattern. Before adding a fifth, ask which is correct for the column type; do not copy the nearest one.
 - ~~Advance status has three incompatible vocabularies~~. Resolved 2026-08-05: `advance-dots.tsx` and `shows-view.tsx` do not exist and had not for some time, so this rule was describing a conflict between one real file and two ghosts. `lib/shows/advance.ts` is the source of truth for the enum (`not_started | in_progress | done`), the five departments, the four that send a rider, and the doc_type each one uses. Import from there rather than restating any of it: the department-to-rider map existed twice, in opposite directions, until Brief 36 step 6 merged them.
-- `components/nav/theme-toggle.tsx` (binary) and `components/tours/settings-form.tsx`'s inline theme picker (3-way) are two separate, un-reconciled theme switchers. Don't add a third.
+- `components/tours/settings-form.tsx`'s inline theme picker (3-way) is the one theme switcher. Don't add a second.
 
 ## A day's items have one source of truth, and that is the point
 
@@ -98,8 +98,7 @@ Brief 43 replaced the chronological `day-timeline.tsx` (a Server Component) with
 ## Naming, not to be confused
 
 - `day-form.tsx` (the typed add-to-day panel: Book flight/drive/rail/hotel, plus Times rows that commit a `day_items` row) vs `day-type-picker.tsx` (tour_date type: Show/Rehearsal/Travel/Press/Day off). They stay distinct, don't merge. `add-picker.tsx` used to be the first half of this pair, a six-tile category popover including Show and Event; REE-89 deleted it for the single typed door and REE-90 took Show and Event out of the add surface entirely. **Show belongs to `day-type-picker.tsx`, not the add flow, because creating a show writes `day_type`.** An event is now just a custom `day_items` row typed into `day-form.tsx`.
-- `components/people/person-sheet.tsx` vs `components/roster/contact-sheet.tsx`: the roster one is live and canonical, the people one is likely dead.
-- `components/schedule/schedule-view.tsx` (tour-level schedule list, own hardcoded colors) vs `components/schedule/date-sidebar.tsx` (day-view Dates panel, CLAUDE.md's documented chip colors). These two have different, unreconciled color maps for the same day types. Confirm which is actually live before copying either one's color logic.
+- `components/schedule/date-sidebar.tsx` (day-view Dates panel) is the only place with day-type colors; its colors are the documented ones (CLAUDE.md).
 
 ## Form submission: every form goes through `useEntityForm`
 
