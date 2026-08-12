@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { testDb } from './test-db'
 import { createFixture, destroyFixture, type Fixture } from './fixture'
 import { handleGuestRequest } from '@/lib/comms/guest-request'
+import { decideGuestEntry } from '@/lib/guest-list/decide'
 
 // Brief 52, step 6 (REE-133). The /guest flow against a real Postgres, so the
 // draft lifecycle, the partial unique index and the cutoff comparison are the
@@ -21,6 +22,16 @@ async function entriesForShow(showId: string) {
     .select('*')
     .eq('show_id', showId)
     .order('created_at', { ascending: true })
+  return data ?? []
+}
+
+async function attentionForEntry(tourId: string, entryId: string) {
+  const { data } = await testDb
+    .from('attention_items')
+    .select('*')
+    .eq('tour_id', tourId)
+    .eq('related_table', 'guest_list_entries')
+    .eq('related_id', entryId)
   return data ?? []
 }
 
@@ -55,6 +66,41 @@ describe('guest request flow', () => {
     expect(row.email).toBe('dave@gmail.com')
     // "+2" is Dave plus two.
     expect(row.num_tickets).toBe(3)
+  })
+
+  it('a completed request writes exactly one attention item, and approving it resolves it', async () => {
+    const result = await handleGuestRequest(testDb, {
+      tourId: fixture.tourId,
+      personId: fixture.personId,
+      channel: 'telegram',
+      text: 'dave smith dave@gmail.com +2',
+    })
+    expect(result.outcome).toBe('submitted')
+    expect(result.entryId).toBeTruthy()
+    const entryId = result.entryId!
+
+    // Exactly one Inbox row, deep-linked back to the entry, still open.
+    const items = await attentionForEntry(fixture.tourId, entryId)
+    expect(items).toHaveLength(1)
+    const item = items[0]
+    expect(item.kind).toBe('guest_request')
+    expect(item.related_table).toBe('guest_list_entries')
+    expect(item.related_id).toBe(entryId)
+    // severity is left to the table default.
+    expect(item.severity).toBe(3)
+    expect(item.resolved_at).toBeNull()
+
+    // Approving the entry resolves the row rather than writing a second one.
+    const outcome = await decideGuestEntry(testDb, {
+      entryId,
+      tourId: fixture.tourId,
+      decision: 'approve',
+    })
+    expect(outcome.error).toBeNull()
+
+    const after = await attentionForEntry(fixture.tourId, entryId)
+    expect(after).toHaveLength(1)
+    expect(after[0].resolved_at).not.toBeNull()
   })
 
   it('an abandoned flow leaves exactly one draft, and it is in no requested or approved count', async () => {

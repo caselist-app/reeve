@@ -309,6 +309,18 @@ async function findSurnameMatches(
   return (data ?? []).map((row) => ({ id: row.id, requestedBy: row.requested_by_person_id }))
 }
 
+// How many requests are now waiting on the TM for this show. Read after the
+// promote lands, so the just-submitted entry is counted. The notification uses
+// it only to say "N requests waiting" when there is a backlog.
+async function countWaitingRequests(supabase: Client, showId: string): Promise<number> {
+  const { count } = await supabase
+    .from('guest_list_entries')
+    .select('id', { count: 'exact', head: true })
+    .eq('show_id', showId)
+    .eq('status', 'requested')
+  return count ?? 0
+}
+
 async function requesterName(supabase: Client, personId: string | null): Promise<string | null> {
   if (!personId) return null
   const { data } = await supabase
@@ -472,8 +484,37 @@ export async function handleGuestRequest(
     draftTickets: draft?.num_tickets ?? null,
   })
 
+  const finalTickets = clampTickets(state.numTickets ?? draft?.num_tickets ?? null)
+
+  // Send the TM the request (Inbox row + Telegram, Approve/Decline). Reached
+  // through a dynamic import so the pure parser's unit test never loads the
+  // server-only notify chain. Best effort: the crew member already has their
+  // reply, so a failure here is logged, never surfaced as a flow error.
+  if (entryId) {
+    try {
+      const [{ announceGuestRequestToTm }, requester, waitingCount] = await Promise.all([
+        import('@/lib/comms/guest-request-announce'),
+        requesterName(supabase, personId),
+        countWaitingRequests(supabase, show.id),
+      ])
+      await announceGuestRequestToTm(supabase, {
+        tourId,
+        entryId,
+        guestName: fullName(state.firstName, state.lastName),
+        numTickets: finalTickets,
+        passType: state.passType ?? 'ticket',
+        venueName: show.venue_name,
+        showDate: formatShowDate(show.date),
+        requesterName: requester,
+        waitingCount,
+      })
+    } catch (err) {
+      console.error('[guest-request] could not announce to the TM:', err)
+    }
+  }
+
   const name = fullName(state.firstName, state.lastName)
-  const tickets = ticketPhrase(clampTickets(state.numTickets ?? draft?.num_tickets ?? null))
+  const tickets = ticketPhrase(finalTickets)
   const email = cleanEmailForEntry(state.email)
   const emailPart = email ? `, ${email}` : ''
   return {

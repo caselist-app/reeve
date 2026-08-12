@@ -1,3 +1,4 @@
+import { resolveGuestRequestAttention } from '@/lib/guest-list/attention'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/types/database'
 
@@ -67,6 +68,9 @@ export async function decideGuestEntry(
       .update({ status: 'declined', decline_reason: reason ?? null })
       .eq('id', entryId)
     if (error) return { error: error.message }
+    // The request is dealt with, so drop it from the Inbox. Idempotent: only the
+    // still-open row is touched, so a repeat decline changes nothing.
+    await resolveGuestRequestAttention(supabase, { tourId, entryId })
     return { error: null, status: 'declined' }
   }
 
@@ -75,6 +79,8 @@ export async function decideGuestEntry(
     .update({ status: 'approved' })
     .eq('id', entryId)
   if (error) return { error: error.message }
+
+  await resolveGuestRequestAttention(supabase, { tourId, entryId })
 
   const overAllotment = await overAllotmentFor(supabase, entry.show_id, entry.pass_type)
   return { error: null, status: 'approved', overAllotment }

@@ -4,6 +4,7 @@ import type { EmailAttachment } from '@/lib/comms/email'
 import type { MorningMessageData } from '@/lib/comms/templates/morning-message'
 import type { BoardingPassNotificationData } from '@/lib/comms/templates/boarding-pass'
 import type { OpenerData, ShowInfoData, CateringData, WrapData } from '@/lib/comms/templates/day-blocks'
+import type { GuestRequestNotificationData } from '@/lib/comms/templates/guest-request-notification'
 
 // A notification can leave on one or more of these. SMS was retired; new
 // channels slot in by extending this union and the adapters.
@@ -24,6 +25,7 @@ export type NotificationType =
   | 'catering'
   | 'wrap'
   | 'flight_status_alert'
+  | 'guest_request'
 
 // The data each notification type renders from. Entries are added as each type
 // is built; the registry is keyed off this, so adding a type here forces the
@@ -40,6 +42,11 @@ export interface NotificationDataMap {
   // (the message already describes exactly what changed), same shape as
   // change_alert deliberately - no separate structured fields needed yet.
   flight_status_alert: { message: string }
+  // Brief 52 (REE-134): the /guest request landing on the TM's list. Sent to the
+  // account holder's Telegram (notifyAccount), not to a crew person, so the
+  // registry renderer is reused by the producer rather than dispatched through
+  // notify(). Telegram only for now, same as flight_status_alert.
+  guest_request: GuestRequestNotificationData
 }
 
 export type ImplementedType = keyof NotificationDataMap
