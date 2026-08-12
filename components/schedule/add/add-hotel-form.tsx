@@ -14,11 +14,14 @@ interface AddHotelFormProps {
   tourId: string
   tourDateId: string
   date: string
+  // The time the TM selected on the day, 'HH:MM' in the tour zone (REE-140).
+  // Seeds the check-in time. Falls back to 15:00 when the line carried no time.
+  initialClock?: string
   onBack: () => void
   onSuccess: () => void
 }
 
-export function AddHotelForm({ tourId, tourDateId, date, onBack, onSuccess }: AddHotelFormProps) {
+export function AddHotelForm({ tourId, tourDateId, date, initialClock, onBack, onSuccess }: AddHotelFormProps) {
   // The add flow is the worse half of the problem the notice and the toast exist
   // for: this panel closes on success, so a stay created for another date leaves
   // no trace on the timeline in front of the TM at all.
@@ -83,7 +86,7 @@ export function AddHotelForm({ tourId, tourDateId, date, onBack, onSuccess }: Ad
         </div>
         <div className="space-y-1">
           <Label className="text-xs">Check-in time</Label>
-          <Input name="check_in_time" type="time" defaultValue="15:00" className="h-7 text-xs" />
+          <Input name="check_in_time" type="time" defaultValue={initialClock ?? '15:00'} className="h-7 text-xs" />
         </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

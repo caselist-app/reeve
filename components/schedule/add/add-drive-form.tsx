@@ -17,14 +17,19 @@ interface AddDriveFormProps {
   tourDateId: string
   date: string
   timezone: string
+  // The time the TM selected on the day, 'HH:MM' in the tour zone (REE-140).
+  // Seeds the departure so a drive added after clicking 2pm departs at 2pm.
+  // Falls back to 09:00 when the line carried no time.
+  initialClock?: string
   onBack: () => void
   onSuccess: () => void
 }
 
-export function AddDriveForm({ tourId, tourDateId, date, timezone, onBack, onSuccess }: AddDriveFormProps) {
+export function AddDriveForm({ tourId, tourDateId, date, timezone, initialClock, onBack, onSuccess }: AddDriveFormProps) {
+  const departDefault = `${date}T${initialClock ?? '09:00'}`
   const [computedArrival, setComputedArrival] = useState<string>('')
   const [computing, setComputing] = useState(false)
-  const [departLocal, setDepartLocal] = useState(`${date}T09:00`)
+  const [departLocal, setDepartLocal] = useState(departDefault)
   // Controlled so the Places widget can write the selected place back in. The
   // rendered inputs still carry name/value, so the onBlur handlers below can keep
   // reading the sibling fields off the form.
@@ -114,7 +119,7 @@ export function AddDriveForm({ tourId, tourDateId, date, timezone, onBack, onSuc
         <Input
           name="depart_at"
           type="datetime-local"
-          defaultValue={`${date}T09:00`}
+          defaultValue={departDefault}
           className="h-7 text-xs"
           onChange={(e) => setDepartLocal(e.target.value)}
           onBlur={(e) => {
