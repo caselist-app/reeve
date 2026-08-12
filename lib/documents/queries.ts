@@ -6,6 +6,7 @@ export interface DocumentRow {
   id: string
   title: string
   doc_type: string
+  version: number
   created_at: string
 }
 
@@ -30,6 +31,15 @@ export interface DocumentShareRow {
   reminder_count: number
 }
 
+/** A non-current documents row, for the card's "older versions" toggle. */
+export interface OlderVersionRow {
+  id: string
+  title: string
+  version: number
+  created_at: string
+  share_count: number
+}
+
 export interface DocumentsPageData {
   // null when the tour does not exist or is not owned by this account, so the
   // page can redirect the same way every other tour-scoped page does.
@@ -40,6 +50,9 @@ export interface DocumentsPageData {
   // per card would be the classic N+1, and a tour's share history is a handful
   // of rows either way.
   shares: Record<string, DocumentShareRow[]>
+  // Non-current documents, keyed by doc_type, newest first. A card looks up
+  // its own doc_type here for the "{n} older versions" toggle.
+  olderVersions: Record<string, OlderVersionRow[]>
   // A failed read must never render as an empty result (CLAUDE.md): "no
   // documents yet" and "the query broke" look identical from the outside, so
   // the page needs this to tell them apart rather than a confident, wrong
@@ -49,17 +62,20 @@ export interface DocumentsPageData {
   // share log fails, and collapsing the two would show every card's log as
   // "Not yet sent." instead of surfacing the failed read.
   sharesError: string | null
+  // Separate again: older versions can fail to load while the current
+  // documents and their shares are fine.
+  olderVersionsError: string | null
 }
 
-// All three fetches run in one Promise.all: the tour (header eyebrow and
-// ownership check), the current documents, and every share ever sent for
-// them. None depends on another's result.
+// All four fetches run in one Promise.all: the tour (header eyebrow and
+// ownership check), the current documents, every share ever sent for them,
+// and the non-current (older) documents. None depends on another's result.
 export async function fetchDocumentsPage(
   supabase: Client,
   tourId: string,
   accountId: string
 ): Promise<DocumentsPageData> {
-  const [tourResult, documentsResult, sharesResult] = await Promise.all([
+  const [tourResult, documentsResult, sharesResult, olderVersionsResult] = await Promise.all([
     supabase
       .from('tours')
       .select('id, name, artists(name)')
@@ -68,7 +84,7 @@ export async function fetchDocumentsPage(
       .single(),
     supabase
       .from('documents')
-      .select('id, title, doc_type, created_at')
+      .select('id, title, doc_type, version, created_at')
       .eq('tour_id', tourId)
       .eq('is_current', true)
       .order('created_at', { ascending: false }),
@@ -76,6 +92,12 @@ export async function fetchDocumentsPage(
     // people(name) does not exist (Brief 20 moved identity onto contacts) and
     // PostgREST rejects the select outright, which used to be the exact bug
     // this page would have shipped.
+    //
+    // Scoped by document_id, not doc_type: every version, current or not,
+    // has its own document row, so a share is only ever attached to the one
+    // exact version it was sent against. Bucketing this by document_id below
+    // is what keeps a card's main log to its current version's shares alone
+    // even though this single query reads every share for the whole tour.
     supabase
       .from('document_shares')
       .select(
@@ -83,6 +105,16 @@ export async function fetchDocumentsPage(
       )
       .eq('tour_id', tourId)
       .order('created_at', { ascending: true }),
+    // is_current = false, explicitly, rather than "not in the current list":
+    // a version-numbered row is only ever current or not, and asserting the
+    // filter here is what a naive doc_type-only join (no is_current check at
+    // all) would be missing, letting a stale row leak into the main list.
+    supabase
+      .from('documents')
+      .select('id, title, doc_type, version, created_at')
+      .eq('tour_id', tourId)
+      .eq('is_current', false)
+      .order('version', { ascending: false }),
   ])
 
   const tour = tourResult.data
@@ -94,7 +126,15 @@ export async function fetchDocumentsPage(
     : null
 
   if (documentsResult.error) {
-    return { tour, documents: [], shares: {}, error: 'Could not load documents.', sharesError: null }
+    return {
+      tour,
+      documents: [],
+      shares: {},
+      olderVersions: {},
+      error: 'Could not load documents.',
+      sharesError: null,
+      olderVersionsError: null,
+    }
   }
 
   const shares: Record<string, DocumentShareRow[]> = {}
@@ -125,11 +165,33 @@ export async function fetchDocumentsPage(
     }
   }
 
+  const olderVersions: Record<string, OlderVersionRow[]> = {}
+  if (olderVersionsResult.error) {
+    console.error('[fetchDocumentsPage] older versions read failed:', olderVersionsResult.error.message)
+  } else {
+    for (const row of olderVersionsResult.data ?? []) {
+      const bucket = olderVersions[row.doc_type] ?? []
+      bucket.push({
+        id: row.id,
+        title: row.title,
+        version: row.version,
+        created_at: row.created_at,
+        // Looked up from the shares map above, keyed by this exact version's
+        // document_id, never by doc_type: that is what keeps this count from
+        // ever double-counting another version's shares.
+        share_count: shares[row.id]?.length ?? 0,
+      })
+      olderVersions[row.doc_type] = bucket
+    }
+  }
+
   return {
     tour,
     documents: documentsResult.data ?? [],
     shares,
+    olderVersions,
     error: null,
     sharesError: sharesResult.error ? 'Could not load share activity.' : null,
+    olderVersionsError: olderVersionsResult.error ? 'Could not load older versions.' : null,
   }
 }

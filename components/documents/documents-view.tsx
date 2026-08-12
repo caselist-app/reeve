@@ -1,15 +1,24 @@
 import { DocumentCard } from '@/components/documents/document-card'
 import { DOC_SECTIONS, sectionForDocType } from '@/lib/documents/doc-types'
-import type { DocumentRow, DocumentShareRow } from '@/lib/documents/queries'
+import type { DocumentRow, DocumentShareRow, OlderVersionRow } from '@/lib/documents/queries'
 
 interface Props {
   documents: DocumentRow[]
   shares: Record<string, DocumentShareRow[]>
+  olderVersions: Record<string, OlderVersionRow[]>
   sharesError: string | null
+  olderVersionsError: string | null
   error: string | null
 }
 
-export function DocumentsView({ documents, shares, sharesError, error }: Props) {
+export function DocumentsView({
+  documents,
+  shares,
+  olderVersions,
+  sharesError,
+  olderVersionsError,
+  error,
+}: Props) {
   if (error) {
     return <p className="text-sm text-destructive">Could not load documents.</p>
   }
@@ -42,6 +51,8 @@ export function DocumentsView({ documents, shares, sharesError, error }: Props) 
                 document={doc}
                 shares={shares[doc.id] ?? []}
                 sharesError={sharesError}
+                olderVersions={olderVersions[doc.doc_type] ?? []}
+                olderVersionsError={olderVersionsError}
               />
             ))}
           </div>
