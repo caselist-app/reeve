@@ -28,6 +28,7 @@ export const telegramRouterJob = task({
       body: payload.body,
       tour_id: payload.tour_id,
       person_id: payload.person_id,
+      channel: 'telegram',
     })
 
     if (result.action === 'template') {
