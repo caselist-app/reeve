@@ -10,6 +10,8 @@ Strict component rules for Reeve. Read this before touching anything in `compone
 
 Do not invent a third. `components/nav/tour-settings-panel.tsx` is a known bespoke exception (nav-rail slide-over, not a content panel), do not use it as precedent for a new panel type.
 
+`components/inbox/extraction-rows-panel.tsx` (Brief 53) is the global side panel, same as every other one: a `PanelDescriptor` variant plus a `case 'extraction-rows'` in `active-panel.tsx`. Miss the `case` and the panel silently renders nothing, because the switch falls through to `default: return null` with no error anywhere.
+
 **A panel that needs more than its ids fetches on open; it does not ride on the descriptor.** `contact-panel.tsx` (via `getContact`), `venue-panel.tsx` (via `getShowVenueDetail`) and `advance-panel.tsx` (via `getShowAdvance`) all take ids, call a server action in an effect, and hold their own loading and error state. The alternative is making the surface that opens the panel fetch the data, which means every day view paying for four queries and a dozen columns to fill a panel a TM opens occasionally. The rule of thumb: if the descriptor would carry more than what the panel header needs, fetch instead. And a failed fetch says so, never renders an empty panel: "no riders on this tour" is a confident, plausible, wrong answer a TM would act on.
 
 **`app-content.tsx` owns every card wrapper. Panel components never carry the card token.**
@@ -34,6 +36,7 @@ For a bottom-anchored mobile sheet, use `components/ui/bottom-sheet.tsx` (wraps 
 
 - Panel/card surface: `rounded-3xl border border-border bg-background`.
 - List row (roster, people table, attention feed): `components/ui/list-row.tsx`, which uses `rounded-xl`, a deliberately different, smaller radius. Use `ListRow` for clickable list rows, not `Card`.
+- The Inbox row (`components/inbox/inbox-view.tsx`) is `ListRow` too, no new row component. `ListRow`'s `severity` prop ("Tints the border and background for attention items") predates the Inbox and already had the tint the queue needed; that's the reason there is no `InboxRow`.
 - `components/ui/card.tsx` is legacy shadcn styling (`rounded-lg`), used in exactly one place: the pre-auth login page. Do not use it anywhere else. It does not carry the Reeve card token.
 - Day calendar chip: `0.375rem` (Tailwind `rounded-md`), set in `components/schedule/day-calendar.css`, not a Tailwind class on the element (RBC's unlayered CSS would win). This is a fourth radius, smaller again than the list row's `rounded-xl`. Do not conflate it with the three above: a grid block is not a card and not a list row, and it is the only surface whose radius lives in a `.css` file rather than on the element.
 
