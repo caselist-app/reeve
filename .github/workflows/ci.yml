@@ -462,3 +462,47 @@ jobs:
           npx "trigger.dev@$CLI_VERSION" deploy
         env:
           TRIGGER_ACCESS_TOKEN: ${{ secrets.TRIGGER_ACCESS_TOKEN }}
+
+  # Deploys the Next.js app to Vercel production, on merge to main only, after
+  # everything else has passed.
+  #
+  # Vercel's own GitHub integration used to deploy production on every push to
+  # main by itself, racing this workflow: it usually finished before build,
+  # integration and e2e did, and always before deploy-trigger did. That put
+  # Vercel live on code Trigger.dev had not caught up to yet, which is the
+  # exact two-runtime skew documented in CLAUDE.md and OPERATIONS.md ("both
+  # runtimes ship from one merge" is the whole point of deploy-trigger existing).
+  # vercel.json now sets git.deploymentEnabled.main to false, so pushing to main
+  # no longer triggers a Vercel deployment on its own. This job is the only
+  # remaining path to a production deploy. Preview deployments on PR branches
+  # are untouched: deploymentEnabled only names "main", so branch protection's
+  # required "Vercel" check still runs on every PR exactly as before.
+  #
+  # needs: [build, integration, e2e, deploy-trigger] deliberately, the same
+  # reasoning as deploy-trigger's own needs plus one more link: Trigger.dev has
+  # to be live before Vercel is, not the other way round, or a dropped column a
+  # migration already applied could 42703 in a job that is still on old code
+  # while the site above it looks perfectly healthy.
+  deploy-vercel:
+    name: Deploy to Vercel
+    runs-on: ubuntu-latest
+    needs: [build, integration, e2e, deploy-trigger]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      # Pinned, not @latest, for the same reason every other CLI version in
+      # this workflow is pinned: an unannounced major on Vercel's side should
+      # not be able to change what a merge to main does with no commit here to
+      # explain it.
+      - name: Pull Vercel environment, build, and deploy
+        run: |
+          npx vercel@58.9.5 pull --yes --environment=production --token="$VERCEL_TOKEN"
+          npx vercel@58.9.5 build --prod --token="$VERCEL_TOKEN"
+          npx vercel@58.9.5 deploy --prebuilt --prod --token="$VERCEL_TOKEN"
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
