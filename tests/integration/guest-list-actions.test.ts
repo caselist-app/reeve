@@ -6,6 +6,7 @@ import {
   updateGuestEntry,
   approveGuestEntry,
 } from '@/lib/actions/guest-list'
+import { decideGuestEntry } from '@/lib/guest-list/decide'
 
 // Brief 52, step 3 (REE-130). The guest list actions, tested against a real
 // Postgres so the check constraints and the partial-write semantics are the real
@@ -141,6 +142,57 @@ describe('guest list approve and decline guards', () => {
       .single()
     expect(afterSecond.data?.status).toBe('approved')
     // No write happened, so the row's updated_at did not move.
+    expect(afterSecond.data?.updated_at).toBe(afterFirst.data?.updated_at)
+  })
+
+  // The Telegram button path (REE-135) calls decideGuestEntry directly, with no
+  // requireUser, the way the account holder's tap resolves an account rather than
+  // a web session (brief 30's runBroadcast split). The guard has to hold on this
+  // path too, because it is the one that fires the guest's confirmation email
+  // (REE-136 sends on the 'requested' -> 'approved' transition). A second tap,
+  // whether a double press or a stale button after the TM already approved in the
+  // panel, must not re-fire that transition and send a second email.
+  //
+  // This is the two-step shape: decide, then look somewhere the status alone does
+  // not tell you. The proof the second call did nothing is that updated_at did
+  // not move: no write happened, so no side effect (the email included) could.
+  it('no-ops a second approval on the job path, so nothing re-fires', async () => {
+    const id = await seedRequested(fixture)
+
+    const first = await decideGuestEntry(testDb, {
+      entryId: id,
+      tourId: fixture.tourId,
+      decision: 'approve',
+    })
+    expect(first.error).toBeNull()
+    expect(first.alreadyDecided).toBeFalsy()
+    expect(first.status).toBe('approved')
+
+    const afterFirst = await testDb
+      .from('guest_list_entries')
+      .select('status, updated_at')
+      .eq('id', id)
+      .single()
+    expect(afterFirst.data?.status).toBe('approved')
+
+    const second = await decideGuestEntry(testDb, {
+      entryId: id,
+      tourId: fixture.tourId,
+      decision: 'approve',
+    })
+    expect(second.error).toBeNull()
+    // The second call reports it was already decided rather than writing again,
+    // which is what stops a second confirmation email being sent to the guest.
+    expect(second.alreadyDecided).toBe(true)
+    expect(second.status).toBe('approved')
+
+    const afterSecond = await testDb
+      .from('guest_list_entries')
+      .select('status, updated_at')
+      .eq('id', id)
+      .single()
+    // No write on the second call, so updated_at is unchanged: the transition
+    // that would fire the email happened exactly once.
     expect(afterSecond.data?.updated_at).toBe(afterFirst.data?.updated_at)
   })
 

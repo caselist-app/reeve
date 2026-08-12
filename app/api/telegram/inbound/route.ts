@@ -5,6 +5,8 @@ import { tasks } from '@trigger.dev/sdk/v3'
 import { redis } from '@/lib/redis'
 import { enqueueWithClaim } from '@/lib/comms/inbound-claim'
 import { sendTelegramMessage, answerTelegramCallbackQuery } from '@/lib/comms/telegram'
+import { parseGuestCallback } from '@/lib/comms/guest-callback'
+import { decideGuestEntry, type GuestDecision, type DecideOutcome } from '@/lib/guest-list/decide'
 
 const LINK_EXPIRED_MESSAGE = 'This link has expired, ask your tour manager to send a new one.'
 
@@ -91,6 +93,18 @@ export async function POST(request: NextRequest) {
   // not after.
   if (body.startsWith('/start')) {
     await handleLinking(admin, chatId, body.slice('/start'.length).trim(), fromUsername)
+    return NextResponse.json({ status: 'ok' })
+  }
+
+  // Guest-list Approve/Decline, tapped by the account holder from the message
+  // REE-134 sends them. The TM's own chat id lives on accounts.telegram_chat_id
+  // (REE-132), not on a crew contact, so this is resolved account-first, before
+  // the crew contact resolution below: brief 30's decision that an admin update
+  // must never fall through crew logic. Only a gl: payload takes this path, so a
+  // TM's ordinary typed message still routes as normal. The spinner was already
+  // dismissed above, so the DB work here happens after the tap is acknowledged.
+  if (body.startsWith('gl:')) {
+    await handleGuestCallback(admin, chatId, body)
     return NextResponse.json({ status: 'ok' })
   }
 
@@ -250,4 +264,88 @@ async function handleLinking(
     .eq('token', token)
 
   await sendTelegramMessage({ chatId, text: "You're connected. You'll get schedule updates here." })
+}
+
+// Handles a tapped Approve or Decline on a guest request. Runs on the admin
+// client with no signed-in user, the runBroadcast split (brief 30): the panel's
+// actions supply requireUser(), this supplies the account resolution, and both
+// then hand decideGuestEntry the (entryId, tourId) it scopes its read by.
+//
+// The parser rejects an unknown or malformed payload, the account gate rejects a
+// tap from anyone but the TM, and the account-owns-tour check is the ownership
+// gate the admin client cannot get from RLS. decideGuestEntry re-reads the entry
+// and no-ops unless it is still 'requested', so a TM who already approved in the
+// panel and then taps Approve on their phone does not send the guest a second
+// email: they are told it was already handled instead.
+async function handleGuestCallback(
+  admin: ReturnType<typeof createAdminClient>,
+  chatId: number,
+  data: string
+): Promise<void> {
+  const parsed = parseGuestCallback(data)
+  if (!parsed) return // Not a guest callback, or a malformed one: nothing to do.
+
+  // The presser must be the account holder. accounts is the only place the TM's
+  // own chat id is stored; a crew contact has no authority to approve. No match
+  // means the tap did not come from a TM, so it is a silent no-op.
+  const { data: account } = await admin
+    .from('accounts')
+    .select('id')
+    .eq('telegram_chat_id', chatId)
+    .maybeSingle()
+  if (!account) return
+
+  const { data: entry } = await admin
+    .from('guest_list_entries')
+    .select('id, tour_id, first_name, last_name')
+    .eq('id', parsed.entryId)
+    .maybeSingle()
+  if (!entry) {
+    await sendTelegramMessage({ chatId, text: 'That guest request is no longer on the list.' })
+    return
+  }
+
+  // The admin client bypasses RLS, so the entry above is readable regardless of
+  // owner. This is the ownership gate: the tour it is on must belong to the
+  // account that tapped. Without it, one TM could action another's entry.
+  const { data: tour } = await admin
+    .from('tours')
+    .select('id')
+    .eq('id', entry.tour_id)
+    .eq('account_id', account.id)
+    .maybeSingle()
+  if (!tour) return // Not this TM's entry.
+
+  const outcome = await decideGuestEntry(admin, {
+    entryId: entry.id,
+    tourId: entry.tour_id,
+    decision: parsed.decision,
+  })
+
+  const guestName = [entry.first_name, entry.last_name].filter(Boolean).join(' ') || 'the guest'
+
+  if (outcome.error) {
+    await sendTelegramMessage({ chatId, text: `Could not update ${guestName}. Try the panel.` })
+    return
+  }
+
+  await sendTelegramMessage({
+    chatId,
+    text: guestDecisionConfirmation(parsed.decision, guestName, outcome),
+  })
+}
+
+// The line the TM gets back after a tap. When the entry was already decided,
+// report the real current status rather than the decision just attempted, so a
+// TM who approved on their laptop and then tapped Approve on their phone is not
+// told it just happened.
+function guestDecisionConfirmation(
+  decision: GuestDecision,
+  guestName: string,
+  outcome: DecideOutcome
+): string {
+  if (outcome.alreadyDecided) {
+    return `${guestName} is already ${outcome.status}.`
+  }
+  return decision === 'approve' ? `Approved ${guestName}.` : `Declined ${guestName}.`
 }
