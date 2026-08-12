@@ -306,15 +306,25 @@ function GuestRow({
   // count into the guest count store. No server refresh: the block updates from
   // that store, not a revalidate across the panel/route boundary (REE-65).
   function approve() {
+    setSendNote(null)
     startTransition(async () => {
-      await approveGuestEntry(tourId, entry.id)
+      const result = await approveGuestEntry(tourId, entry.id)
+      if (result.error) {
+        setSendNote(result.error)
+        return
+      }
       onChanged()
     })
   }
 
   function decline() {
+    setSendNote(null)
     startTransition(async () => {
-      await declineGuestEntry(tourId, entry.id)
+      const result = await declineGuestEntry(tourId, entry.id)
+      if (result.error) {
+        setSendNote(result.error)
+        return
+      }
       onChanged()
     })
   }
@@ -429,19 +439,30 @@ function GuestListSettings({
   const [cutoff, setCutoff] = useState(toDatetimeLocal(cutoffAt, timezone))
   const [pending, startTransition] = useTransition()
   const [saved, setSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   function saveCutoff() {
     setSaved(false)
+    setError(null)
     startTransition(async () => {
-      await setGuestListCutoff(showId, fromDatetimeLocal(cutoff, timezone) ?? null)
+      const result = await setGuestListCutoff(showId, fromDatetimeLocal(cutoff, timezone) ?? null)
+      if (result.error) {
+        setError(result.error)
+        return
+      }
       setSaved(true)
       onChanged()
     })
   }
 
   function toggleLock(next: boolean) {
+    setError(null)
     startTransition(async () => {
-      await setGuestListLock(showId, next)
+      const result = await setGuestListLock(showId, next)
+      if (result.error) {
+        setError(result.error)
+        return
+      }
       onChanged()
     })
   }
@@ -477,6 +498,8 @@ function GuestListSettings({
         </Label>
         <Switch checked={locked} disabled={pending} onCheckedChange={toggleLock} />
       </div>
+
+      {error && <p className="text-[11px] text-destructive">{error}</p>}
     </section>
   )
 }

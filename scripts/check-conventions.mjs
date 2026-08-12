@@ -112,7 +112,14 @@ function exportedAsyncFunctions(src) {
         if (depth === 0) break
       }
     }
-    found.push({ name: m[1], body: src.slice(i, end + 1), index: m.index })
+    found.push({
+      name: m[1],
+      body: src.slice(i, end + 1),
+      index: m.index,
+      // The return-type annotation, `: Promise<...>` and any whitespace, sitting
+      // between the parameter list and the body's opening brace. Rule 13 reads it.
+      returnType: src.slice(afterParams, i),
+    })
   }
   return found
 }
@@ -663,6 +670,115 @@ for (const doc of FACT_DOCS) {
           'of writing the figure.',
         `facts-in-prose|${'$'}{doc}|${'$'}{lineOf(src, at)}`
       )
+    }
+  }
+}
+
+// ---- Rule 13: a server action's returned error is read ----
+// A server action that returns { error } is telling the caller a save can fail.
+// A call written as a bare `await updateDayNotes(...)` statement throws that
+// away: the promise resolves to an object nobody looks at, so a failed write is
+// indistinguishable from a successful one and the TM is told "Saved." over a
+// column that never changed. Six of these shipped at once, which is why this
+// check lands before any of them is fixed.
+//
+// The rule is deliberately narrow. It flags a call that begins a statement
+// (preceded only by whitespace on its line), because that is the one shape where
+// the result is provably discarded. A result that is assigned and then ignored
+// needs flow analysis a grep cannot do, and widening to catch it would turn main
+// red on correct code, so it is out of scope (Decision 4).
+//
+// Keyed on rule|file|actionName, never on the line number: Rule 12 keys on line
+// number and REE-74 is open about the collision that causes, and this brief
+// edits the exact files a line-keyed entry would sit in.
+
+// The action-facing return shapes live in lib/actions/. A function counts if its
+// return-type annotation mentions `error`, either inline (Promise<{ error: ... }>)
+// or through a named type (Promise<TourDateActionState>) whose `export type X =`
+// declaration in the same file mentions it.
+function namedTypeBody(id, src) {
+  const m = new RegExp(`export\\s+type\\s+${id}\\s*=\\s*`).exec(src)
+  if (!m) return null
+  let start = m.index + m[0].length
+  while (start < src.length && /\s/.test(src[start])) start++
+  if (src[start] === '{') {
+    let depth = 0
+    for (let k = start; k < src.length; k++) {
+      if (src[k] === '{') depth++
+      else if (src[k] === '}') {
+        depth--
+        if (depth === 0) return src.slice(start, k + 1)
+      }
+    }
+    return src.slice(start)
+  }
+  const nl = src.indexOf('\n', start)
+  return src.slice(start, nl === -1 ? src.length : nl)
+}
+
+function returnTypeMentionsError(annotation, src) {
+  if (/\berror\b/.test(annotation)) return true
+  for (const idMatch of annotation.matchAll(/[A-Za-z_$][\w$]*/g)) {
+    const body = namedTypeBody(idMatch[0], src)
+    if (body && /\berror\b/.test(body)) return true
+  }
+  return false
+}
+
+const errorReturningActions = new Set()
+for (const file of sourceFiles.filter((f) => /^lib\/actions\/[^/]+\.ts$/.test(rel(f)))) {
+  const src = readFileSync(file, 'utf8')
+  for (const fn of exportedAsyncFunctions(src)) {
+    if (returnTypeMentionsError(fn.returnType, src)) errorReturningActions.add(fn.name)
+  }
+}
+
+// The call sites live in components/ and app/. A bare `await NAME(` whose line
+// carries only whitespace before it discards the result; anything with `= `,
+// `return `, `(`, `,` or `...` before it on the line is reading it.
+const rule13Targets = sourceFiles.filter(
+  (f) => rel(f).startsWith('components/') || rel(f).startsWith('app/')
+)
+
+// Guard, per Rule 10: an empty action set or an empty file walk is a broken
+// check comparing nothing, not a clean pass. Either would silently pass every
+// call site below.
+if (errorReturningActions.size === 0) {
+  report(
+    'action-result-unread',
+    'lib/actions',
+    1,
+    'Found no server actions returning an error. Either lib/actions/ changed ' +
+      'shape or this check is broken; either way it is no longer checking anything.',
+    'action-result-unread|no-actions'
+  )
+} else if (rule13Targets.length === 0) {
+  report(
+    'action-result-unread',
+    'components',
+    1,
+    'Walked no files under components/ or app/, so no call site is being checked.',
+    'action-result-unread|no-targets'
+  )
+} else {
+  for (const file of rule13Targets) {
+    const src = readFileSync(file, 'utf8')
+    for (const name of errorReturningActions) {
+      const re = new RegExp(`await\\s+${name}\\s*\\(`, 'g')
+      let m
+      while ((m = re.exec(src)) !== null) {
+        const lineStart = src.lastIndexOf('\n', m.index - 1) + 1
+        const prefix = src.slice(lineStart, m.index)
+        if (prefix.trim() !== '') continue
+        report(
+          'action-result-unread',
+          rel(file),
+          lineOf(src, m.index),
+          `await ${name}(...) is a bare statement, so its returned error is ` +
+            `discarded. Read the result and surface the error.`,
+          `action-result-unread|${rel(file)}|${name}`
+        )
+      }
     }
   }
 }
