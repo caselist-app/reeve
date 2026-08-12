@@ -273,16 +273,44 @@ export async function createE2eSeed(): Promise<E2eSeed> {
     throw new Error(`seed: could not create rehearsal: ${rehearsalError?.message}`)
   }
 
-  // A pending guest request on account A's own show, plus the attention_items
-  // row REE-134's producer would have written for it, so the smoke spec has a
-  // real /inbox/{itemId} to open (REE-152). Inserted directly rather than
-  // through writeGuestRequestAttention for the same globalSetup-is-plain-Node
-  // reason as the day_items row above.
+  // A guest request plus the attention_items row REE-134's producer would have
+  // written for it, so the smoke spec has a real /inbox/{itemId} to open
+  // (REE-152). On its OWN show, not account A's main seeded show: guest-list.
+  // spec.ts asserts that show's guest list "starts empty: no other spec adds a
+  // guest to this show". The attention_items row is inserted already resolved,
+  // so it never counts as an open item: revalidate.spec.ts's Inbox badge spec
+  // asserts an exact open count of 1, "no count in the app touches
+  // attention_items except this spec". fetchInboxItem reads by id regardless
+  // of resolved_at, so the smoke spec can still open this route.
+  const inboxItemDate = nextDay(rehearsalDate)
+  const { data: inboxTourDate, error: inboxTourDateError } = await testDb
+    .from('tour_dates')
+    .insert({ tour_id: a.tourId, date: inboxItemDate, day_type: 'show' })
+    .select('id')
+    .single()
+  if (inboxTourDateError || !inboxTourDate) {
+    throw new Error(`seed: could not create inbox item tour_date: ${inboxTourDateError?.message}`)
+  }
+
+  const { data: inboxShow, error: inboxShowError } = await testDb
+    .from('shows')
+    .insert({
+      tour_id: a.tourId,
+      tour_date_id: inboxTourDate.id,
+      date: inboxItemDate,
+      venue_name: 'Seeded Inbox Venue',
+    })
+    .select('id')
+    .single()
+  if (inboxShowError || !inboxShow) {
+    throw new Error(`seed: could not create inbox item show: ${inboxShowError?.message}`)
+  }
+
   const { data: guestEntry, error: guestEntryError } = await testDb
     .from('guest_list_entries')
     .insert({
       tour_id: a.tourId,
-      show_id: a.showId,
+      show_id: inboxShow.id,
       first_name: 'Sam',
       last_name: 'Reed',
       email: 'sam.reed@example.test',
@@ -302,11 +330,10 @@ export async function createE2eSeed(): Promise<E2eSeed> {
     .insert({
       tour_id: a.tourId,
       kind: 'guest_request',
-      // 'Test Venue' matches createFixture's hardcoded venue_name for account
-      // A's show, the same shape announceGuestRequestToTm writes.
-      title: 'Guest request: Sam Reed for Test Venue',
+      title: 'Guest request: Sam Reed for Seeded Inbox Venue',
       related_table: 'guest_list_entries',
       related_id: guestEntry.id,
+      resolved_at: new Date().toISOString(),
     })
     .select('id')
     .single()
