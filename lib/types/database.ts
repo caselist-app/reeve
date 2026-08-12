@@ -218,36 +218,42 @@ export type Database = {
           detail: string | null
           id: string
           kind: string
+          read_at: string | null
           related_id: string | null
           related_table: string | null
           resolved_at: string | null
           severity: number
           title: string
           tour_id: string
+          updated_at: string
         }
         Insert: {
           created_at?: string
           detail?: string | null
           id?: string
           kind: string
+          read_at?: string | null
           related_id?: string | null
           related_table?: string | null
           resolved_at?: string | null
           severity?: number
           title: string
           tour_id: string
+          updated_at?: string
         }
         Update: {
           created_at?: string
           detail?: string | null
           id?: string
           kind?: string
+          read_at?: string | null
           related_id?: string | null
           related_table?: string | null
           resolved_at?: string | null
           severity?: number
           title?: string
           tour_id?: string
+          updated_at?: string
         }
         Relationships: [
           {
