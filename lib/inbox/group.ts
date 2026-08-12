@@ -8,6 +8,7 @@ export interface InboxItem {
   id: string
   tour_id: string
   tour_name: string
+  tour_timezone: string | null
   artist_id: string
   artist_name: string
   kind: string
