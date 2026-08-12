@@ -68,7 +68,18 @@ export function AppContent({ children, secondaryPanel }: AppContentProps) {
         <MobileTopBar />
 
         <div className="flex flex-1 min-h-0 overflow-hidden px-2 pt-2 pb-[max(0.5rem,var(--safe-bottom))]">
-          <main className="flex-1 min-w-0 bg-background border border-border rounded-3xl overflow-y-auto overflow-x-hidden">
+          {/* flex flex-col, not a bare block: the day view's inner flex-1/min-h-0
+              chain (day-view-client -> day-calendar -> RBC's .rbc-time-content)
+              only bounds to a real height if its parent is a flex container.
+              As a plain block main, that chain never bounded, so the whole grid
+              expanded to full height and main became the sole scroll container.
+              Desktop tolerated that (the wheel scrolls main either way), but on
+              iOS the nested, non-scrollable overflow-y:auto wrappers trapped the
+              touch and never bubbled the scroll to main, so the day view simply
+              would not scroll (REE-125). Making main a flex column bounds the
+              chain so RBC scrolls internally instead. Ordinary pages render a
+              plain child that overflows and main still scrolls them. */}
+          <main className="flex flex-col flex-1 min-w-0 bg-background border border-border rounded-3xl overflow-y-auto overflow-x-hidden">
             {children}
           </main>
         </div>

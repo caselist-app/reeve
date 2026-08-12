@@ -91,39 +91,50 @@ export async function fetchDayItems(
 }
 
 /**
- * Items that started before a broadcast-day boundary but end after it: a day_item
- * whose interval breaks over the 04:00 boundary and so belongs on the grid of the
- * day it spills into as well as its home day (REE-123).
+ * Items filed on a PREVIOUS day whose stated end reaches into this broadcast day.
  *
- * Filtered on the instant pair, not the link, because this is a read-only second
- * view: the item is owned and edited on its home day (its tour_date_id), and
- * shown on the spill day clamped to the grid top. `ends_at` null is excluded by
- * `.gt`, deliberately: a point with no end cannot span. `boundary` is the day's
- * broadcast start, a UTC instant from localBroadcastDayWindowUtc.
+ * A block only "breaks over the day" when it crosses the 04:00 broadcast
+ * boundary (REE-124): an overnight item stored on last night, e.g. a 22:00 to
+ * 07:00 something, spans into this morning. Those are a second view of the row
+ * on this day's grid, drawn read-only and clamped to the grid top, never a
+ * reassignment of which day the row belongs to. That is why they are fetched
+ * separately here and kept out of `items`: `items` stays the answer to "what is
+ * filed on this day", exactly as fetchDayItems returns it.
  *
- * Not wrapped in the DayItemsResult error contract: a spanning read that fails
- * drops a second view of a record still shown on its home day, so it degrades to
- * "not shown on the spill day" rather than to the empty-day lie the home read
- * guards against. Logged, and returns an empty list.
+ * The window is an instant query, not a day derivation: a row qualifies when its
+ * `starts_at` is before this day's broadcast start AND its stated `ends_at` is
+ * after it, so the row was in progress at the moment the day began. A null end
+ * cannot span, so it is excluded (`not ends_at is null`). Rows whose tour_date_id
+ * IS this day are excluded too: a pre-dawn item filed on this day is the existing
+ * "Outside this day" case, handled by buildDayCalendarView, not a continuation.
+ *
+ * Same error contract as fetchDayItems: an empty array on failure is the bug
+ * that told a crew member their tour had no shows.
  */
-export async function fetchSpanningDayItems(
+export async function fetchContinuingDayItems(
   supabase: Client,
-  { tourId, boundary }: { tourId: string; boundary: string },
-): Promise<DayItem[]> {
+  {
+    tourId,
+    tourDateId,
+    broadcastStart,
+  }: { tourId: string; tourDateId: string; broadcastStart: string },
+): Promise<DayItemsResult> {
   const { data, error } = await supabase
     .from('day_items')
     .select(DAY_ITEM_SELECT)
     .eq('tour_id', tourId)
-    .lt('starts_at', boundary)
-    .gt('ends_at', boundary)
+    .neq('tour_date_id', tourDateId)
+    .not('ends_at', 'is', null)
+    .lt('starts_at', broadcastStart)
+    .gt('ends_at', broadcastStart)
     .order('starts_at', { ascending: true })
 
   if (error) {
-    console.error('[day-items] could not read spanning items:', error.message)
-    return []
+    console.error('[day-items] could not read the continuing items:', error.message)
+    return { items: [], error: error.message }
   }
 
-  return data ?? []
+  return { items: data ?? [], error: null }
 }
 
 /**

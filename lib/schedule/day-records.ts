@@ -1,8 +1,12 @@
 import type { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/lib/types/database'
-import { addDays, localDayWindowUtc } from '@/lib/schedule/datetime'
+import { localDayWindowUtc } from '@/lib/schedule/datetime'
 import { localBroadcastDayWindowUtc } from '@/lib/schedule/day-window'
-import { fetchDayItems, fetchSpanningDayItems, type DayItem } from '@/lib/schedule/day-items'
+import {
+  fetchContinuingDayItems,
+  fetchDayItems,
+  type DayItem,
+} from '@/lib/schedule/day-items'
 
 // Single source of truth for a schedule day's records. The day view used to
 // fetch this set two to three times per navigation (the page for panel data,
@@ -46,54 +50,6 @@ export type DayHotel = Pick<
 // rejected by every bucket and render on no day at all.
 export type DayHotelItem = DayHotel & { isCheckout: boolean }
 
-// Transport belonging to the small hours of the following calendar morning,
-// which a TM reads as the end of this day rather than the start of the next one.
-// A 01:30 red-eye after a show is the case: it is stored on the 15th, correctly,
-// and the TM planning the 14th needs to see it.
-//
-// Deliberately a separate field rather than merged into `segments`. These
-// records genuinely belong to the next calendar day, they are still fetched and
-// rendered by that day, and nothing about where they are stored changes. This is
-// a second view of them, not a reassignment. Merging them would make "which day
-// is this on" ambiguous again, which is the thing the day link exists to settle.
-//
-// DAY ITEMS ARE NOT IN THE TAIL, AND THAT IS THE BRIEF'S STRUCTURAL WIN.
-//
-// The old freeform events had no tour_date_id: they were placed by `date` alone,
-// so a 01:30 after-show party stored on the 15th rendered on the 15th, and the
-// tail existed
-// to put it back under the 14th where the TM had been working. day_items has the
-// day link and the instant as separate facts, so a curfew a TM sets on the 14th
-// has tour_date_id pointing at the 14th and starts_at falling on the 15th. It
-// arrives on the right day already. There is nothing to compensate for.
-//
-// The consequence, stated so it is a decision rather than a side effect: an item
-// whose tour_date_id genuinely IS the 15th no longer appears at the bottom of
-// the 14th. That is the TM's own choice of day being respected rather than
-// second-guessed, and it is the only way "which day is this on" keeps one
-// answer. Transport keeps its tail because transport_segments still has no
-// equivalent: it is placed by depart_at, so the question is still open there.
-export interface LateNight {
-  segments: DaySegment[]
-}
-
-// Blocks that started on an EARLIER broadcast day but continue into this one: an
-// overnight drive that departed last night, or a day_item spanning the 04:00
-// boundary (REE-123). A block that breaks over two days shows on both, and this
-// is the incoming half: the day it spills into. The outgoing half (a block that
-// starts on this day and runs past the boundary) needs no fetch, because it is
-// already on this day's grid and the view just clamps it to the bottom.
-//
-// A read-only second view, the way the retired transport tail was: these rows are
-// owned and edited on their home day (their own tour_date_id / departure day) and
-// drawn here clamped to the grid top. Kept OUT of `segments`, `items` and the
-// roster deliberately, so "which day is this on" keeps one answer and today's
-// party count is not inflated by people who are mid-journey from yesterday.
-export interface Continuation {
-  segments: DaySegment[]
-  items: DayItem[]
-}
-
 export interface DayRecords {
   shows: DayShow[]
   items: DayItem[]                // every time on this day, ordered as shown
@@ -103,8 +59,15 @@ export interface DayRecords {
   itemsError: string | null
   segments: DaySegment[]          // deduped union of tour_date-linked and date-matched
   hotels: DayHotelItem[]          // check-ins and check-outs falling on this day
-  lateNight: LateNight            // next morning's small hours, shown as this day's tail
-  continuation: Continuation      // blocks spilling in from an earlier broadcast day
+  // Blocks filed on a PREVIOUS broadcast day whose stated end reaches past this
+  // day's 04:00 start, so they break over the boundary (REE-124). A second view
+  // of those rows, drawn read-only and clamped to the grid top on this day, NOT
+  // a reassignment: they stay filed on the day they start. Kept separate from
+  // `items`/`segments` so "which day is this record on" still has one answer,
+  // and out of the roster so a previous night's overnight drive does not add its
+  // passengers to this day. Hotels are excluded by scope: a stay stays discrete
+  // check-in/check-out point events, never a bar across its nights.
+  continuedFromPrev: { items: DayItem[]; segments: DaySegment[] }
   // Ids of the segments and hotels on this day, used by the info panel to
   // resolve the day's roster without re-querying for them.
   segmentIds: string[]
@@ -117,23 +80,10 @@ const EMPTY: DayRecords = {
   itemsError: null,
   segments: [],
   hotels: [],
-  lateNight: { segments: [] },
-  continuation: { segments: [], items: [] },
+  continuedFromPrev: { items: [], segments: [] },
   segmentIds: [],
   hotelStayIds: [],
 }
-
-// Where the tail stops. This is a cutoff hour, and the two places this brief
-// deliberately refused to put one (the day-sheet write rule, and the definition
-// of a day) are the reason to say why it is acceptable here.
-//
-// Nothing is stored against it and nothing is grouped by it. A record on either
-// side of this line lives on exactly the same day it did before, is fetched by
-// that day, and renders there. All this decides is whether it ALSO appears at
-// the bottom of the previous day. Being wrong shows something in one extra
-// place, or fails to, which is a presentation miss the TM can see and correct.
-// Being wrong about a stored instant is silent and compounds.
-const LATE_NIGHT_ENDS_AT_HOUR = 6
 
 // A plain column list now, with no embed. This string used to be one of the two
 // untyped sources of truth for a day-sheet field: nothing but a running query
@@ -165,9 +115,9 @@ export async function fetchDayRecords(
   // with no row has none either, and typing one adds the day (updateDayNotes).
   if (!tourDateId) return EMPTY
 
-  // Transport is sourced from the broadcast day, not the calendar day (REE-111
-  // step 2). Transport is fetched across the calendar day extended forward to the
-  // next broadcast boundary: [date 00:00, date+1 04:00) in the tour's timezone.
+  // Transport is sourced from the broadcast day, not the calendar day (REE-111).
+  // Transport is fetched across the calendar day extended forward to the next
+  // broadcast boundary: [date 00:00, date+1 04:00) in the tour's timezone.
   // depart_at is a timestamptz, so this is derived in the tour's zone; falls back
   // to UTC when the tour has none, like every other date-deriving path. Only
   // transport reads from here: day_items stay fetched by tour_date_id and hotels
@@ -175,46 +125,26 @@ export async function fetchDayRecords(
   //
   // Two halves, deliberately:
   //   - the calendar start (date 00:00) keeps this day's OWN pre-dawn departures
-  //     on it. The full broadcast window would start at 04:00 and so drop a 01:30
-  //     drive stored on this date onto the previous night, which is correct only
-  //     once the grid itself is broadcast-aware (step 3). Until then the grid is
-  //     still calendar-bounded, and dropping it here would make it vanish.
+  //     in the fetch. On the broadcast grid a 01:30 drive stored on this date
+  //     belongs to the previous night, so buildDayCalendarView shifts it before
+  //     00:00 and rails it under "Outside this day" rather than dropping it.
   //   - the broadcast end (date+1 04:00) pulls the next morning's small hours
   //     onto this day, so a 02:00 overnight drive after tonight's show, stored on
-  //     the next calendar date, lands in `segments` for the step-3 grid to render.
-  //
-  // No double display in this step: the grid is still bounded to the calendar
-  // day, so RBC filters the past-midnight segment off the column and it keeps
-  // showing only in the tail below. The grid becomes the authority in step 3.
+  //     the next calendar date, lands in `segments` and the grid renders it on the
+  //     night it follows via the DAY_START_HOUR shift.
   const dayWindow = localDayWindowUtc(date, timezone ?? 'UTC')
   const broadcastWindow = localBroadcastDayWindowUtc(date, timezone ?? 'UTC')
   const transportWindow = { start: dayWindow.start, end: broadcastWindow.end }
 
-  // The small hours of the next morning. Starts where this day's window ends,
-  // which is next-day midnight in the tour's timezone, so the two are adjacent
-  // and cannot overlap: nothing can be both on this day and in its tail.
-  const nextDate = addDays(date, 1)
-  const nextDayWindow = localDayWindowUtc(nextDate, timezone ?? 'UTC')
-  // Six hours of elapsed time from local midnight, not "06:00 local". On a
-  // spring-forward night the clocks skip an hour, so this reads as 07:00 local
-  // on that one night a year. Left as elapsed time deliberately: converting a
-  // wall-clock 06:00 costs another timezone round trip to move a presentational
-  // boundary by an hour, on a night when the boundary is genuinely ambiguous
-  // anyway.
-  const lateNightEnd = new Date(
-    new Date(nextDayWindow.start).getTime() + LATE_NIGHT_ENDS_AT_HOUR * 3_600_000,
-  ).toISOString()
-
   const [
     { data: showRows },
     dayItems,
+    continuingItems,
     { data: linkedSegments },
     { data: datedSegments },
+    { data: continuingSegmentRows },
     { data: checkinHotels },
     { data: checkoutHotels },
-    { data: lateSegmentRows },
-    { data: spanningSegmentRows },
-    spanningItems,
   ] = await Promise.all([
     supabase.from('shows').select(SHOW_SELECT).eq('tour_id', tourId).eq('tour_date_id', tourDateId),
 
@@ -223,6 +153,15 @@ export async function fetchDayRecords(
     // and it is the point of the brief: a load-in, a second soundcheck and a
     // press call are the same kind of thing now.
     fetchDayItems(supabase, { tourId, tourDateId }),
+
+    // Items filed on a previous day that break over this day's 04:00 start and
+    // continue into it (REE-124). An instant-window read, kept out of `items`:
+    // this is a second view of those rows on this grid, not a reassignment.
+    fetchContinuingDayItems(supabase, {
+      tourId,
+      tourDateId,
+      broadcastStart: broadcastWindow.start,
+    }),
 
     // Linked segments are date-guarded too, but in JS below rather than here.
     // One day's segments are a handful of rows, and expressing "null or inside
@@ -246,6 +185,21 @@ export async function fetchDayRecords(
       .gte('depart_at', transportWindow.start)
       .lt('depart_at', transportWindow.end),
 
+    // Segments that departed on a PREVIOUS broadcast day but whose arrival
+    // reaches past this day's 04:00 start, so they break over the boundary
+    // (REE-124). depart_at before the broadcast start, arrive_at after it, and a
+    // stated arrival (a null arrival cannot span). This is the smallest of the
+    // three continuation reads because transport is already an instant query;
+    // it just looks the other way across the boundary. Deduped below against the
+    // segments already on this day (a 02:00 departure sits in both windows).
+    supabase
+      .from('transport_segments')
+      .select(SEGMENT_SELECT)
+      .eq('tour_id', tourId)
+      .not('arrive_at', 'is', null)
+      .lt('depart_at', broadcastWindow.start)
+      .gt('arrive_at', broadcastWindow.start),
+
     // Hotels are matched on date alone, linked or not. The old shape queried
     // linked stays by tour_date_id and unlinked ones by date, so an edited stay
     // could be excluded by both, and a linked multi-night stay never rendered a
@@ -264,37 +218,6 @@ export async function fetchDayRecords(
       .eq('tour_id', tourId)
       .eq('check_out_date', date)
       .neq('check_in_date', date), // avoid duplicating same-day check-in/out
-
-    // Tail: departures in the next morning's small hours. Filtered on depart_at
-    // alone rather than on the link, because that is the fact being asked about
-    // (when does this actually leave) and because it catches planner-created
-    // segments, which have no link at all.
-    supabase
-      .from('transport_segments')
-      .select(SEGMENT_SELECT)
-      .eq('tour_id', tourId)
-      .gte('depart_at', nextDayWindow.start)
-      .lt('depart_at', lateNightEnd),
-
-    // Continuation: a transport segment that departed BEFORE this broadcast day
-    // began but arrives after its 04:00 start, so it breaks over the boundary and
-    // must show on this day too, clamped to the grid top (REE-123). Filtered on
-    // the depart/arrive instants, not the link: this is a read-only second view,
-    // and the segment is still owned by, and fetched for, its departure day.
-    // arrive_at null is excluded by .gt, because a departure with no arrival has
-    // no interval to span. The upper bound is open: a multi-day drive whose
-    // arrival is days out still spills through this whole day.
-    supabase
-      .from('transport_segments')
-      .select(SEGMENT_SELECT)
-      .eq('tour_id', tourId)
-      .lt('depart_at', broadcastWindow.start)
-      .gt('arrive_at', broadcastWindow.start),
-
-    // The day_item equivalent of the same spillover, scoped by the broadcast
-    // start. Its own helper, so the error handling (drop the second view, keep
-    // the home read intact) lives with the other day_item reads.
-    fetchSpanningDayItems(supabase, { tourId, boundary: broadcastWindow.start }),
   ])
 
   // The date guard the linked query used to be missing entirely. A segment
@@ -318,12 +241,11 @@ export async function fetchDayRecords(
   for (const s of [...linkedOnThisDay, ...(datedSegments ?? [])]) segMap.set(s.id, s)
 
   // The roster (segmentIds) answers "who is on this day", and it stays on the
-  // calendar day: a next-morning overnight drive is in `segments` so the step-3
-  // grid can render it, but its passengers are travelling the next date and are
-  // not part of this day's party. A departure inside the calendar day, or a
-  // linked segment with no departure at all (placed by its link), counts. This
-  // preserves the pre-broadcast roster exactly; step 3 revisits it when the grid
-  // becomes broadcast-aware.
+  // calendar day: a next-morning overnight drive is in `segments` so the
+  // broadcast grid can render it on the night it follows, but its passengers are
+  // travelling the next date and are not part of this day's party. A departure
+  // inside the calendar day, or a linked segment with no departure at all (placed
+  // by its link), counts.
   const calendarStart = new Date(dayWindow.start).getTime()
   const calendarEnd = new Date(dayWindow.end).getTime()
   const onCalendarDay = (s: DaySegment): boolean => {
@@ -332,6 +254,15 @@ export async function fetchDayRecords(
     return departs >= calendarStart && departs < calendarEnd
   }
 
+  // Continuation segments, deduped against the ones already placed on this day.
+  // A segment departing at, say, 02:00 today sits in both the transport window
+  // (its depart_at is inside [date 00:00, date+1 04:00)) and the continuation
+  // window (it departs before 04:00 and arrives after), so it would otherwise be
+  // counted twice: once as this day's own record, once as a continuation. The
+  // day's own placement wins; the continuation view is only for rows filed on a
+  // genuinely earlier day.
+  const continuingSegments = (continuingSegmentRows ?? []).filter((s) => !segMap.has(s.id))
+
   // One entry per card. A same-day check-in and check-out is excluded from the
   // check-out query above, so a stay cannot produce two cards for one event.
   const hotels: DayHotelItem[] = [
@@ -339,34 +270,16 @@ export async function fetchDayRecords(
     ...(checkoutHotels ?? []).map((h) => ({ ...h, isCheckout: true })),
   ]
 
-  // The tail is not folded into segmentIds or hotelStayIds. Those drive the day
-  // roster, which answers "who is on this day", and these people are on the next
-  // one. Showing a TM that a red-eye exists is useful; counting its passengers
-  // as today's party is not.
-  const lateNight: LateNight = {
-    segments: lateSegmentRows ?? [],
-  }
-
-  // Continuation spillover, deduped against the home sets. A pre-dawn departure
-  // (a 02:00 drive on this calendar date, before the 04:00 boundary) matches both
-  // the home window and the spanning query; it is a home record of this day, so
-  // the home copy wins and the spanning copy is dropped. The view then decides,
-  // from grid geometry, whether each remaining spillover clamps to the top.
-  const homeSegmentIds = new Set(segMap.keys())
-  const homeItemIds = new Set(dayItems.items.map((i) => i.id))
-  const continuation: Continuation = {
-    segments: (spanningSegmentRows ?? []).filter((s) => !homeSegmentIds.has(s.id)),
-    items: spanningItems.filter((i) => !homeItemIds.has(i.id)),
-  }
-
   return {
     shows: showRows ?? [],
     items: dayItems.items,
     itemsError: dayItems.error,
     segments: Array.from(segMap.values()),
     hotels,
-    lateNight,
-    continuation,
+    continuedFromPrev: {
+      items: continuingItems.items,
+      segments: continuingSegments,
+    },
     // Roster: calendar-day segments only, so a next-morning overnight drive that
     // is in `segments` for the grid does not add its passengers to this day.
     segmentIds: Array.from(segMap.values()).filter(onCalendarDay).map((s) => s.id),

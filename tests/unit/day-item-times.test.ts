@@ -122,8 +122,10 @@ describe('resolveItemDayOffsets carries Brief 40 across unchanged', () => {
       item('curfew', '23:00'),
     ])
 
+    // changeover is a non-crossing evening slot now (REE-120), so it is absent
+    // from the offset map rather than present as 0; a missing entry is offset 0.
     for (const kind of ['changeover', 'headliner', 'curfew']) {
-      expect(offsets[kind]).toBe(0)
+      expect(offsets[kind] ?? 0).toBe(0)
     }
   })
 

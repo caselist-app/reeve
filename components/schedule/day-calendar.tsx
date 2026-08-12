@@ -304,24 +304,22 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
   }, [depthById])
 
   // Lookups from a clicked event back to its record, so a click can open the
-  // right detail panel. Segments include the late-night tail, which is
-  // clickable too.
-  const itemsById = useMemo(
-    () =>
-      new Map(
-        [...records.items, ...records.continuation.items].map((item) => [item.id, item]),
-      ),
-    [records.items, records.continuation.items],
-  )
+  // right detail panel. `records.segments` already reaches into the next
+  // morning's small hours (the broadcast window), so an "Outside this day"
+  // segment is clickable through the same map. The continuation blocks
+  // (records.continuedFromPrev, REE-124) are read-only but still open their
+  // detail panel on click, so their rows go in these maps too.
+  const itemsById = useMemo(() => {
+    const map = new Map(records.items.map((item) => [item.id, item]))
+    for (const item of records.continuedFromPrev.items) map.set(item.id, item)
+    return map
+  }, [records.items, records.continuedFromPrev.items])
   const segmentsById = useMemo(() => {
     const map = new Map<string, DaySegment>()
     for (const seg of records.segments) map.set(seg.id, seg)
-    for (const seg of records.lateNight.segments) map.set(seg.id, seg)
-    // Continuation blocks are clickable too: clicking opens the record's panel on
-    // its own (real) times, even though the block is read-only here (REE-123).
-    for (const seg of records.continuation.segments) map.set(seg.id, seg)
+    for (const seg of records.continuedFromPrev.segments) map.set(seg.id, seg)
     return map
-  }, [records.segments, records.lateNight.segments, records.continuation.segments])
+  }, [records.segments, records.continuedFromPrev.segments])
   const hotelsById = useMemo(
     () => new Map(records.hotels.map((hotel) => [hotel.id, hotel])),
     [records.hotels],
@@ -652,26 +650,27 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
               className: cn(
                 accentClassName(event.source, event.accent),
                 stacked && 'evt-stacked',
-                // Breaks over a broadcast-day boundary (REE-123): square off the
-                // spilling edge and fade it, so it reads as continuing rather than
-                // ending at the grid edge. A continuation projection (continuesBefore)
-                // is also dimmed to read as read-only.
-                event.continuesBefore && 'evt-continues-before',
+                // Breaks over the 04:00 boundary (REE-124): a squared, faded edge
+                // and a chevron on the side it continues past, so the block reads
+                // as one thing spanning two days' grids rather than two truncated
+                // blocks. Either or both may be set on a block long enough to run
+                // off both ends.
                 event.continuesAfter && 'evt-continues-after',
-                event.readOnly && 'evt-continuation',
+                event.continuesBefore && 'evt-continues-before',
                 // Its detail panel is open: fill it with the accent (REE-109).
                 event.id === selectedKey && 'evt-selected',
               ),
             }
           }}
           // Desktop only. RBC's drag addon is mouse-oriented; on mobile every
-          // gesture is off and the grid is display plus tap-to-open. A continuation
-          // block (readOnly) is never draggable or resizable on any device: it is a
-          // projection of a record owned by another day, and a gesture here would
-          // move it by a whole day.
-          draggableAccessor={(event: CalendarEvent) => gesturesEnabled && !event.readOnly}
-          resizableAccessor={(event: CalendarEvent) => gesturesEnabled && !event.readOnly}
+          // gesture is off and the grid is display plus tap-to-open. A
+          // continuation block (continuesBefore) is a read-only projection of a
+          // row filed on a previous day (REE-124): it opens its panel on click
+          // but never drags or resizes, so a gesture can only ever move the row
+          // from its home day.
+          draggableAccessor={(event) => gesturesEnabled && !event.continuesBefore}
           resizable={gesturesEnabled}
+          resizableAccessor={(event) => gesturesEnabled && !event.continuesBefore}
           // 'ignoreEvents', not true: a click that lands on an event opens that
           // event's panel and must not also fire onSelectSlot underneath it,
           // which would open the add form at the same time.

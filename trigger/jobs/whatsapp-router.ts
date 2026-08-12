@@ -26,6 +26,7 @@ export const whatsappRouterJob = task({
       body: payload.body,
       tour_id: payload.tour_id,
       person_id: payload.person_id,
+      channel: 'whatsapp',
     })
 
     if (result.action === 'template') {

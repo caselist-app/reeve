@@ -16,15 +16,19 @@ interface AddRailFormProps {
   tourDateId: string
   date: string
   timezone: string
+  // The time the TM selected on the day, 'HH:MM' in the tour zone (REE-140).
+  // Seeds the departure. Falls back to 09:00 when the line carried no time.
+  initialClock?: string
   onBack: () => void
   onSuccess: () => void
 }
 
-export function AddRailForm({ tourId, tourDateId, date, timezone, onBack, onSuccess }: AddRailFormProps) {
+export function AddRailForm({ tourId, tourDateId, date, timezone, initialClock, onBack, onSuccess }: AddRailFormProps) {
   // The departure decides the day, and this field defaults to the current day and
   // then lets the TM edit it, so the segment can leave the day it was added from
   // before it ever exists.
-  const [departLocal, setDepartLocal] = useState(`${date}T09:00`)
+  const departDefault = `${date}T${initialClock ?? '09:00'}`
+  const [departLocal, setDepartLocal] = useState(departDefault)
   // Controlled so the Places widget can write the selected station back in.
   const [origin, setOrigin] = useState('')
   const [destination, setDestination] = useState('')
@@ -84,7 +88,7 @@ export function AddRailForm({ tourId, tourDateId, date, timezone, onBack, onSucc
           <Input
             name="depart_at"
             type="datetime-local"
-            defaultValue={`${date}T09:00`}
+            defaultValue={departDefault}
             onChange={(e) => setDepartLocal(e.target.value)}
             className="h-7 text-xs"
           />

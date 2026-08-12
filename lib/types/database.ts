@@ -48,6 +48,7 @@ export type Database = {
           name: string
           stripe_customer_id: string | null
           subscription_status: string
+          telegram_chat_id: number | null
           updated_at: string
         }
         Insert: {
@@ -58,6 +59,7 @@ export type Database = {
           name: string
           stripe_customer_id?: string | null
           subscription_status?: string
+          telegram_chat_id?: number | null
           updated_at?: string
         }
         Update: {
@@ -68,6 +70,7 @@ export type Database = {
           name?: string
           stripe_customer_id?: string | null
           subscription_status?: string
+          telegram_chat_id?: number | null
           updated_at?: string
         }
         Relationships: []
@@ -649,6 +652,145 @@ export type Database = {
           },
         ]
       }
+      guest_list_allotments: {
+        Row: {
+          created_at: string
+          id: string
+          num_allowed: number
+          pass_type: string
+          show_id: string
+          tour_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          num_allowed: number
+          pass_type: string
+          show_id: string
+          tour_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          num_allowed?: number
+          pass_type?: string
+          show_id?: string
+          tour_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "guest_list_allotments_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "guest_list_allotments_tour_id_fkey"
+            columns: ["tour_id"]
+            isOneToOne: false
+            referencedRelation: "tours"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      guest_list_entries: {
+        Row: {
+          created_at: string
+          decline_reason: string | null
+          email: string | null
+          first_name: string | null
+          guest_type: string | null
+          id: string
+          last_name: string | null
+          notes: string | null
+          notified_at: string | null
+          num_tickets: number
+          pass_type: string
+          pass_type_detail: string | null
+          pickup: string | null
+          pickup_detail: string | null
+          priority: boolean
+          request_channel: string
+          requested_by_person_id: string | null
+          show_id: string
+          status: string
+          tour_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          decline_reason?: string | null
+          email?: string | null
+          first_name?: string | null
+          guest_type?: string | null
+          id?: string
+          last_name?: string | null
+          notes?: string | null
+          notified_at?: string | null
+          num_tickets?: number
+          pass_type?: string
+          pass_type_detail?: string | null
+          pickup?: string | null
+          pickup_detail?: string | null
+          priority?: boolean
+          request_channel: string
+          requested_by_person_id?: string | null
+          show_id: string
+          status: string
+          tour_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          decline_reason?: string | null
+          email?: string | null
+          first_name?: string | null
+          guest_type?: string | null
+          id?: string
+          last_name?: string | null
+          notes?: string | null
+          notified_at?: string | null
+          num_tickets?: number
+          pass_type?: string
+          pass_type_detail?: string | null
+          pickup?: string | null
+          pickup_detail?: string | null
+          priority?: boolean
+          request_channel?: string
+          requested_by_person_id?: string | null
+          show_id?: string
+          status?: string
+          tour_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "guest_list_entries_requested_by_person_id_fkey"
+            columns: ["requested_by_person_id"]
+            isOneToOne: false
+            referencedRelation: "people"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "guest_list_entries_show_id_fkey"
+            columns: ["show_id"]
+            isOneToOne: false
+            referencedRelation: "shows"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "guest_list_entries_tour_id_fkey"
+            columns: ["tour_id"]
+            isOneToOne: false
+            referencedRelation: "tours"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hotel_stays: {
         Row: {
           address: string | null
@@ -750,6 +892,7 @@ export type Database = {
       }
       notification_log: {
         Row: {
+          account_id: string | null
           channel: string
           created_at: string
           dedup_dimension: string
@@ -757,7 +900,7 @@ export type Database = {
           error: string | null
           id: string
           notification_type: string
-          person_id: string
+          person_id: string | null
           provider_message_id: string | null
           read_at: string | null
           sent_at: string | null
@@ -766,6 +909,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          account_id?: string | null
           channel: string
           created_at?: string
           dedup_dimension: string
@@ -773,7 +917,7 @@ export type Database = {
           error?: string | null
           id?: string
           notification_type: string
-          person_id: string
+          person_id?: string | null
           provider_message_id?: string | null
           read_at?: string | null
           sent_at?: string | null
@@ -782,6 +926,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          account_id?: string | null
           channel?: string
           created_at?: string
           dedup_dimension?: string
@@ -789,7 +934,7 @@ export type Database = {
           error?: string | null
           id?: string
           notification_type?: string
-          person_id?: string
+          person_id?: string | null
           provider_message_id?: string | null
           read_at?: string | null
           sent_at?: string | null
@@ -798,6 +943,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "notification_log_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "notification_log_person_id_fkey"
             columns: ["person_id"]
@@ -1040,6 +1192,8 @@ export type Database = {
           created_at: string
           date: string
           dressing_rooms: string | null
+          guest_list_cutoff_at: string | null
+          guest_list_locked: boolean
           house_lighting_plot: string | null
           house_pa_spec: string | null
           hub_ground_minutes: number | null
@@ -1070,6 +1224,8 @@ export type Database = {
           created_at?: string
           date: string
           dressing_rooms?: string | null
+          guest_list_cutoff_at?: string | null
+          guest_list_locked?: boolean
           house_lighting_plot?: string | null
           house_pa_spec?: string | null
           hub_ground_minutes?: number | null
@@ -1100,6 +1256,8 @@ export type Database = {
           created_at?: string
           date?: string
           dressing_rooms?: string | null
+          guest_list_cutoff_at?: string | null
+          guest_list_locked?: boolean
           house_lighting_plot?: string | null
           house_pa_spec?: string | null
           hub_ground_minutes?: number | null
@@ -1150,7 +1308,7 @@ export type Database = {
       telegram_link_tokens: {
         Row: {
           account_id: string
-          contact_id: string
+          contact_id: string | null
           created_at: string
           expires_at: string
           token: string
@@ -1158,7 +1316,7 @@ export type Database = {
         }
         Insert: {
           account_id: string
-          contact_id: string
+          contact_id?: string | null
           created_at?: string
           expires_at?: string
           token?: string
@@ -1166,7 +1324,7 @@ export type Database = {
         }
         Update: {
           account_id?: string
-          contact_id?: string
+          contact_id?: string | null
           created_at?: string
           expires_at?: string
           token?: string

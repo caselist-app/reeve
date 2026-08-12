@@ -22,6 +22,7 @@ const AUTHENTICATED_ROUTES = [
   '/home',
   '/roster',
   '/roster/{contactId}',
+  '/settings',
   '/artists/new',
   '/artists/{artistId}/settings',
   '/tours/new',
@@ -146,7 +147,7 @@ test('every page under app/(app) is in the list above', () => {
   // same reason: an empty list produces no tests at all, and a suite that runs
   // nothing reports green.
   expect(pages.length).toBeGreaterThan(10)
-  expect(AUTHENTICATED_ROUTES.length).toBe(20)
+  expect(AUTHENTICATED_ROUTES.length).toBe(21)
   expect(PUBLIC_ROUTES.length).toBe(5)
   expect(pages.length, `app/(app) pages:\n${pages.join('\n')}`).toBe(APP_GROUP_ROUTE_COUNT)
 })

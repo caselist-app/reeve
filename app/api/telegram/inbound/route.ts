@@ -3,6 +3,7 @@ import { timingSafeEqual } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { tasks } from '@trigger.dev/sdk/v3'
 import { redis } from '@/lib/redis'
+import { enqueueWithClaim } from '@/lib/comms/inbound-claim'
 import { sendTelegramMessage, answerTelegramCallbackQuery } from '@/lib/comms/telegram'
 
 const LINK_EXPIRED_MESSAGE = 'This link has expired, ask your tour manager to send a new one.'
@@ -38,18 +39,9 @@ export async function POST(request: NextRequest) {
   const update = payload as Record<string, unknown>
 
   // update_id is monotonically increasing per bot, never reused: the direct
-  // equivalent of wamid. Same Redis pattern as WhatsApp: proceed if Redis
-  // throws, dropping an inbound message is worse than a duplicate job
-  // enqueue (the router job has its own second guard).
+  // equivalent of wamid. It is deduped at enqueue time, below, through the same
+  // claim-send-release helper the WhatsApp route uses.
   const updateId = update.update_id as number | undefined
-  if (updateId != null) {
-    try {
-      const claimed = await redis.set(`tg_update:${updateId}`, '1', { nx: true, ex: 60 * 60 * 24 })
-      if (claimed === null) return NextResponse.json({ status: 'ok' })
-    } catch {
-      // Redis unavailable: proceed and rely on the router-job guard.
-    }
-  }
 
   const admin = createAdminClient()
 
@@ -133,14 +125,33 @@ export async function POST(request: NextRequest) {
   const person = sorted[0]
   if (!person) return NextResponse.json({ status: 'ok' }) // Should not happen given length check above.
 
-  // Enqueue the router job. The handler does nothing else.
-  await tasks.trigger('telegram-router', {
-    tour_id: person.tour_id,
-    person_id: person.id,
-    chat_id: chatId,
-    body,
-    update_id: updateId ?? null,
-  })
+  // Claim the update id, enqueue the router job, release the claim if the
+  // enqueue throws. Without the release, a transient Trigger.dev outage would
+  // strand the claim: Telegram's retry of the same update would hit the dedup
+  // guard, get a 200, and the crew member's message would be lost for the full
+  // 24 hour TTL. Same helper and rule the WhatsApp route uses.
+  const CLAIM_TTL_SECONDS = 60 * 60 * 24
+  try {
+    await enqueueWithClaim({
+      claimKey: updateId != null ? `tg_update:${updateId}` : null,
+      claim: (key) => redis.set(key, '1', { nx: true, ex: CLAIM_TTL_SECONDS }),
+      release: (key) => redis.del(key),
+      enqueue: () =>
+        tasks.trigger('telegram-router', {
+          tour_id: person.tour_id,
+          person_id: person.id,
+          chat_id: chatId,
+          body,
+          update_id: updateId ?? null,
+        }),
+    })
+  } catch (err) {
+    // Deliberate non-200: Telegram retries, and the claim is now free for the
+    // retry to get through, so a transient Trigger.dev outage recovers by
+    // itself. Dropping an inbound crew message is worse than a retry.
+    console.error('telegram inbound: enqueue failed', err)
+    return NextResponse.json({ error: 'Enqueue failed' }, { status: 500 })
+  }
 
   // Always return 200 fast. Telegram retries on anything else.
   return NextResponse.json({ status: 'ok' })
@@ -164,7 +175,7 @@ async function handleLinking(
 
   const { data: linkToken } = await admin
     .from('telegram_link_tokens')
-    .select('contact_id, expires_at, used_at')
+    .select('contact_id, account_id, expires_at, used_at')
     .eq('token', token)
     .maybeSingle()
 
@@ -173,6 +184,31 @@ async function handleLinking(
 
   if (isExpired || !linkToken) {
     await sendTelegramMessage({ chatId, text: LINK_EXPIRED_MESSAGE })
+    return
+  }
+
+  // A token with no contact links the account holder to their own chat, rather
+  // than a crew member's. Generated from account settings (REE-132), it writes
+  // accounts.telegram_chat_id so Reeve can message the TM directly. No per-tour
+  // uniqueness trigger applies: this is the account's own Telegram, not a crew
+  // identity shared across a tour's roster.
+  if (linkToken.contact_id === null) {
+    const { error: accountError } = await admin
+      .from('accounts')
+      .update({ telegram_chat_id: chatId })
+      .eq('id', linkToken.account_id)
+
+    if (accountError) {
+      await sendTelegramMessage({ chatId, text: LINK_EXPIRED_MESSAGE })
+      return
+    }
+
+    await admin
+      .from('telegram_link_tokens')
+      .update({ used_at: new Date().toISOString() })
+      .eq('token', token)
+
+    await sendTelegramMessage({ chatId, text: "You're connected. Reeve will message you here." })
     return
   }
 

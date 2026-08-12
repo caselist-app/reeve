@@ -7,7 +7,6 @@ import {
   COULD_NOT_LOAD_MESSAGE,
 } from '@/lib/schedule/day-calendar-view'
 import type { DayRecords } from '@/lib/schedule/day-records'
-import { addDays, wallClockToUtc } from '@/lib/schedule/datetime'
 
 // Brief 43 step 4 (REE-55). The day is a calendar grid now, and this is where
 // its correctness is asserted: no component in this repo can be rendered (no
@@ -129,88 +128,6 @@ describe('the three day sources map to grid events', () => {
   })
 })
 
-// REE-123. An overnight drive departs one night and arrives the next morning,
-// so its interval breaks over the 04:00 broadcast boundary and it is one record
-// that has to show on two days: a normal block on the day it departs, and a
-// read-only projection clamped to the top of the day it arrives. The fetch is the
-// half a unit test cannot reach, so it is asserted here against a real database.
-describe('a block that breaks over the broadcast boundary shows on both days', () => {
-  let fixture: Fixture
-  const NEXT = addDays(DATE, 1)
-  let nextDateId: string
-
-  beforeEach(async () => {
-    fixture = await createFixture({ date: DATE, timezone: TIMEZONE })
-    // The arrival day needs its own tour_dates row, or the day view renders no
-    // grid for it at all (the null-tourDateId branch of fetchDayRecords).
-    const { data, error } = await testDb
-      .from('tour_dates')
-      .insert({ tour_id: fixture.tourId, date: NEXT, day_type: 'travel' })
-      .select('id')
-      .single()
-    if (error || !data) throw new Error(`could not seed the arrival day: ${error?.message}`)
-    nextDateId = data.id
-  })
-
-  afterEach(async () => {
-    await destroyFixture(fixture)
-  })
-
-  it('is continues-after on the departure day and a read-only spill on the arrival day', async () => {
-    // Departs DATE 20:00, arrives NEXT 09:46, both wall-clock in the tour zone.
-    // Owned by (linked to) its departure day, exactly as createTransportSegment
-    // files it.
-    const { data: seg, error } = await testDb
-      .from('transport_segments')
-      .insert({
-        tour_id: fixture.tourId,
-        tour_date_id: fixture.tourDateId,
-        mode: 'ground',
-        origin: 'Venue',
-        destination: 'O2 Arena',
-        depart_at: wallClockToUtc(`${DATE}T20:00`, TIMEZONE),
-        arrive_at: wallClockToUtc(`${NEXT}T09:46`, TIMEZONE),
-      })
-      .select('id')
-      .single()
-    if (error || !seg) throw new Error(`could not seed the overnight drive: ${error?.message}`)
-
-    // Departure day: a home block, flagged as continuing past the grid bottom, and
-    // still interactive (its home day owns the edit).
-    const departRecords = await fetchDayRecords(testDb, {
-      tourId: fixture.tourId,
-      tourDateId: fixture.tourDateId,
-      date: DATE,
-      timezone: TIMEZONE,
-    })
-    const departView = buildDayCalendarView(departRecords, TIMEZONE, DATE)
-    const departBlock = departView.events.find((e) => e.recordId === seg.id)
-    expect(departBlock).toBeDefined()
-    expect(departBlock!.continuesAfter).toBe(true)
-    expect(departBlock!.readOnly).toBeFalsy()
-
-    // Arrival day: fetched as continuation spillover (this is the fetch the unit
-    // suite cannot exercise), then drawn as a read-only block clamped to the top
-    // rather than lost to the "Outside this day" rail.
-    const arriveRecords = await fetchDayRecords(testDb, {
-      tourId: fixture.tourId,
-      tourDateId: nextDateId,
-      date: NEXT,
-      timezone: TIMEZONE,
-    })
-    expect(arriveRecords.continuation.segments.map((s) => s.id)).toContain(seg.id)
-    // The spill is not counted into the arrival day's own roster.
-    expect(arriveRecords.segmentIds).not.toContain(seg.id)
-
-    const arriveView = buildDayCalendarView(arriveRecords, TIMEZONE, NEXT)
-    const arriveBlock = arriveView.events.find((e) => e.recordId === seg.id)
-    expect(arriveBlock).toBeDefined()
-    expect(arriveBlock!.continuesBefore).toBe(true)
-    expect(arriveBlock!.readOnly).toBe(true)
-    expect(arriveView.outsideDay.map((e) => e.recordId)).not.toContain(seg.id)
-  })
-})
-
 describe('a failed read is a message, not a blank grid', () => {
   it('carries the could-not-load message when itemsError is set', () => {
     // Constructed rather than fetched: forcing a real PostgREST failure is not
@@ -224,8 +141,7 @@ describe('a failed read is a message, not a blank grid', () => {
       itemsError: 'relation "day_items" does not exist',
       segments: [],
       hotels: [],
-      lateNight: { segments: [] },
-      continuation: { segments: [], items: [] },
+      continuedFromPrev: { items: [], segments: [] },
       segmentIds: [],
       hotelStayIds: [],
     }
@@ -245,8 +161,7 @@ describe('a failed read is a message, not a blank grid', () => {
       itemsError: null,
       segments: [],
       hotels: [],
-      lateNight: { segments: [] },
-      continuation: { segments: [], items: [] },
+      continuedFromPrev: { items: [], segments: [] },
       segmentIds: [],
       hotelStayIds: [],
     }

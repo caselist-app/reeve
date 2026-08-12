@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { buildDayCalendarView } from '@/lib/schedule/day-calendar-view'
+import { assignOverlapDepths } from '@/lib/schedule/overlap-layout'
 import {
   wallClockToUtc,
   localDayWindowUtc,
@@ -34,8 +35,7 @@ function emptyRecords(): DayRecords {
     itemsError: null,
     segments: [],
     hotels: [],
-    lateNight: { segments: [] },
-    continuation: { segments: [], items: [] },
+    continuedFromPrev: { items: [], segments: [] },
     segmentIds: [],
     hotelStayIds: [],
   }
@@ -83,35 +83,26 @@ function driveAt(id: string, local: string, tz: string): DaySegment {
   }
 }
 
-// A drive that breaks over the boundary: it departs one wall-clock evening and
-// arrives the next morning, so its interval crosses 04:00 and it belongs on both
-// broadcast days (REE-123).
-function spanningDrive(
+// A drive that spans, with a stated arrival: only a stated end can break over
+// the boundary. `departLocal`/`arriveLocal` are `YYYY-MM-DDTHH:MM`, read in tz.
+function overnightDrive(
   id: string,
   departLocal: string,
   arriveLocal: string,
   tz: string,
 ): DaySegment {
-  return {
-    id,
-    mode: 'ground',
-    origin: 'Venue',
-    destination: 'O2 Arena',
-    depart_at: wallClockToUtc(departLocal, tz),
-    arrive_at: wallClockToUtc(arriveLocal, tz),
-    carrier_operator: null,
-    vehicle_or_flight_no: null,
-    booking_reference: null,
-    status: 'planned',
-    origin_iata: null,
-    destination_iata: null,
-    flight_status: null,
-    actual_depart_at: null,
-    actual_arrive_at: null,
-    gate: null,
-    terminal: null,
-    last_tracked_at: null,
-  }
+  return { ...driveAt(id, departLocal, tz), arrive_at: wallClockToUtc(arriveLocal, tz) }
+}
+
+// A day_item with a stated end, so it too can break over the boundary.
+function itemSpan(
+  id: string,
+  kind: string,
+  startLocal: string,
+  endLocal: string,
+  tz: string,
+): DayItem {
+  return { ...itemAt(id, kind, startLocal, tz), ends_at: wallClockToUtc(endLocal, tz) }
 }
 
 for (const tz of ZONES) {
@@ -211,94 +202,124 @@ for (const tz of ZONES) {
       expect(localTimeInZone(view.events[0].start.toISOString(), tz)).toBe('00:00')
     })
 
-    // REE-123. A block that breaks over the boundary is one record shown on two
-    // days. These two cases are the two halves of the same overnight drive:
-    // departs DATE 20:00, arrives NEXT 09:46.
-    it('flags the departure-day block as continuing after, kept interactive', () => {
+    it('tags a block that runs past the grid bottom as continuesAfter (REE-124)', () => {
+      // An overnight drive after tonight's show: departs 22:00 on DATE, arrives
+      // 07:00 the next morning, past the 04:00 boundary. On DATE's grid it is
+      // positioned but breaks over the bottom, so it is tagged continuesAfter and
+      // will also draw on NEXT's grid.
       const records: DayRecords = {
         ...emptyRecords(),
-        segments: [spanningDrive('drive', `${DATE}T20:00`, `${NEXT}T09:46`, tz)],
+        segments: [overnightDrive('drive', `${DATE}T22:00`, `${NEXT}T07:00`, tz)],
       }
 
       const view = buildDayCalendarView(records, tz, DATE)
 
-      const drive = view.events.find((e) => e.recordId === 'drive')
-      expect(drive).toBeDefined()
-      // Shown as a normal block from its real departure; RBC clamps the height to
-      // the grid, so start/end stay real and the drag maths is untouched.
-      expect(drive!.continuesAfter).toBe(true)
-      expect(drive!.continuesBefore).toBeFalsy()
-      expect(drive!.readOnly).toBeFalsy()
-      expect(localTimeInZone(drive!.realStart.toISOString(), tz)).toBe('20:00')
-      // The block runs past the grid bottom into the next broadcast day.
-      expect(drive!.end.getTime()).toBeGreaterThan(gridEnd)
-      // It is not railed.
-      expect(view.outsideDay.map((e) => e.recordId)).not.toContain('drive')
+      expect(view.events).toHaveLength(1)
+      const drive = view.events[0]
+      expect(drive.recordId).toBe('drive')
+      expect(drive.continuesAfter).toBe(true)
+      expect(drive.continuesBefore).toBeFalsy()
+      // Positioned by its real start: 22:00 shifted back four hours is 18:00, and
+      // that sits inside DATE's grid window.
+      expect(localTimeInZone(drive.start.toISOString(), tz)).toBe('18:00')
+      expect(drive.start.getTime()).toBeGreaterThanOrEqual(gridStart)
+      expect(drive.start.getTime()).toBeLessThan(gridEnd)
+      // Its shifted end really does run past the grid bottom, which is why it
+      // continues: 07:00 -> 03:00 on NEXT, past NEXT 00:00 (this grid's end).
+      expect(drive.end.getTime()).toBeGreaterThan(gridEnd)
     })
 
-    it('draws the spill on the arrival day as a read-only block clamped to the top', () => {
-      const nextStart = new Date(localDayWindowUtc(NEXT, tz).start).getTime()
+    it('projects a previous-day block onto this grid clamped to the top, continuesBefore (REE-124)', () => {
+      // The same overnight drive, now viewed on NEXT: it is filed on DATE, so it
+      // arrives via continuedFromPrev, is clamped to NEXT's grid top and marked
+      // as continuing from before. A day_item spans identically, so one of each.
       const records: DayRecords = {
         ...emptyRecords(),
-        continuation: {
-          segments: [spanningDrive('drive', `${DATE}T20:00`, `${NEXT}T09:46`, tz)],
-          items: [],
+        continuedFromPrev: {
+          items: [itemSpan('film', 'other', `${DATE}T23:00`, `${NEXT}T05:00`, tz)],
+          segments: [overnightDrive('drive', `${DATE}T22:00`, `${NEXT}T07:00`, tz)],
         },
       }
 
       const view = buildDayCalendarView(records, tz, NEXT)
+      const gridStartNext = new Date(localDayWindowUtc(NEXT, tz).start).getTime()
 
-      const drive = view.events.find((e) => e.recordId === 'drive')
-      expect(drive).toBeDefined()
-      // A read-only projection: clamped to the grid top, marked as continuing from
-      // before, and not draggable. This is what was previously lost to the
-      // "Outside this day" rail (REE-123).
-      expect(drive!.continuesBefore).toBe(true)
-      expect(drive!.readOnly).toBe(true)
-      expect(drive!.start.getTime()).toBe(nextStart)
-      // The label still reads the real wall clock, not the clamped top.
-      expect(localTimeInZone(drive!.realStart.toISOString(), tz)).toBe('20:00')
-      expect(localTimeInZone(drive!.realEnd.toISOString(), tz)).toBe('09:46')
-      // It reaches the grid and is not railed.
-      expect(view.outsideDay.map((e) => e.recordId)).not.toContain('drive')
-    })
-
-    it('draws a day_item that spans the boundary on the arrival day too', () => {
-      const item: DayItem = {
-        ...itemAt('afterparty', 'other', `${DATE}T23:00`, tz),
-        ends_at: wallClockToUtc(`${NEXT}T05:30`, tz),
-      }
-      const records: DayRecords = {
-        ...emptyRecords(),
-        continuation: { segments: [], items: [item] },
+      expect(view.events).toHaveLength(2)
+      for (const event of view.events) {
+        expect(event.continuesBefore).toBe(true)
+        // Clamped exactly to the grid top, so RBC draws it from the very top down.
+        expect(event.start.getTime()).toBe(gridStartNext)
       }
 
-      const view = buildDayCalendarView(records, tz, NEXT)
-
-      const spill = view.events.find((e) => e.recordId === 'afterparty')
-      expect(spill).toBeDefined()
-      expect(spill!.continuesBefore).toBe(true)
-      expect(spill!.readOnly).toBe(true)
+      const byId = new Map(view.events.map((e) => [e.recordId, e]))
+      // Labels stay the real wall clock even though both are drawn from the top:
+      // the drive still reads 22:00 -> 07:00 and the film 23:00 -> 05:00.
+      expect(localTimeInZone(byId.get('drive')!.realStart.toISOString(), tz)).toBe('22:00')
+      expect(localTimeInZone(byId.get('drive')!.realEnd.toISOString(), tz)).toBe('07:00')
+      expect(localTimeInZone(byId.get('film')!.realStart.toISOString(), tz)).toBe('23:00')
+      expect(localTimeInZone(byId.get('film')!.realEnd.toISOString(), tz)).toBe('05:00')
+      // Both end inside NEXT's day, so neither also continues past the bottom.
+      expect(byId.get('drive')!.continuesAfter).toBeFalsy()
+      expect(byId.get('film')!.continuesAfter).toBeFalsy()
     })
 
-    it('does not double a pre-dawn record that is both a home event and a spill candidate', () => {
-      // A 02:00 departure on this date is a home record (its own day fetches it)
-      // and the spanning query can also surface it. Whichever copy places it, it
-      // is drawn exactly once and never left in the rail as well as on the grid.
-      const drive = spanningDrive('predawn', `${DATE}T02:00`, `${DATE}T05:00`, tz)
+    it('does not double-draw a record already on this grid as its own continuation (REE-124)', () => {
+      // A record present both in the day's own sources and in continuedFromPrev
+      // (a small-hours departure can be caught by both windows) is drawn once:
+      // its own placement wins and the continuation projection is skipped.
+      const drive = overnightDrive('drive', `${DATE}T22:00`, `${NEXT}T07:00`, tz)
       const records: DayRecords = {
         ...emptyRecords(),
         segments: [drive],
-        continuation: { segments: [drive], items: [] },
+        continuedFromPrev: { items: [], segments: [drive] },
       }
 
       const view = buildDayCalendarView(records, tz, DATE)
 
-      const matches = view.events.filter((e) => e.recordId === 'predawn')
-      expect(matches).toHaveLength(1)
+      expect(view.events.filter((e) => e.recordId === 'drive')).toHaveLength(1)
+      // The survivor is the day's own placement (continuesAfter), not the clamped
+      // continuation projection (continuesBefore).
+      expect(view.events[0].continuesAfter).toBe(true)
+      expect(view.events[0].continuesBefore).toBeFalsy()
     })
   })
 }
+
+// The continuation block is drawn full-height from the grid top, so it must not
+// bury the continuation day's own morning items in the overlap cascade. The
+// cascade paints later array entries on top, so a real item that overlaps the
+// continuation must come out at a deeper depth and later in paint order.
+describe('broadcast-day grid view: a continuation block does not bury real items (REE-124)', () => {
+  it('keeps a real morning item in front of a full-height continuation block', () => {
+    const tz = 'UTC'
+    const records: DayRecords = {
+      ...emptyRecords(),
+      // A real 05:00 lobby call this morning, inside the drive's continuation span.
+      items: [itemAt('lobby', 'lobby_call', `${NEXT}T05:00`, tz)],
+      // An overnight drive from last night still running into this morning
+      // (22:00 -> 07:00), so it is clamped to the grid top and spans past 05:00.
+      continuedFromPrev: {
+        items: [],
+        segments: [overnightDrive('drive', `${DATE}T22:00`, `${NEXT}T07:00`, tz)],
+      },
+    }
+
+    const view = buildDayCalendarView(records, tz, NEXT)
+    const laid = assignOverlapDepths(view.events)
+    const byId = new Map(laid.map((l) => [l.recordId, l]))
+
+    // The continuation block anchors the slot at depth 0 (flush, behind); the
+    // real lobby call steps in front of it at a deeper depth.
+    expect(byId.get('drive')!.depth).toBe(0)
+    expect(byId.get('lobby')!.depth).toBe(1)
+
+    // Paint order: the real item comes later in the array, so it draws on top and
+    // is never buried under the continuation block.
+    const driveIndex = laid.findIndex((l) => l.recordId === 'drive')
+    const lobbyIndex = laid.findIndex((l) => l.recordId === 'lobby')
+    expect(lobbyIndex).toBeGreaterThan(driveIndex)
+  })
+})
 
 // The shift is the same wall-clock night in every zone, so the grid positions are
 // byte-for-byte identical across UTC, Auckland and Los Angeles. If someone later

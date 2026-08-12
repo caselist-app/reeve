@@ -78,6 +78,19 @@ export function PlacesAddressInput({
   onChangeRef.current = onChange
   onPlaceSelectRef.current = onPlaceSelect
 
+  // Enter in an address field is for choosing an autocomplete suggestion, not
+  // submitting the form. Google's Autocomplete selects the highlighted
+  // prediction from its own keydown listener regardless of this, so all we do
+  // here is stop the browser's implicit form submission. Without it, pressing
+  // Enter to pick an address saved the whole form and closed the panel: on the
+  // Add drive form that created the segment and reopening showed the edit view,
+  // which looks nothing like it (REE-126). Applied in the plain-input branch
+  // too, so the behaviour does not hinge on whether the Maps script has loaded.
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter') e.preventDefault()
+    onKeyDown?.(e)
+  }
+
   // Load the Places API script once.
   useEffect(() => {
     if (!apiKey || scriptReady) return
@@ -163,7 +176,7 @@ export function PlacesAddressInput({
         name={name}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        onKeyDown={onKeyDown}
+        onKeyDown={handleKeyDown}
         onBlur={onBlur}
         placeholder={placeholder}
         className={className}
