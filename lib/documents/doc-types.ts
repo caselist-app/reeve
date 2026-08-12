@@ -35,3 +35,9 @@ export function sectionForDocType(docType: string): DocSection {
 // transport boarding pass is recorded against an assignment, never chosen from
 // a manual upload form.
 export const UPLOADABLE_DOC_TYPES: readonly string[] = RIDER_SECTIONS.map((s) => s.docType)
+
+// The sections the upload panel's doc_type picker offers, same rows as
+// RIDER_SECTIONS and in the same order. Exported under its own name so the
+// panel (REE-3) reads it as "what a TM can upload" rather than reaching for
+// the rider-only name.
+export const UPLOADABLE_SECTIONS: readonly DocSection[] = RIDER_SECTIONS

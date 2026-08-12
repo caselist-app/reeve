@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { PageLayout } from '@/components/layout/page-layout'
 import { PageHeader } from '@/components/layout/page-header'
 import { DocumentsView } from '@/components/documents/documents-view'
+import { UploadDocumentButton } from '@/components/documents/upload-document-button'
 import { fetchDocumentsPage } from '@/lib/documents/queries'
 
 export default async function DocumentsPage({
@@ -27,6 +28,7 @@ export default async function DocumentsPage({
         eyebrow={tour.artist_name ?? ''}
         title="Documents"
         description={description}
+        actions={<UploadDocumentButton tourId={id} />}
       />
       <DocumentsView documents={documents} error={error} />
     </PageLayout>

@@ -213,6 +213,12 @@ export type PanelDescriptor =
       subjectLine: string | null
       proposal: ExtractionProposal
     }
+  // REE-3: the manual document upload panel, opened from the Documents page.
+  | {
+      type: 'upload-document'
+      tourId: string
+      onSuccess: () => void
+    }
 
 // The subset of PanelDescriptor that day-calendar.tsx can open: the variants
 // that carry a stable key, used for active-state comparison instead of
