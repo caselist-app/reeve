@@ -10,6 +10,7 @@ import {
 import {
   guestRequestBody, guestRequestButtons, guestRequestEmailSubject,
 } from '@/lib/comms/templates/guest-request-notification'
+import { doorsNudgeBody } from '@/lib/comms/templates/guest-list-doors-nudge'
 import type { ImplementedType, NotificationDataMap, NotificationDef } from './types'
 
 // One entry per implemented notification type. Typed as a full record over
@@ -75,6 +76,14 @@ export const registry: Registry = {
       subject: guestRequestEmailSubject(d),
       html: `<p>${guestRequestBody(d).replace(/\n/g, '<br>')}</p>`,
     }),
+  },
+
+  // Brief 52, step 10 (REE-137): the hourly before-doors nudge when guest
+  // requests are still waiting. Telegram only, same reasoning as
+  // flight_status_alert: a real-time nudge, not a formal document.
+  guest_list_doors_nudge: {
+    timeCritical: false,
+    telegram: (d) => ({ body: doorsNudgeBody(d) }),
   },
 
   // --- Show-day blocks (WhatsApp/Telegram only: no email() renderer) ---
