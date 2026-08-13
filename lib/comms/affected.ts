@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { resolveParty, type PartyPerson } from '@/lib/party/resolve'
 
 // ChangeDescriptor identifies the record that changed.
 // Used by getAffectedPeople and buildChangeMessage to compute
@@ -45,25 +46,21 @@ export async function getAffectedPeople(
 
   switch (change.type) {
     case 'transport_segment': {
-      const { data, error } = await db
-        .from('transport_assignments')
-        .select('people(id, contacts(name, whatsapp_number, contact_email))')
-        .eq('segment_id', change.segmentId)
-        .eq('tour_id', tourId)
-
-      if (error) return { people: [], error: error.message }
-      return { people: extractPeople(data), error: null }
+      const { people, error } = await resolveParty(db, tourId, {
+        kind: 'transport_segment',
+        ids: [change.segmentId],
+      })
+      if (error) return { people: [], error }
+      return { people: toAffectedPeople(people), error: null }
     }
 
     case 'hotel_stay': {
-      const { data, error } = await db
-        .from('room_assignments')
-        .select('people(id, contacts(name, whatsapp_number, contact_email))')
-        .eq('hotel_stay_id', change.stayId)
-        .eq('tour_id', tourId)
-
-      if (error) return { people: [], error: error.message }
-      return { people: extractPeople(data), error: null }
+      const { people, error } = await resolveParty(db, tourId, {
+        kind: 'hotel_stay',
+        ids: [change.stayId],
+      })
+      if (error) return { people: [], error }
+      return { people: toAffectedPeople(people), error: null }
     }
 
     case 'show': {
@@ -127,29 +124,17 @@ export async function getAffectedPeople(
       const stayIds = (stays ?? []).map((s) => s.id)
 
       const [segResult, hotelResult] = await Promise.all([
-        segIds.length > 0
-          ? db
-              .from('transport_assignments')
-              .select('people(id, contacts(name, whatsapp_number, contact_email))')
-              .eq('tour_id', tourId)
-              .in('segment_id', segIds)
-          : Promise.resolve({ data: [] as Array<{ people: unknown }>, error: null }),
-        stayIds.length > 0
-          ? db
-              .from('room_assignments')
-              .select('people(id, contacts(name, whatsapp_number, contact_email))')
-              .eq('tour_id', tourId)
-              .in('hotel_stay_id', stayIds)
-          : Promise.resolve({ data: [] as Array<{ people: unknown }>, error: null }),
+        resolveParty(db, tourId, { kind: 'transport_segment', ids: segIds }),
+        resolveParty(db, tourId, { kind: 'hotel_stay', ids: stayIds }),
       ])
 
-      if (segResult.error) return { people: [], error: segResult.error.message }
-      if (hotelResult.error) return { people: [], error: hotelResult.error.message }
+      if (segResult.error) return { people: [], error: segResult.error }
+      if (hotelResult.error) return { people: [], error: hotelResult.error }
 
-      const segPeople = extractPeople(segResult.data)
-      const hotelPeople = extractPeople(hotelResult.data)
-
-      return { people: deduplicate([...segPeople, ...hotelPeople]), error: null }
+      return {
+        people: deduplicate(toAffectedPeople([...segResult.people, ...hotelResult.people])),
+        error: null,
+      }
     }
 
     case 'day_sheet': {
@@ -179,27 +164,15 @@ export async function getAffectedPeople(
   }
 }
 
-// Safely extracts AffectedPerson[] from a joined Supabase result. Identity
-// lives on the contact, so each person row nests a contact.
-function extractPeople(
-  data: Array<{ people: unknown }> | null
-): AffectedPerson[] {
-  if (!data) return []
-  return data
-    .map((row) => {
-      const p = row.people as {
-        id?: string
-        contacts?: { name?: string; whatsapp_number?: string | null; contact_email?: string | null } | null
-      } | null
-      if (!p || typeof p.id !== 'string') return null
-      return {
-        id: p.id,
-        name: p.contacts?.name ?? '',
-        whatsapp_number: p.contacts?.whatsapp_number ?? null,
-        contact_email: p.contacts?.contact_email ?? null,
-      }
-    })
-    .filter((p): p is AffectedPerson => p !== null)
+// resolveParty's PartyPerson carries person_type for the day roster's benefit;
+// this caller only ever sends messages, so it drops that field.
+function toAffectedPeople(people: PartyPerson[]): AffectedPerson[] {
+  return people.map((p) => ({
+    id: p.id,
+    name: p.name,
+    whatsapp_number: p.whatsapp_number,
+    contact_email: p.contact_email,
+  }))
 }
 
 function deduplicate(people: AffectedPerson[]): AffectedPerson[] {

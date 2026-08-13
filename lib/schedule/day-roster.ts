@@ -1,4 +1,5 @@
 import type { createClient } from '@/lib/supabase/server'
+import { resolveParty } from '@/lib/party/resolve'
 
 type Client = Awaited<ReturnType<typeof createClient>>
 
@@ -19,30 +20,15 @@ export async function fetchDayRoster(
 ): Promise<RosterPerson[]> {
   if (segmentIds.length === 0 && hotelStayIds.length === 0) return []
 
-  const [{ data: transportPeople }, { data: hotelPeople }] = await Promise.all([
-    segmentIds.length > 0
-      ? supabase
-          .from('transport_assignments')
-          .select('people(id, person_type, contacts(name))')
-          .eq('tour_id', tourId)
-          .in('segment_id', segmentIds)
-      : Promise.resolve({ data: [] }),
-    hotelStayIds.length > 0
-      ? supabase
-          .from('room_assignments')
-          .select('people(id, person_type, contacts(name))')
-          .eq('tour_id', tourId)
-          .in('hotel_stay_id', hotelStayIds)
-      : Promise.resolve({ data: [] }),
+  const [transport, hotel] = await Promise.all([
+    resolveParty(supabase, tourId, { kind: 'transport_segment', ids: segmentIds }),
+    resolveParty(supabase, tourId, { kind: 'hotel_stay', ids: hotelStayIds }),
   ])
 
   const rosterMap = new Map<string, RosterPerson>()
-  for (const row of [...(transportPeople ?? []), ...(hotelPeople ?? [])]) {
-    const p = Array.isArray(row.people) ? row.people[0] : row.people
-    if (!p) continue
-    const contact = Array.isArray(p.contacts) ? p.contacts[0] : p.contacts
-    if (contact?.name && !rosterMap.has(p.id)) {
-      rosterMap.set(p.id, { id: p.id, name: contact.name, person_type: p.person_type })
+  for (const p of [...transport.people, ...hotel.people]) {
+    if (p.name && !rosterMap.has(p.id)) {
+      rosterMap.set(p.id, { id: p.id, name: p.name, person_type: p.person_type })
     }
   }
   return Array.from(rosterMap.values())
