@@ -1,5 +1,5 @@
 // Skeleton placeholders for the schedule day view. They mirror the layout
-// (230px date sidebar, flex-1 timeline, 260px static day info) so the frame
+// (230px date sidebar, flex-1 timeline, 320px static day info) so the frame
 // paints instantly with no layout shift while the day's data resolves.
 // Brief 33: day info is a static block now, not a swappable panel, and there
 // is no vertical divider between it and the timeline.
@@ -26,7 +26,7 @@ export function SidebarSkeleton() {
   )
 }
 
-// The flex-1 timeline plus the 260px info panel. Used on its own as the
+// The flex-1 timeline plus the 320px info panel. Used on its own as the
 // Suspense fallback while only the day's data is still loading.
 export function DayContentSkeleton() {
   return (
@@ -61,7 +61,7 @@ export function DayContentSkeleton() {
       </div>
       {/* Day info, hidden on mobile, matches the live static block: toolbar
           placeholder at the top, then venue/roster/notes content below. */}
-      <div className="hidden lg:flex lg:flex-col w-[260px] shrink-0 min-h-0">
+      <div className="hidden lg:flex lg:flex-col w-[320px] shrink-0 min-h-0">
         <div className="flex items-center justify-end gap-1.5 px-4 pt-4 pb-1 shrink-0">
           <div className="h-8 w-8 rounded-lg bg-muted" />
           <div className="h-8 w-8 rounded-lg bg-muted" />

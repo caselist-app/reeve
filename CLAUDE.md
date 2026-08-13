@@ -158,7 +158,7 @@ The schedule day view is the main place a TM works. The date sidebar is its own 
 ```
 ┌─────────────────┬────────────────────────────────────────────────────┐
 │  Date sidebar   │  main (one card)                                   │
-│  230px fixed    │  Day calendar (flex-1)   |   Day info (260px)      │
+│  230px fixed    │  Day calendar (flex-1)   |   Day info (320px)      │
 │  (own card)     │  no divider between them                           │
 └─────────────────┴────────────────────────────────────────────────────┘
 ```
