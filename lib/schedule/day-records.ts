@@ -2,6 +2,7 @@ import type { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/lib/types/database'
 import { localDayWindowUtc } from '@/lib/schedule/datetime'
 import { localBroadcastDayWindowUtc } from '@/lib/schedule/day-window'
+import { emptyPartyIds } from '@/lib/party/empty-flag'
 import {
   fetchContinuingDayItems,
   fetchDayItems,
@@ -73,6 +74,13 @@ export interface DayRecords {
   // resolve the day's roster without re-querying for them.
   segmentIds: string[]
   hotelStayIds: string[]
+  // REE-170: ids of every segment or hotel stay rendered on this day (including
+  // a continuation drawn from a previous broadcast day) with zero attached
+  // people, for the day view to flag. Every mode counts, including truck: this
+  // is a display flag only and never blocks a save, so it carries no relation
+  // to lib/validators.
+  emptyPartySegmentIds: string[]
+  emptyPartyHotelIds: string[]
 }
 
 const EMPTY: DayRecords = {
@@ -84,6 +92,8 @@ const EMPTY: DayRecords = {
   continuedFromPrev: { items: [], segments: [] },
   segmentIds: [],
   hotelStayIds: [],
+  emptyPartySegmentIds: [],
+  emptyPartyHotelIds: [],
 }
 
 // A plain column list now, with no embed. This string used to be one of the two
@@ -272,6 +282,33 @@ export async function fetchDayRecords(
     ...(checkoutHotels ?? []).map((h) => ({ ...h, isCheckout: true })),
   ]
 
+  // REE-170: which of the segments and hotels drawn on this day (including a
+  // continuation projected from the previous broadcast day) have nobody
+  // attached, so the day view can flag them. Guarded against an empty `.in()`
+  // per CLAUDE.md; run after the ids above are known, so it cannot join the
+  // first Promise.all. Errors are swallowed to an empty result the same way
+  // fetchDayRoster already does for this same pair of tables: this is a
+  // display flag, not a crew-facing answer, so a failed read here degrades to
+  // "nothing flagged" rather than needing its own error surface.
+  const allSegmentIds = [...segMap.keys(), ...continuingSegments.map((s) => s.id)]
+  const allHotelIds = Array.from(new Set(hotels.map((h) => h.id)))
+
+  const [{ data: segAssignments }, { data: hotelAssignments }] = await Promise.all([
+    allSegmentIds.length > 0
+      ? supabase.from('transport_assignments').select('segment_id').eq('tour_id', tourId).in('segment_id', allSegmentIds)
+      : Promise.resolve({ data: [] as { segment_id: string }[] }),
+    allHotelIds.length > 0
+      ? supabase.from('room_assignments').select('hotel_stay_id').eq('tour_id', tourId).in('hotel_stay_id', allHotelIds)
+      : Promise.resolve({ data: [] as { hotel_stay_id: string }[] }),
+  ])
+
+  const emptyPartySegmentIds = Array.from(
+    emptyPartyIds(allSegmentIds, (segAssignments ?? []).map((a) => a.segment_id)),
+  )
+  const emptyPartyHotelIds = Array.from(
+    emptyPartyIds(allHotelIds, (hotelAssignments ?? []).map((a) => a.hotel_stay_id)),
+  )
+
   return {
     shows: showRows ?? [],
     items: dayItems.items,
@@ -288,5 +325,7 @@ export async function fetchDayRecords(
     // Deduplicated: a stay checking in and out across this day would otherwise
     // contribute its occupants to the roster twice.
     hotelStayIds: Array.from(new Set(hotels.map((h) => h.id))),
+    emptyPartySegmentIds,
+    emptyPartyHotelIds,
   }
 }
