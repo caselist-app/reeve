@@ -783,6 +783,33 @@ if (errorReturningActions.size === 0) {
   }
 }
 
+// ---- Rule 14: AlertDialog is reached through ConfirmDialog ----
+// The AlertDialog primitive is being retired in favour of a single
+// ConfirmDialog wrapper (Brief 51, "one confirm, one contract"). This rule
+// lands before ConfirmDialog exists, so every current importer of AlertDialog
+// fails the build immediately: red first, then the primitive gets built, then
+// each of these gets migrated one at a time. Do not baseline these; the
+// baseline only ever shrinks and every one of these is fixed later in this
+// chain.
+const ALERT_DIALOG_ALLOWED = new Set(['components/ui/confirm-dialog.tsx'])
+const ALERT_DIALOG_IMPORT = /from\s+['"]@\/components\/ui\/alert-dialog['"]/
+for (const file of sourceFiles) {
+  if (ALERT_DIALOG_ALLOWED.has(rel(file))) continue
+  if (rel(file) === 'components/ui/alert-dialog.tsx') continue
+
+  const src = readFileSync(file, 'utf8')
+  const m = ALERT_DIALOG_IMPORT.exec(src)
+  if (m) {
+    report(
+      'alert-dialog-containment',
+      rel(file),
+      lineOf(src, m.index),
+      'Imports AlertDialog directly. Reach it through ConfirmDialog instead.',
+      `alert-dialog-containment|${rel(file)}`
+    )
+  }
+}
+
 // ---- Compare against the baseline ----
 const baseline = existsSync(BASELINE_PATH)
   ? JSON.parse(readFileSync(BASELINE_PATH, 'utf8'))
