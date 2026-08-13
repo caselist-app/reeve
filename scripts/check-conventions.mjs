@@ -665,10 +665,10 @@ for (const doc of FACT_DOCS) {
         'facts-in-prose',
         doc,
         lineOf(src, at),
-        `States the baseline count in prose ("${'$'}{m[0].trim()}"). A number about this ` +
+        `States the baseline count in prose ("${m[0].trim()}"). A number about this ` +
           'repo goes stale silently and nothing tells you. Run `pnpm facts` instead ' +
           'of writing the figure.',
-        `facts-in-prose|${'$'}{doc}|${'$'}{lineOf(src, at)}`
+        `facts-in-prose|${doc}|${lineOf(src, at)}`
       )
     }
   }
