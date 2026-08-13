@@ -3,14 +3,17 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
+import { toast } from 'sonner'
 import { AlertCircle, ChevronRight } from 'lucide-react'
 import { PanelShell } from '@/components/layout/panel-shell'
 import { PanelDeleteMenu } from '@/components/schedule/panels/panel-delete-menu'
 import { ShowForm } from '@/components/shows/show-form'
+import { Button } from '@/components/ui/button'
 import {
   getShowVenueDetail,
   previewShowRemoval,
   deleteShowAndResend,
+  retryHubResolution,
   type ShowVenueDetail,
   type ShowRemovalPreview,
 } from '@/lib/actions/shows'
@@ -48,6 +51,28 @@ export function VenuePanel({ tourId, showId, venueName }: VenuePanelProps) {
   const [removal, setRemoval] = useState<ShowRemovalPreview | null>(null)
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
+  const [retrying, setRetrying] = useState(false)
+
+  // Re-enqueues the same resolve-hub job the address-change path already
+  // uses. A stuck resolution and one that is genuinely still in flight look
+  // identical from here (hub_resolved_at null either way), so this is safe
+  // to offer any time the banner is showing rather than only once we know it
+  // failed. REE-216: without this, a permanently failed resolution (a
+  // missing GOOGLE_MAPS_API_KEY, a bad address, a geocode with no results)
+  // never retries unless the TM happens to edit the address again.
+  async function handleRetry() {
+    setRetrying(true)
+    const result = await retryHubResolution(showId)
+    setRetrying(false)
+    if (result.error) {
+      toast.error(result.error)
+      return
+    }
+    toast('Retrying venue location.', {
+      description: 'This can take a moment. Reopen this panel to check.',
+    })
+  }
+
   async function handleDelete(): Promise<string | null> {
     // resend is false because the "send the day again" checkbox is not rendered:
     // its callable day send is Brief 48 (Send The Day Again), which has not
@@ -149,9 +174,22 @@ export function VenuePanel({ tourId, showId, venueName }: VenuePanelProps) {
           {!detail.hubResolvedAt && (
             <div className="mb-4 flex items-start gap-2 rounded-lg border border-border px-3 py-2">
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-              <p className="text-xs text-muted-foreground">
-                Resolving venue location. Travel options will appear once it completes.
-              </p>
+              <div className="flex-1 space-y-1.5">
+                <p className="text-xs text-muted-foreground">
+                  Resolving venue location. Travel options and the map will appear once it
+                  completes. Taking a while? Retry it.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  disabled={retrying}
+                  onClick={handleRetry}
+                >
+                  {retrying ? 'Retrying...' : 'Retry'}
+                </Button>
+              </div>
             </div>
           )}
 
