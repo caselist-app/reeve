@@ -353,10 +353,19 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
   // "04:00"; the slot three hours from the bottom un-shifts to real 01:00. The
   // block positions and this gutter share one shift, so a 01:00 curfew's chip
   // lines up with the "01:00" gutter label.
+  // RBC's own live "drag out a new block" preview (`.rbc-slot-selection`,
+  // DayColumn's native selecting state, on screen only while the mouse is still
+  // down and before onSelectSlot/handleSelectSlot ever runs) formats its label
+  // straight off the raw grid-space instants via `selectRangeFormat`, the same
+  // way the gutter would without the un-shift below (REE-195). Un-shift it here
+  // too, so the live label a TM sees mid-drag matches the row it is being drawn
+  // against instead of reading DAY_START_HOUR hours earlier.
   const formats = useMemo(
     () => ({
       timeGutterFormat: (slot: Date) =>
         localTimeInZone(fromGridInstant(slot.toISOString(), timezone), timezone),
+      selectRangeFormat: ({ start, end }: { start: Date; end: Date }) =>
+        `${localTimeInZone(fromGridInstant(start.toISOString(), timezone), timezone)} – ${localTimeInZone(fromGridInstant(end.toISOString(), timezone), timezone)}`,
     }),
     [timezone],
   )
