@@ -1,7 +1,5 @@
 import { z } from 'zod'
-
-// E.164: + followed by country code (1 non-zero digit) and 6-14 more digits.
-const e164Regex = /^\+[1-9]\d{6,14}$/
+import { E164_REGEX, normalizeWhatsappNumber } from '@/lib/phone'
 
 // Form DTO for an account-level contact: the single source of truth for a
 // person's identity. The default_* fields seed the per-tour terms when the
@@ -30,11 +28,13 @@ export const contactSchema = z.object({
   // Independent of the operational channel: email serves a different purpose
   // (formal riders and advancing documents), not the day-to-day stream.
   email_enabled: z.boolean().optional(),
-  // An emptied input arrives as null and clears the stored number. Only a
-  // non-empty value has to be E.164.
+  // An emptied input arrives as null and clears the stored number. A
+  // non-empty value is normalized (gaps stripped, a leading 0 swapped for a
+  // +) before validation, so a paste like "07944 630 634" is accepted rather
+  // than rejected for formatting the UI's own blur handler already fixes.
   whatsapp_number: z.preprocess(
-    (v) => (v === '' ? null : v),
-    z.string().regex(e164Regex, 'Enter a number in E.164 format, e.g. +447700900123').nullable().optional()
+    (v) => (typeof v === 'string' ? (v === '' ? null : normalizeWhatsappNumber(v)) : v),
+    z.string().regex(E164_REGEX, 'Enter a number in E.164 format, e.g. +447700900123').nullable().optional()
   ),
   sms_number: optionalText,
   emergency_contact_name: optionalText,

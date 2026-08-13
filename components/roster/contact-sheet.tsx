@@ -4,6 +4,7 @@ import { useState, useId } from 'react'
 import { createContact, updateContact } from '@/lib/actions/contacts'
 import { addPerson, updatePersonTerms } from '@/lib/actions/people'
 import { contactSchema } from '@/lib/validators/contact'
+import { normalizeWhatsappNumber } from '@/lib/phone'
 import type { Tables } from '@/lib/types/database'
 import type { ContactTourContext } from '@/stores/side-panel-store'
 import { useSidePanel } from '@/stores/side-panel-store'
@@ -389,6 +390,12 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
               name="whatsapp_number"
               defaultValue={contact?.whatsapp_number ?? ''}
               placeholder="+447700900123"
+              onBlur={(e) => {
+                // A TM pasting "07944 630 634" should not have to fix it by
+                // hand. contactSchema/personSchema normalize the same way on
+                // submit, so this is the fast path, not the only one.
+                e.currentTarget.value = normalizeWhatsappNumber(e.currentTarget.value)
+              }}
             />
           </div>
         </div>
