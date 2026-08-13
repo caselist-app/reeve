@@ -150,12 +150,14 @@ export type PanelDescriptor =
   | {
       type: 'transport'
       key: string
+      tourId: string
       segment: ScheduleTransportSegment
       timezone: string
     }
   | {
       type: 'hotel'
       key: string
+      tourId: string
       stay: ScheduleHotelStay
     }
   | {

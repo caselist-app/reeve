@@ -89,7 +89,7 @@ export function DayInfoPanel({ tourId, tourDateId, dayType, date, show, dayNotes
           <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
             Hotel
           </p>
-          <HotelBlock hotel={hotel} />
+          <HotelBlock tourId={tourId} hotel={hotel} />
         </section>
       )}
     </div>

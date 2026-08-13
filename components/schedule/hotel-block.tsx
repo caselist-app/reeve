@@ -6,6 +6,7 @@ import type { DayHotel } from '@/lib/schedule/day-hotel'
 import { staticMapUrl, googleMapsUrl } from '@/lib/schedule/venue-map'
 
 interface HotelBlockProps {
+  tourId: string
   hotel: DayHotel
 }
 
@@ -13,7 +14,7 @@ interface HotelBlockProps {
 // existing hotel side panel on click. Same thin-client-that-calls-useSidePanel
 // shape as VenueBlock, so day-info-panel.tsx stays a Server Component. REE-179.
 // The map below the button mirrors VenueBlock's REE-178 treatment: REE-206.
-export function HotelBlock({ hotel }: HotelBlockProps) {
+export function HotelBlock({ tourId, hotel }: HotelBlockProps) {
   const { open } = useSidePanel()
   const hasCoordinates = hotel.lat != null && hotel.lng != null
 
@@ -21,7 +22,7 @@ export function HotelBlock({ hotel }: HotelBlockProps) {
     <div className="-mx-2 space-y-1.5">
       <button
         type="button"
-        onClick={() => open({ type: 'hotel', key: `hotel:${hotel.id}`, stay: hotel })}
+        onClick={() => open({ type: 'hotel', key: `hotel:${hotel.id}`, tourId, stay: hotel })}
         className="group flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted/50"
       >
         <div className="min-w-0 flex-1">
