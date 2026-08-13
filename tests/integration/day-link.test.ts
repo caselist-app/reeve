@@ -6,6 +6,7 @@ import { createDayItem } from '@/lib/actions/day-items'
 import { updateHotelStay } from '@/lib/actions/hotels'
 import { updateTransportSegment, createTransportSegment } from '@/lib/actions/transport'
 import { createHotelStay } from '@/lib/actions/hotels'
+import { createTourDate } from '@/lib/actions/tour-dates'
 import { fetchDayRecords } from '@/lib/schedule/day-records'
 import { renderItinerary } from '@/lib/comms/templates/itinerary'
 
@@ -505,6 +506,90 @@ describe('the day link survives an edit', () => {
 
       expect(segment?.booking_reference).toBe('ABC123')
       expect(segment?.depart_at).not.toBeNull()
+      expect(segment?.tour_date_id).toBe(fixture.tourDateId)
+    })
+  })
+
+  // REE-161. The segment's own link is still decided by depart_at alone, but an
+  // arrival that breaks over into a date the tour has no tour_dates row for used
+  // to leave that date unreachable: not in the Dates sidebar, not navigable by
+  // ?date=, and fetchDayRecords' continuation view (REE-124) had no row to
+  // render onto even though the segment's arrival genuinely reaches into it.
+  describe('an arrival that breaks over into a day that does not exist', () => {
+    it('creates the arrival day as a travel day, without moving the segment off its departure day', async () => {
+      fixture = await createFixture({ date: DATE })
+      expect(await tourDateFor(NEXT_DAY)).toBeNull()
+
+      const created = await createTransportSegment(fixture.tourId, {
+        tour_date_id: fixture.tourDateId,
+        mode: 'flight',
+        origin: 'LHR',
+        destination: 'JFK',
+        depart_at: `${DATE}T23:00:00.000Z`,
+        arrive_at: `${NEXT_DAY}T02:00:00.000Z`,
+      })
+      if (created.error || !created.segmentId) throw new Error(created.error ?? 'no segment created')
+
+      const arrivalDay = await tourDateFor(NEXT_DAY)
+      expect(arrivalDay).not.toBeNull()
+      expect(arrivalDay?.day_type).toBe('travel')
+
+      const { data: segment } = await testDb
+        .from('transport_segments')
+        .select('tour_date_id')
+        .eq('id', created.segmentId)
+        .single()
+      expect(segment?.tour_date_id).toBe(fixture.tourDateId)
+    })
+
+    it('does not relabel an arrival day that already exists', async () => {
+      fixture = await createFixture({ date: DATE })
+      await createTourDate(fixture.tourId, { date: NEXT_DAY, day_type: 'show' })
+
+      const created = await createTransportSegment(fixture.tourId, {
+        tour_date_id: fixture.tourDateId,
+        mode: 'flight',
+        depart_at: `${DATE}T23:00:00.000Z`,
+        arrive_at: `${NEXT_DAY}T02:00:00.000Z`,
+      })
+      if (created.error || !created.segmentId) throw new Error(created.error ?? 'no segment created')
+
+      const arrivalDay = await tourDateFor(NEXT_DAY)
+      expect(arrivalDay?.day_type).toBe('show')
+    })
+
+    it('creates the arrival day when only the arrival is edited, leaving the segment link alone', async () => {
+      fixture = await createFixture({ date: DATE })
+
+      // Both ends land well before local midnight, so the segment is
+      // unambiguously on DATE and there is nothing yet for the arrival to
+      // break over into.
+      const created = await createTransportSegment(fixture.tourId, {
+        tour_date_id: fixture.tourDateId,
+        mode: 'flight',
+        depart_at: `${DATE}T20:00:00.000Z`,
+        arrive_at: `${DATE}T20:45:00.000Z`,
+      })
+      if (created.error || !created.segmentId) throw new Error(created.error ?? 'no segment created')
+      expect(await tourDateFor(NEXT_DAY)).toBeNull()
+
+      const result = await updateTransportSegment(created.segmentId, {
+        arrive_at: `${NEXT_DAY}T02:00:00.000Z`,
+      })
+      expect(result.error).toBeNull()
+      // Editing the arrival alone must not report a move: the segment itself
+      // did not go anywhere, only the arrival day was brought into existence.
+      expect(result.moved).toBeFalsy()
+
+      const arrivalDay = await tourDateFor(NEXT_DAY)
+      expect(arrivalDay).not.toBeNull()
+      expect(arrivalDay?.day_type).toBe('travel')
+
+      const { data: segment } = await testDb
+        .from('transport_segments')
+        .select('tour_date_id')
+        .eq('id', created.segmentId)
+        .single()
       expect(segment?.tour_date_id).toBe(fixture.tourDateId)
     })
   })

@@ -76,6 +76,36 @@ describe('recordTransportOption resolves the departure day (REE-158)', () => {
     expect(segment?.tour_date_id).toBe(departureDay?.id)
   })
 
+  it('creates the arrival day as a travel day when it breaks over into a date the tour has no row for (REE-161)', async () => {
+    // Departs the fixture's own day (the 14th), arrives past midnight local on
+    // the 15th, which has no tour_dates row of its own.
+    const result = await recordTransportOption(
+      fixture.tourId,
+      fixture.showId,
+      fixture.personId,
+      travelOptionAt('2026-06-14T22:00:00.000Z', '2026-06-15T01:00:00.000Z')
+    )
+    expect(result.error).toBeNull()
+
+    const { data: segment } = await testDb
+      .from('transport_segments')
+      .select('tour_date_id')
+      .eq('id', result.segmentId!)
+      .single()
+    // The segment stays linked to its departure day.
+    expect(segment?.tour_date_id).toBe(fixture.tourDateId)
+
+    const { data: arrivalDay } = await testDb
+      .from('tour_dates')
+      .select('id, day_type')
+      .eq('tour_id', fixture.tourId)
+      .eq('date', '2026-06-15')
+      .maybeSingle()
+
+    expect(arrivalDay).not.toBeNull()
+    expect(arrivalDay?.day_type).toBe('travel')
+  })
+
   it('links to the existing day rather than creating a duplicate when one already covers the departure', async () => {
     const result = await recordTransportOption(
       fixture.tourId,
