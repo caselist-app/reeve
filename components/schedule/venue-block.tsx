@@ -39,7 +39,10 @@ export function VenueBlock({ tourId, show }: VenueBlockProps) {
         className="group flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted/50"
       >
         <span className="min-w-0 flex-1 text-sm font-semibold">{show.venue_name}</span>
-        <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+        <span className="mt-0.5 flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground transition-colors group-hover:text-foreground">
+          view
+          <ChevronRight className="h-3.5 w-3.5" />
+        </span>
       </button>
 
       {hasCoordinates && (
