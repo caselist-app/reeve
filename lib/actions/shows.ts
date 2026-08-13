@@ -461,6 +461,35 @@ export async function getShowVenueDetail(
   return { data: { show, hubResolvedAt: show.hub_resolved_at }, error: null }
 }
 
+// A venue whose address resolution failed (bad address, geocode error, or a
+// missing GOOGLE_MAPS_API_KEY in the Trigger.dev environment, REE-216) has no
+// error state of its own: resolveHub throws rather than writing anything, so
+// hub_resolved_at stays null forever and looks identical to "still resolving".
+// Nothing then retries it unless the TM happens to edit the address again,
+// which they have no reason to do if the address was already correct. This is
+// the retry affordance REE-214 named and left out of scope: re-enqueue the
+// same async job the address-change path already uses, with no schema change
+// needed since a stuck resolution and a pending one look the same from here.
+export async function retryHubResolution(showId: string): Promise<{ error: string | null }> {
+  await requireUser()
+
+  const supabase = await createClient()
+
+  // RLS scopes by owns_tour, so a show on someone else's tour reads as not
+  // found rather than needing a separate ownership query.
+  const { data: show } = await supabase
+    .from('shows')
+    .select('id')
+    .eq('id', showId)
+    .maybeSingle()
+
+  if (!show) return { error: 'Show not found.' }
+
+  await resolveHubJob.trigger({ show_id: showId })
+
+  return { error: null }
+}
+
 export type ShowAdvanceDetail = {
   advance: Tables<'show_advance'> | null
   departments: DepartmentShareData[]
