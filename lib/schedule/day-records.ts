@@ -23,7 +23,8 @@ type Client = Awaited<ReturnType<typeof createClient>>
 // that was not a time and had no row to become.
 export type DayShow = Pick<
   Tables<'shows'>,
-  'id' | 'venue_name' | 'address' | 'capacity' | 'venue_type' | 'catering_type'
+  | 'id' | 'venue_name' | 'address' | 'capacity' | 'venue_type' | 'catering_type'
+  | 'venue_lat' | 'venue_lng'
 >
 
 export type DaySegment = Pick<
@@ -88,7 +89,8 @@ const EMPTY: DayRecords = {
 // A plain column list now, with no embed. This string used to be one of the two
 // untyped sources of truth for a day-sheet field: nothing but a running query
 // would tell you it was wrong. There is nothing left in it to get wrong.
-const SHOW_SELECT = 'id, venue_name, address, capacity, venue_type, catering_type'
+const SHOW_SELECT =
+  'id, venue_name, address, capacity, venue_type, catering_type, venue_lat, venue_lng'
 
 const SEGMENT_SELECT =
   'id, mode, origin, destination, depart_at, arrive_at, carrier_operator, vehicle_or_flight_no, booking_reference, status, origin_iata, destination_iata, flight_status, actual_depart_at, actual_arrive_at, gate, terminal, last_tracked_at'
