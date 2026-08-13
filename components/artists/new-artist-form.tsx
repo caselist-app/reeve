@@ -47,7 +47,6 @@ export function NewArtistForm() {
           name="slug"
           value={slug}
           readOnly
-          disabled
           className="cursor-default"
           placeholder="derived from artist name"
         />
