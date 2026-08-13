@@ -50,6 +50,7 @@ import {
   Bus,
   Navigation,
   BedDouble,
+  UserRoundX,
   type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -201,6 +202,18 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
     () => buildDayCalendarView(records, timezone, date),
     [records, timezone, date],
   )
+
+  // REE-170: which blocks to flag as carrying nobody. Keyed the same way
+  // CalendarEvent.id and the unpositioned rail are (`${source}:${id}`), computed
+  // once from the ids fetchDayRecords already resolved rather than re-deriving
+  // party membership here. Every mode counts, including truck: this set carries
+  // no notion of mode at all, which is what makes that true.
+  const emptyPartyKeys = useMemo(() => {
+    return new Set([
+      ...records.emptyPartySegmentIds.map((id) => `segment:${id}`),
+      ...records.emptyPartyHotelIds.map((id) => `hotel:${id}`),
+    ])
+  }, [records.emptyPartySegmentIds, records.emptyPartyHotelIds])
 
   // The gesture is desktop only. On mobile the grid still renders and events
   // still open their panels; only drag, resize and click-to-add are off.
@@ -478,6 +491,14 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
             <span className="min-w-0 truncate font-medium">{event.title}</span>
             <span className="shrink-0 tabular-nums text-[color:var(--evt-meta)]">{timeLabel}</span>
           </span>
+          {/* REE-170: nobody attached, any mode including truck. Purely a flag;
+              saving was never blocked on this. */}
+          {emptyPartyKeys.has(event.id) && (
+            <UserRoundX
+              className="mt-px h-3 w-3 shrink-0 text-amber-600"
+              aria-label="No one attached"
+            />
+          )}
         </button>
       )
     }
@@ -513,7 +534,7 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
     }
 
     return { event: EventChip, timeGutterWrapper: TimeGutterWrapper }
-  }, [openEvent, timezone, date])
+  }, [openEvent, timezone, date, emptyPartyKeys])
 
   // A move (onEventDrop) and a resize (onEventResize) share one write path. The
   // difference lives entirely in fromDropOrResize: a move whose duration is
@@ -606,9 +627,10 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
           <div className="flex flex-wrap gap-1.5">
             {view.unpositioned.map((record) => {
               const Icon = eventIcon(record.icon)
+              const key = `${record.source}:${record.id}`
               return (
                 <button
-                  key={`${record.source}:${record.id}`}
+                  key={key}
                   type="button"
                   onClick={() => openRecord(record.source, record.id)}
                   className={cn(
@@ -618,6 +640,9 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
                 >
                   <Icon className="h-3 w-3 shrink-0" aria-hidden />
                   {record.title}
+                  {emptyPartyKeys.has(key) && (
+                    <UserRoundX className="h-3 w-3 shrink-0 text-amber-600" aria-label="No one attached" />
+                  )}
                 </button>
               )
             })}
@@ -752,6 +777,9 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
                       {localTimeInZone(event.realStart.toISOString(), timezone)}
                     </span>
                     <span className="truncate">{event.title}</span>
+                    {emptyPartyKeys.has(event.id) && (
+                      <UserRoundX className="h-3 w-3 shrink-0 text-amber-600" aria-label="No one attached" />
+                    )}
                   </button>
                 </li>
               )

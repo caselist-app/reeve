@@ -38,6 +38,8 @@ function emptyRecords(): DayRecords {
     continuedFromPrev: { items: [], segments: [] },
     segmentIds: [],
     hotelStayIds: [],
+    emptyPartySegmentIds: [],
+    emptyPartyHotelIds: [],
   }
 }
 

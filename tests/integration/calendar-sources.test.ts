@@ -144,6 +144,8 @@ describe('a failed read is a message, not a blank grid', () => {
       continuedFromPrev: { items: [], segments: [] },
       segmentIds: [],
       hotelStayIds: [],
+      emptyPartySegmentIds: [],
+      emptyPartyHotelIds: [],
     }
 
     const view = buildDayCalendarView(records, TIMEZONE, DATE)
@@ -164,6 +166,8 @@ describe('a failed read is a message, not a blank grid', () => {
       continuedFromPrev: { items: [], segments: [] },
       segmentIds: [],
       hotelStayIds: [],
+      emptyPartySegmentIds: [],
+      emptyPartyHotelIds: [],
     }
 
     expect(buildDayCalendarView(records, TIMEZONE, DATE).errorMessage).toBeNull()
