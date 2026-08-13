@@ -121,7 +121,6 @@ export async function DayContent({ tourId, tourName, timezone, selectedDate, tou
           date={selectedDate}
           show={records.shows[0] ?? null}
           dayNotes={tourDate?.notes ?? null}
-          roster={roster}
           guestListSummary={guestListSummary}
           hotel={hotel}
         />

@@ -4,7 +4,6 @@ import { GuestListBlock } from '@/components/schedule/guest-list-block'
 import { AddVenueButton } from '@/components/schedule/add-venue-button'
 import { HotelBlock } from '@/components/schedule/hotel-block'
 import type { DayShow } from '@/lib/schedule/day-records'
-import type { RosterPerson } from '@/lib/schedule/day-roster'
 import type { DayType } from '@/lib/schedule/day-link'
 import { venueSectionState } from '@/lib/schedule/day-info-venue'
 import type { GuestListSummary } from '@/lib/schedule/guest-list-summary'
@@ -19,8 +18,6 @@ interface DayInfoPanelProps {
   date: string
   show: DayShow | null
   dayNotes: string | null
-  // Resolved once in DayContent (fetchDayRoster) and shared with the bottom dock.
-  roster: RosterPerson[]
   // The guest list count for the block under Venue, resolved in DayContent.
   guestListSummary: GuestListSummary
   // The night's hotel, resolved once in DayContent (resolveHotelForDay). Null
@@ -30,10 +27,7 @@ interface DayInfoPanelProps {
   hotel: DayHotel | null
 }
 
-export function DayInfoPanel({ tourId, tourDateId, dayType, date, show, dayNotes, roster, guestListSummary, hotel }: DayInfoPanelProps) {
-  const rosterPreview = roster.slice(0, 4)
-  const rosterOverflow = roster.length - rosterPreview.length
-
+export function DayInfoPanel({ tourId, tourDateId, dayType, date, show, dayNotes, guestListSummary, hotel }: DayInfoPanelProps) {
   // The venue section is conditional on the day type. It is absent on a travel
   // day, a press day, a rehearsal day and a day off as a matter of fact: those
   // days have no venue to have, so there is nothing to say. Do not restore a
@@ -41,7 +35,7 @@ export function DayInfoPanel({ tourId, tourDateId, dayType, date, show, dayNotes
   const venue = dayType ? venueSectionState(dayType, show !== null) : { kind: 'absent' as const }
 
   return (
-    <div className="flex flex-col h-full px-4 py-4 gap-5 overflow-y-auto">
+    <div data-testid="day-info-panel" className="flex flex-col h-full px-4 py-4 gap-5 overflow-y-auto">
       {/* Venue. Clickable since Brief 36 step 6: this is the way into a show's
           venue detail now that the show page is gone. */}
       {venue.kind === 'venue' && show && (
@@ -70,6 +64,14 @@ export function DayInfoPanel({ tourId, tourDateId, dayType, date, show, dayNotes
         </section>
       )}
 
+      {/* Notes: saves on blur, no save button. */}
+      <section className="flex-1">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+          Notes
+        </p>
+        <NotesTextarea tourId={tourId} date={date} initialValue={dayNotes ?? ''} />
+      </section>
+
       {/* Hotel. Read-only: name and check-in time, opening the existing hotel
           side panel on click. Absent, with no empty state, when no hotel
           resolves for this day. */}
@@ -81,36 +83,6 @@ export function DayInfoPanel({ tourId, tourDateId, dayType, date, show, dayNotes
           <HotelBlock hotel={hotel} />
         </section>
       )}
-
-      {/* Roster */}
-      {roster.length > 0 && (
-        <section>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-            Roster
-          </p>
-          <div className="space-y-1.5">
-            {rosterPreview.map((p) => (
-              <div key={p.id} className="flex items-center gap-2">
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold uppercase">
-                  {p.name.slice(0, 2)}
-                </span>
-                <span className="text-xs font-medium truncate">{p.name}</span>
-              </div>
-            ))}
-            {rosterOverflow > 0 && (
-              <p className="text-xs text-muted-foreground pl-8">+{rosterOverflow} more</p>
-            )}
-          </div>
-        </section>
-      )}
-
-      {/* Notes: saves on blur, no save button. */}
-      <section className="flex-1">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
-          Notes
-        </p>
-        <NotesTextarea tourId={tourId} date={date} initialValue={dayNotes ?? ''} />
-      </section>
     </div>
   )
 }
