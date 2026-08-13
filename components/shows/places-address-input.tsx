@@ -7,6 +7,12 @@ import { Input } from '@/components/ui/input'
 interface GooglePlace {
   formatted_address?: string
   name?: string
+  geometry?: {
+    location?: {
+      lat(): number
+      lng(): number
+    }
+  }
 }
 
 interface GoogleAutocomplete {
@@ -38,7 +44,12 @@ interface PlacesAddressInputProps {
   name: string
   value: string
   onChange: (value: string) => void
-  onPlaceSelect?: (address: string, venueName: string | undefined) => void
+  onPlaceSelect?: (
+    address: string,
+    venueName: string | undefined,
+    lat: number | undefined,
+    lng: number | undefined
+  ) => void
   placeholder?: string
   className?: string
   // Autocomplete result types. Defaults to street addresses and establishments.
@@ -46,6 +57,11 @@ interface PlacesAddressInputProps {
   types?: string[]
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void
   onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void
+  // Requests coordinates from Google alongside the address. Off by default:
+  // most of this component's callers (hotel/drive/rail/rehearsal/event fields)
+  // have no use for a lat/lng, and every field requesting geometry adds cost
+  // per Google's Places pricing. Scope it to the callers that need it (REE-212).
+  includeGeometry?: boolean
 }
 
 // Loads the Google Maps Places API script once per page and attaches an
@@ -62,6 +78,7 @@ export function PlacesAddressInput({
   types = ['establishment', 'geocode'],
   onKeyDown,
   onBlur,
+  includeGeometry = false,
 }: PlacesAddressInputProps) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
   const inputRef = useRef<HTMLInputElement>(null)
@@ -137,7 +154,9 @@ export function PlacesAddressInput({
 
     const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
       types,
-      fields: ['formatted_address', 'name'],
+      fields: includeGeometry
+        ? ['formatted_address', 'name', 'geometry']
+        : ['formatted_address', 'name'],
     })
 
     // Empty if Google builds the dropdown lazily on first keystroke rather than
@@ -152,7 +171,8 @@ export function PlacesAddressInput({
       const address = place.formatted_address ?? ''
       onChangeRef.current(address)
       if (onPlaceSelectRef.current) {
-        onPlaceSelectRef.current(address, place.name)
+        const location = place.geometry?.location
+        onPlaceSelectRef.current(address, place.name, location?.lat(), location?.lng())
       }
     })
 
