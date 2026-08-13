@@ -1,6 +1,5 @@
 'use client'
 
-import { useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
@@ -8,7 +7,6 @@ import { PeopleTable } from '@/components/people/people-table'
 import { removePerson } from '@/lib/actions/people'
 import { useSidePanel } from '@/stores/side-panel-store'
 import type { Tables } from '@/lib/types/database'
-import { useState } from 'react'
 
 // A tour membership joined with its account-level contact (identity lives there).
 export type PersonWithContact = Tables<'people'> & { contacts: Tables<'contacts'> }
@@ -31,8 +29,6 @@ interface Props {
 export function PeopleView({ tourId, people, crewDetails }: Props) {
   const router = useRouter()
   const { open } = useSidePanel()
-  const [removeError, setRemoveError] = useState<string | null>(null)
-  const [_removePending, startRemove] = useTransition()
 
   function handleAdd(type: PersonType) {
     open({
@@ -67,16 +63,11 @@ export function PeopleView({ tourId, people, crewDetails }: Props) {
     })
   }
 
-  function handleRemove(personId: string) {
-    setRemoveError(null)
-    startRemove(async () => {
-      const result = await removePerson(personId)
-      if (result.error) {
-        setRemoveError(result.error)
-      } else {
-        router.refresh()
-      }
-    })
+  async function handleRemove(personId: string): Promise<string | null> {
+    const result = await removePerson(personId)
+    if (result.error) return result.error
+    router.refresh()
+    return null
   }
 
   const byType = (type: PersonType) =>
@@ -84,12 +75,6 @@ export function PeopleView({ tourId, people, crewDetails }: Props) {
 
   return (
     <>
-      {removeError && (
-        <p className="mb-4 rounded-md border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          {removeError}
-        </p>
-      )}
-
       <Tabs defaultValue="crew">
         <div className="overflow-x-auto">
         <TabsList>

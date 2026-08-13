@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { MoreHorizontal, Pencil, Trash2, Send } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Tables } from '@/lib/types/database'
@@ -10,23 +10,13 @@ import type { TourMembership } from '@/lib/actions/contacts'
 import type { ContactTourContext } from '@/stores/side-panel-store'
 import { useSidePanel } from '@/stores/side-panel-store'
 import { PanelShell } from '@/components/layout/panel-shell'
-import { ConnectTelegramDialog } from '@/components/roster/connect-telegram-dialog'
 import { Button } from '@/components/ui/button'
 import { ListRow } from '@/components/ui/list-row'
 import { Separator } from '@/components/ui/separator'
 import { DataField } from '@/components/ui/data-field'
 import { SectionHeader } from '@/components/ui/section-header'
 import { StatusBadge, PASSPORT_VARIANT } from '@/components/ui/status-badge'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -48,10 +38,7 @@ export function ContactPanel({ contactId, tourContext, onSuccess }: Props) {
   const [tours, setTours] = useState<TourMembership[]>([])
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
-  const [deleteError, setDeleteError] = useState<string | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [telegramOpen, setTelegramOpen] = useState(false)
-  const [pending, startTransition] = useTransition()
 
   useEffect(() => {
     getContact(contactId)
@@ -80,17 +67,24 @@ export function ContactPanel({ contactId, tourContext, onSuccess }: Props) {
     })
   }
 
-  function handleDelete() {
-    setDeleteError(null)
-    startTransition(async () => {
-      const result = await deleteContact(contactId)
-      if (result.error) {
-        setDeleteError(result.error)
-      } else {
-        close()
-        onSuccess()
-      }
+  function handleConnectTelegram() {
+    if (!contact) return
+    open({
+      type: 'connect-telegram',
+      contactId: contact.id,
+      contactName: contact.name,
+      // Reopens this same view underneath rather than closing outright,
+      // since this panel replaces it in the store while it's open.
+      onBack: () => open({ type: 'contact-view', contactId, tourContext, onSuccess }),
     })
+  }
+
+  async function handleDelete(): Promise<string | null> {
+    const result = await deleteContact(contactId)
+    if (result.error) return result.error
+    close()
+    onSuccess()
+    return null
   }
 
   const status = contact?.passport_expiry ? passportStatus(contact.passport_expiry) : null
@@ -109,7 +103,7 @@ export function ContactPanel({ contactId, tourContext, onSuccess }: Props) {
             Edit
           </DropdownMenuItem>
           {!contact.telegram_chat_id && (
-            <DropdownMenuItem onSelect={() => setTelegramOpen(true)}>
+            <DropdownMenuItem onSelect={handleConnectTelegram}>
               <Send className="mr-2 h-4 w-4" />
               Connect Telegram
             </DropdownMenuItem>
@@ -124,34 +118,15 @@ export function ContactPanel({ contactId, tourContext, onSuccess }: Props) {
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <ConnectTelegramDialog
-        contactId={contact.id}
-        contactName={contact.name}
-        open={telegramOpen}
-        onOpenChange={setTelegramOpen}
+      <ConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        title={`Delete ${contact.name}?`}
+        description="This removes them from your roster. A contact on a tour cannot be deleted; remove them from their tours first. This cannot be undone."
+        confirmLabel="Delete"
+        pendingLabel="Deleting..."
+        onConfirm={handleDelete}
       />
-
-      <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete {contact.name}?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This removes them from your roster. A contact on a tour cannot be deleted;
-              remove them from their tours first. This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              disabled={pending}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   ) : undefined
 
@@ -177,7 +152,6 @@ export function ContactPanel({ contactId, tourContext, onSuccess }: Props) {
     >
       {loading && <p className="text-sm text-muted-foreground">Loading...</p>}
       {fetchError && <p className="text-sm text-destructive">{fetchError}</p>}
-      {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
 
       {contact && (
         <>

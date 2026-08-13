@@ -14,7 +14,7 @@ interface Props {
 
 // Lets the account holder generate a one-time Telegram deep link and copy it,
 // then open it themselves to link their own chat. Delivery is manual by design,
-// same as the crew ConnectTelegramDialog: Reeve never sends the link on its own.
+// same as the crew ConnectTelegramPanel: Reeve never sends the link on its own.
 export function ConnectTelegramAccount({ connected }: Props) {
   const [deepLink, setDeepLink] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)

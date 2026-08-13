@@ -1,22 +1,12 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState } from 'react'
 import { Trash2 } from 'lucide-react'
 import { deleteArtistAction } from '@/lib/actions/artists'
-import { Button, buttonVariants } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  AlertDialog,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-  AlertDialogCancel,
-} from '@/components/ui/alert-dialog'
-import { cn } from '@/lib/utils'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
 interface Props {
   artistId: string
@@ -27,21 +17,16 @@ interface Props {
 export function DeleteArtistDialog({ artistId, artistName, tourCount }: Props) {
   const [open, setOpen] = useState(false)
   const [confirmation, setConfirmation] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [pending, startTransition] = useTransition()
 
   const isConfirmed = confirmation === artistName
 
-  function handleDelete() {
-    if (!isConfirmed) return
-    setError(null)
-    startTransition(async () => {
-      try {
-        await deleteArtistAction(artistId)
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Something went wrong')
-      }
-    })
+  async function handleDelete(): Promise<string | null> {
+    try {
+      await deleteArtistAction(artistId)
+      return null
+    } catch (err) {
+      return err instanceof Error ? err.message : 'Something went wrong'
+    }
   }
 
   function handleOpenChange(v: boolean) {
@@ -57,23 +42,27 @@ export function DeleteArtistDialog({ artistId, artistName, tourCount }: Props) {
       : `${tourCount} tours and all their data`
 
   return (
-    <AlertDialog open={open} onOpenChange={handleOpenChange}>
-      <AlertDialogTrigger asChild>
-        <Button variant="destructive" size="sm">
-          <Trash2 className="mr-2 h-4 w-4" />
-          Delete artist
-        </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete {artistName}?</AlertDialogTitle>
-          <AlertDialogDescription>
+    <>
+      <Button variant="destructive" size="sm" onClick={() => setOpen(true)}>
+        <Trash2 className="mr-2 h-4 w-4" />
+        Delete artist
+      </Button>
+      <ConfirmDialog
+        open={open}
+        onOpenChange={handleOpenChange}
+        title={`Delete ${artistName}?`}
+        description={
+          <>
             This will permanently delete <strong className="text-foreground">{artistName}</strong>{' '}
             and {tourLabel}. Shows, people, transport, hotels, documents -- everything. This cannot
             be undone.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-
+          </>
+        }
+        confirmLabel="Delete forever"
+        pendingLabel="Deleting..."
+        confirmDisabled={!isConfirmed}
+        onConfirm={handleDelete}
+      >
         <div className="space-y-2 py-1">
           <Label htmlFor="confirm-artist-name">
             Type <strong>{artistName}</strong> to confirm
@@ -86,23 +75,7 @@ export function DeleteArtistDialog({ artistId, artistName, tourCount }: Props) {
             autoComplete="off"
           />
         </div>
-
-        {error && <p className="text-sm text-destructive">{error}</p>}
-
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
-          <button
-            onClick={handleDelete}
-            disabled={!isConfirmed || pending}
-            className={cn(
-              buttonVariants({ variant: 'destructive' }),
-              (!isConfirmed || pending) && 'pointer-events-none opacity-50',
-            )}
-          >
-            {pending ? 'Deleting...' : 'Delete forever'}
-          </button>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+      </ConfirmDialog>
+    </>
   )
 }

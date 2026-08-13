@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
@@ -25,6 +25,13 @@ interface VenuePanelProps {
   showId: string
   venueName: string
 }
+
+// How long to keep polling for a hub resolution before giving up. Generous
+// relative to a typical geocode (a few seconds); the Retry button below is
+// the fallback for a resolution that is genuinely stuck rather than merely
+// slow, so this does not need to run forever.
+const HUB_POLL_INTERVAL_MS = 4000
+const HUB_POLL_MAX_ATTEMPTS = 20
 
 // The show, minus its running order. Address, capacity, stage, power, dressing
 // rooms, house spec, catering type, and the way into the advance, the planner
@@ -52,6 +59,51 @@ export function VenuePanel({ tourId, showId, venueName }: VenuePanelProps) {
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [retrying, setRetrying] = useState(false)
+  const hubPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (hubPollRef.current) clearInterval(hubPollRef.current)
+    }
+  }, [])
+
+  // Polls getShowVenueDetail until hub_resolved_at lands, then refreshes so
+  // the venue's map appears on the day view without a manual reload. Shared
+  // by the two paths that queue resolveHubJob (Trigger.dev) and have no other
+  // way to learn when it finishes: a save that changes the address, and a
+  // manual Retry. That job writes the geocode via the admin client, outside
+  // any Next.js request, so nothing tells the schedule route's Router Cache
+  // to refetch on its own. REE-227.
+  function pollUntilHubResolved() {
+    if (hubPollRef.current) clearInterval(hubPollRef.current)
+    let attempts = 0
+    hubPollRef.current = setInterval(() => {
+      attempts += 1
+      getShowVenueDetail(showId).then(({ data: polled }) => {
+        if (!polled) return
+        if (polled.hubResolvedAt) {
+          setDetail(polled)
+          if (hubPollRef.current) clearInterval(hubPollRef.current)
+          router.refresh()
+        } else if (attempts >= HUB_POLL_MAX_ATTEMPTS && hubPollRef.current) {
+          clearInterval(hubPollRef.current)
+        }
+      })
+    }, HUB_POLL_INTERVAL_MS)
+  }
+
+  // ShowForm's own save (address, or anything else) does not otherwise reach
+  // this panel: the form only reports up whether a show id came back.
+  // Refetch this panel's own detail, which also clears or shows the banner
+  // above without waiting for a reopen, and start polling if it is still
+  // unresolved.
+  function handleSaved() {
+    getShowVenueDetail(showId).then(({ data }) => {
+      if (!data) return
+      setDetail(data)
+      if (!data.hubResolvedAt) pollUntilHubResolved()
+    })
+  }
 
   // Re-enqueues the same resolve-hub job the address-change path already
   // uses. A stuck resolution and one that is genuinely still in flight look
@@ -69,8 +121,9 @@ export function VenuePanel({ tourId, showId, venueName }: VenuePanelProps) {
       return
     }
     toast('Retrying venue location.', {
-      description: 'This can take a moment. Reopen this panel to check.',
+      description: 'This can take a moment. The map appears here once it resolves.',
     })
+    pollUntilHubResolved()
   }
 
   async function handleDelete(): Promise<string | null> {
@@ -197,6 +250,7 @@ export function VenuePanel({ tourId, showId, venueName }: VenuePanelProps) {
             tourId={tourId}
             showId={showId}
             initialData={detail.show as Partial<Show>}
+            onSaved={handleSaved}
           />
 
           {/* Moved off the show panel by Brief 42. Advance opens a panel; travel

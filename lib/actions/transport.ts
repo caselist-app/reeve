@@ -492,6 +492,80 @@ export async function updateTransportSegment(
   }
 }
 
+// Replaces who is attached to an existing segment. Used by the timeline edit
+// panel's party field (REE-226): the add flow only ever inserts fresh rows,
+// but an edit has to diff against whatever is already attached and remove
+// what the TM unchecked, not just add what they checked.
+export async function updateTransportParty(
+  tourId: string,
+  segmentId: string,
+  personIds: string[],
+): Promise<{ error: string | null }> {
+  const user = await requireUser()
+
+  const supabase = await createClient()
+
+  const { data: tour } = await supabase
+    .from('tours')
+    .select('id')
+    .eq('id', tourId)
+    .eq('account_id', user.id)
+    .single()
+
+  if (!tour) return { error: 'Tour not found.' }
+
+  const { data: segment } = await supabase
+    .from('transport_segments')
+    .select('id')
+    .eq('id', segmentId)
+    .eq('tour_id', tourId)
+    .single()
+
+  if (!segment) return { error: 'Segment not found on this tour.' }
+
+  // Same cross-tour check as createTransportSegment: RLS scopes rows by tour
+  // but does not check that an id arriving in this payload belongs to it.
+  if (personIds.length > 0) {
+    const { data: validPeople } = await supabase
+      .from('people')
+      .select('id')
+      .eq('tour_id', tourId)
+      .in('id', personIds)
+
+    if ((validPeople?.length ?? 0) !== new Set(personIds).size) {
+      return { error: 'One or more people are not on this tour.' }
+    }
+  }
+
+  const { data: existing } = await supabase
+    .from('transport_assignments')
+    .select('id, person_id')
+    .eq('tour_id', tourId)
+    .eq('segment_id', segmentId)
+
+  const desiredIds = new Set(personIds)
+  const toRemove = (existing ?? []).filter((a) => !desiredIds.has(a.person_id)).map((a) => a.id)
+  const existingIds = new Set((existing ?? []).map((a) => a.person_id))
+  const toAdd = personIds.filter((id) => !existingIds.has(id))
+
+  if (toRemove.length > 0) {
+    const { error } = await supabase.from('transport_assignments').delete().in('id', toRemove)
+    if (error) return { error: error.message }
+  }
+
+  if (toAdd.length > 0) {
+    const { error } = await supabase
+      .from('transport_assignments')
+      .insert(toAdd.map((person_id) => ({ tour_id: tourId, segment_id: segmentId, person_id })))
+    if (error) return { error: error.message }
+  }
+
+  void bustTourContextCache(tourId)
+  revalidatePath(`/tours/${tourId}/schedule`)
+
+  return { error: null }
+}
+
 // Deletes a transport segment outright. Used by the schedule edit panel's
 // delete menu. RLS (owns_tour) is the real authorization gate; the ownership
 // select below exists only so a not-found/not-owned segment returns a clean

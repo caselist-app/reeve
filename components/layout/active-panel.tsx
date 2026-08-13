@@ -27,6 +27,8 @@ const DayForm = dynamic(() => import('@/components/schedule/day-form').then((m) 
 const ExtractionRowsPanel = dynamic(() => import('@/components/inbox/extraction-rows-panel').then((m) => m.ExtractionRowsPanel), { ssr: false })
 // REE-3: the manual document upload panel.
 const UploadDocumentPanel = dynamic(() => import('@/components/documents/upload-document-panel').then((m) => m.UploadDocumentPanel), { ssr: false })
+// REE-224: the Telegram deep-link generator, formerly its own AlertDialog.
+const ConnectTelegramPanel = dynamic(() => import('@/components/roster/connect-telegram-panel').then((m) => m.ConnectTelegramPanel), { ssr: false })
 
 // Renders the correct panel content based on the active descriptor.
 // Mounted inside AppContent, which handles the slide-in animation and
@@ -140,11 +142,12 @@ export function ActivePanel() {
           key={`${panel.segment.depart_at ?? ''}|${panel.segment.arrive_at ?? ''}`}
           segment={panel.segment}
           timezone={panel.timezone}
+          tourId={panel.tourId}
         />
       )
     case 'hotel':
       return (
-        <HotelPanel stay={panel.stay} />
+        <HotelPanel stay={panel.stay} tourId={panel.tourId} />
       )
     case 'add-to-day':
       return (
@@ -184,6 +187,14 @@ export function ActivePanel() {
     case 'upload-document':
       return (
         <UploadDocumentPanel tourId={panel.tourId} onSuccess={panel.onSuccess} />
+      )
+    case 'connect-telegram':
+      return (
+        <ConnectTelegramPanel
+          contactId={panel.contactId}
+          contactName={panel.contactName}
+          onBack={panel.onBack}
+        />
       )
     default:
       return null
