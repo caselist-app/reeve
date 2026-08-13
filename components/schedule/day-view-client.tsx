@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation'
 import { BottomSheet, BottomSheetClose } from '@/components/ui/bottom-sheet'
 import { cn } from '@/lib/utils'
 import { useSidePanel } from '@/stores/side-panel-store'
-import { useIsMobile } from '@/hooks/use-is-mobile'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -90,7 +89,6 @@ function DayOptionsMenu({
 export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, addContext, dayMeta }: DayViewClientProps) {
   const { open: openSidePanel } = useSidePanel()
   const router = useRouter()
-  const isMobile = useIsMobile()
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -204,8 +202,10 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
 
           {/* Mobile add-to-day FAB, pinned bottom-right of the timeline, above the
               dock. Opens the same typed day-form the desktop '+' does, gated on a
-              day existing. */}
-          {isMobile && hasDay && (
+              day existing. Hidden via lg:hidden below, the same breakpoint the
+              desktop day info column appears at, so there is no dead zone
+              between this and useIsMobile's narrower JS breakpoint. */}
+          {hasDay && (
             <button
               type="button"
               onClick={openTypedForm}
@@ -217,9 +217,13 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
           )}
         </div>
 
-        {/* Mobile-only day info dock: always visible, pinned at the bottom.
-            Tapping it opens the full day info sheet below. */}
-        {isMobile && dayInfoDock && (
+        {/* Day info dock: pinned at the bottom below lg, where the desktop day
+            info column (below) is hidden. Gated on lg:hidden alone, not
+            useIsMobile (which flips at 767px, not 1024px): gating this on the
+            JS hook left a dead zone between 768 and 1023px where neither the
+            dock nor the desktop column rendered. Tapping it opens the full day
+            info sheet below. */}
+        {dayInfoDock && (
           <button
             type="button"
             onClick={() => setDayInfoOpen(true)}
@@ -266,32 +270,33 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Bottom-sheet for the day-info panel on mobile (venue, guest list, notes, hotel). */}
-      {isMobile && (
-        <BottomSheet open={dayInfoOpen} onOpenChange={setDayInfoOpen} title="Day info" titleClassName="sr-only">
-          <div className="flex shrink-0 items-center justify-between px-4 py-3 border-b border-border">
-            <span className="text-sm font-semibold">Day info</span>
-            <div className="flex items-center gap-1">
-              {dayMeta && (
-                <DayOptionsMenu
-                  onEdit={() => { setDayInfoOpen(false); handleEditDay() }}
-                  onDelete={() => { setDayInfoOpen(false); setDeleteDialogOpen(true) }}
-                  triggerClassName="h-9 w-9"
-                />
-              )}
-              <BottomSheetClose
-                className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
-                aria-label="Close"
-              >
-                <X className="h-4 w-4" />
-              </BottomSheetClose>
-            </div>
+      {/* Bottom-sheet for the day-info panel below lg (venue, guest list, notes,
+          hotel). Always mounted: Radix's Dialog.Root renders nothing while
+          open is false, and dayInfoOpen only ever flips true via the dock
+          above, which is itself lg:hidden, so this never opens at lg+. */}
+      <BottomSheet open={dayInfoOpen} onOpenChange={setDayInfoOpen} title="Day info" titleClassName="sr-only">
+        <div className="flex shrink-0 items-center justify-between px-4 py-3 border-b border-border">
+          <span className="text-sm font-semibold">Day info</span>
+          <div className="flex items-center gap-1">
+            {dayMeta && (
+              <DayOptionsMenu
+                onEdit={() => { setDayInfoOpen(false); handleEditDay() }}
+                onDelete={() => { setDayInfoOpen(false); setDeleteDialogOpen(true) }}
+                triggerClassName="h-9 w-9"
+              />
+            )}
+            <BottomSheetClose
+              className="flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" />
+            </BottomSheetClose>
           </div>
-          <div className="flex-1 overflow-y-auto">
-            {dayInfoPanel}
-          </div>
-        </BottomSheet>
-      )}
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {dayInfoPanel}
+        </div>
+      </BottomSheet>
     </>
   )
 }
