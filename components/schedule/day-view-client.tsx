@@ -266,7 +266,7 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Bottom-sheet for the day-info panel on mobile (venue, roster, notes). */}
+      {/* Bottom-sheet for the day-info panel on mobile (venue, guest list, notes, hotel). */}
       {isMobile && (
         <BottomSheet open={dayInfoOpen} onOpenChange={setDayInfoOpen} title="Day info" titleClassName="sr-only">
           <div className="flex shrink-0 items-center justify-between px-4 py-3 border-b border-border">
