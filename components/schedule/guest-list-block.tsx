@@ -13,12 +13,18 @@ interface GuestListBlockProps {
   summary: GuestListSummary
 }
 
-// The Guest list block in day info, directly under Venue and rendered only on a
-// show day with a show. Brief 52, step 4 (REE-131).
+// The Guest list block in day info, its own section (REE-209) and rendered
+// only on a show day with a show. Brief 52, step 4 (REE-131).
 //
 // A thin client button, the same shape as venue-block.tsx: day-info-panel stays
 // a Server Component and the clickable pieces are small clients that call
 // useSidePanel themselves.
+//
+// The button's own label is fixed via aria-label rather than left to its text
+// content: the visible bold line is now the count (matching VenueBlock's venue
+// name and HotelBlock's hotel name sitting under their own section label), so
+// the accessible name needs to say what the button is for independently of
+// that value.
 //
 // The count comes from the server (`summary`) on first paint, but tracks the
 // guest list panel through an optimistic store rather than a server refresh. The
@@ -45,22 +51,26 @@ export function GuestListBlock({ tourId, showId, venueName, summary }: GuestList
   return (
     <button
       type="button"
+      aria-label="Guest list"
       onClick={() => open({ type: 'guest-list', tourId, showId, venueName })}
       className="group -mx-2 flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted/50"
     >
       <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold">Guest list</span>
         {count === null ? (
           // A failed read says so rather than rendering "Guest list, 0", which is
           // the confident, plausible, wrong answer a failed query must never be.
-          <span className="mt-0.5 block text-xs text-destructive">
+          <span className="block text-sm font-semibold text-destructive">
             Could not load the guest list
           </span>
         ) : (
-          <span className="mt-0.5 block text-xs text-muted-foreground">
-            {guestCountPhrase(count.total)}
-            {count.waiting > 0 && `, ${waitingPhrase(count.waiting)}`}
-          </span>
+          <>
+            <span className="block text-sm font-semibold">{guestCountPhrase(count.total)}</span>
+            {count.waiting > 0 && (
+              <span className="mt-0.5 block text-xs text-muted-foreground">
+                {waitingPhrase(count.waiting)}
+              </span>
+            )}
+          </>
         )}
       </span>
       <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />

@@ -20,9 +20,11 @@ test('the guest list block opens the panel and its count tracks an add without a
 
   await page.goto(`/tours/${seed.a.tourId}/schedule?date=${seed.a.date}`)
 
-  // The block renders on the show day, under Venue. It starts empty: no other
-  // spec adds a guest to this show, and this one cleans up after itself.
-  const block = page.getByRole('button', { name: /Guest list/ })
+  // The block renders in its own Guest list section on the show day (REE-209).
+  // It starts empty: no other spec adds a guest to this show, and this one
+  // cleans up after itself. The button's accessible name is fixed via
+  // aria-label, since its visible text is the count, not the word "Guest list".
+  const block = page.getByRole('button', { name: 'Guest list' })
   await expect(block).toBeVisible()
   await expect(block).toContainText('No names yet')
 
