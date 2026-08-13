@@ -13,16 +13,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { deleteTourDate } from '@/lib/actions/tour-dates'
 
 interface DayViewClientProps {
@@ -90,8 +81,6 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
   const { open: openSidePanel } = useSidePanel()
   const router = useRouter()
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [deleting, setDeleting] = useState(false)
-  const [deleteError, setDeleteError] = useState<string | null>(null)
   const [dayInfoOpen, setDayInfoOpen] = useState(false)
 
   // REE-89: one door into a day. The '+', the '/' shortcut and the mobile FAB
@@ -144,23 +133,13 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
     })
   }
 
-  async function handleDeleteConfirm() {
-    if (!dayMeta) return
-    setDeleting(true)
-    setDeleteError(null)
+  async function handleDeleteConfirm(): Promise<string | null> {
+    if (!dayMeta) return null
     const result = await deleteTourDate(dayMeta.tourDateId)
-    if (result.error) {
-      setDeleting(false)
-      setDeleteError(result.error)
-      return
-    }
+    if (result.error) return result.error
     // Navigate to schedule root. The sidebar will show the next available day.
     router.push(`/tours/${addContext.tourId}/schedule`)
-  }
-
-  function handleDeleteDialogOpenChange(open: boolean) {
-    setDeleteDialogOpen(open)
-    if (!open) setDeleteError(null)
+    return null
   }
 
   const toolbar = (
@@ -247,28 +226,15 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
       </div>
 
       {/* Delete confirmation */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={handleDeleteDialogOpenChange}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete this day?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete the day and everything on it: shows,
-              rehearsals, transport, hotels, and events. This cannot be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {deleteError && <p className="text-sm text-destructive">{deleteError}</p>}
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDeleteConfirm}
-              disabled={deleting}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {deleting ? 'Deleting...' : 'Delete day'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Delete this day?"
+        description="This will permanently delete the day and everything on it: shows, rehearsals, transport, hotels, and events. This cannot be undone."
+        confirmLabel="Delete day"
+        pendingLabel="Deleting..."
+        onConfirm={handleDeleteConfirm}
+      />
 
       {/* Bottom-sheet for the day-info panel below lg (venue, guest list, notes,
           hotel). Always mounted: Radix's Dialog.Root renders nothing while
