@@ -5,10 +5,10 @@ import { PageLayout } from '@/components/layout/page-layout'
 import { PageHeader } from '@/components/layout/page-header'
 import { ConnectTelegramAccount } from '@/components/account/connect-telegram-account'
 import { AppearanceSettings } from '@/components/account/appearance-settings'
+import { SignOutButton } from '@/components/account/sign-out-button'
 
 // Account settings, distinct from a tour's settings: this is about the account
-// holder (the TM), not one of their tours. First and currently only row is the
-// Telegram connection, which lets Reeve message the TM directly (REE-132).
+// holder (the TM), not one of their tours.
 export default async function AccountSettingsPage() {
   const user = await requireUser()
   const supabase = await createClient()
@@ -29,6 +29,7 @@ export default async function AccountSettingsPage() {
       <div className="flex flex-col gap-4">
         <ConnectTelegramAccount connected={account.telegram_chat_id !== null} />
         <AppearanceSettings />
+        <SignOutButton />
       </div>
     </PageLayout>
   )
