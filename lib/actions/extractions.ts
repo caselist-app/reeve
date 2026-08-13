@@ -10,7 +10,15 @@ import { resolveAttentionItem } from '@/lib/actions/inbox'
 import { resolveTourDateId } from '@/lib/schedule/day-link'
 import { localDateInZone } from '@/lib/schedule/datetime'
 import type { TablesInsert } from '@/lib/types/database'
-import { extractionKeepSchema, narrowExtractionProposal, type ExtractionKeep } from '@/lib/validators/extraction'
+import {
+  extractionKeepSchema,
+  extractionPartySchema,
+  narrowExtractionProposal,
+  type ExtractionKeep,
+  type ExtractionParty,
+  type ExtractionPartySelection,
+} from '@/lib/validators/extraction'
+import { roomTierFor } from '@/lib/party/room-tier'
 
 export type ExtractionActionState = { error: string | null }
 
@@ -25,13 +33,22 @@ const EMPTY_PROPOSAL: ExtractionProposal = { shows: [], transport_segments: [], 
 // extraction_status = 'confirmed'.
 export async function confirmExtraction(
   forwardedEmailId: string,
-  keep: ExtractionKeep
+  keep: ExtractionKeep,
+  // REE-169: which people (if any) attach to a kept transport_segment or
+  // hotel_stay, by original proposed_rows index. Absent or empty for an index
+  // means that row saves with zero assignment rows, same as before this
+  // existed: this is additive, never a new way to block a save.
+  party?: ExtractionParty
 ): Promise<ExtractionActionState> {
   await requireUser()
   const supabase = await createClient()
 
   const parsedKeep = extractionKeepSchema.safeParse(keep)
   if (!parsedKeep.success) return { error: 'That selection is not valid.' }
+
+  const parsedParty = extractionPartySchema.safeParse(party ?? {})
+  if (!parsedParty.success) return { error: 'That party selection is not valid.' }
+  const partySelections = parsedParty.data
 
   // RLS check: owns_tour on forwarded_emails enforces ownership.
   const { data: forwarded } = await supabase
@@ -50,6 +67,33 @@ export async function confirmExtraction(
   if (narrowed.proposal === null) return { error: narrowed.error }
 
   const confirmed = narrowed.proposal
+
+  // Every id in every party selection has to belong to this tour before
+  // anything is written, the same cross-tour check every add-form create path
+  // makes (RLS scopes rows by tour, not ids arriving together in one
+  // payload). Checked once, up front, rather than per row: person_type is
+  // needed later to pick a hotel room_tier, so this doubles as that lookup.
+  const partyPersonIds = new Set<string>()
+  for (const sel of Object.values(partySelections.transport_segments ?? {})) {
+    sel.people.forEach((id) => partyPersonIds.add(id))
+  }
+  for (const sel of Object.values(partySelections.hotel_stays ?? {})) {
+    sel.people.forEach((id) => partyPersonIds.add(id))
+  }
+
+  let peopleTypes = new Map<string, string>()
+  if (partyPersonIds.size > 0) {
+    const { data: validPeople } = await supabase
+      .from('people')
+      .select('id, person_type')
+      .eq('tour_id', tourId)
+      .in('id', Array.from(partyPersonIds))
+
+    if ((validPeople?.length ?? 0) !== partyPersonIds.size) {
+      return { error: 'One or more people are not on this tour.' }
+    }
+    peopleTypes = new Map(validPeople!.map((p) => [p.id, p.person_type]))
+  }
 
   // Optimistic lock: claim the row before inserting any spine data, compare-
   // and-swap against the status this call just read. By the time a TM
@@ -150,8 +194,14 @@ export async function confirmExtraction(
   // started at the top of that grid (REE-158). resolveTourDateId is
   // idempotent, so two segments departing on the same date each just read
   // back the row the first one created rather than racing to insert it twice.
-  const segments = confirmed.transport_segments.filter((s) => !!s.mode)
-  if (segments.length > 0) {
+  // Paired with keep.transport_segments (same order pick() built confirmed
+  // from), so originalIndex is the proposed_rows index the TM's party
+  // selection is keyed by, not the position in this narrowed/filtered array.
+  const segmentEntries = confirmed.transport_segments
+    .map((seg, i) => ({ seg, originalIndex: parsedKeep.data.transport_segments[i] }))
+    .filter((e) => !!e.seg.mode)
+
+  if (segmentEntries.length > 0) {
     const { data: tourRow } = await supabase
       .from('tours')
       .select('timezone')
@@ -160,7 +210,10 @@ export async function confirmExtraction(
     const timezone = tourRow?.timezone ?? 'UTC'
 
     const rows: TablesInsert<'transport_segments'>[] = []
-    for (const seg of segments) {
+    // Same length and order as rows, so index i of one is index i of the
+    // other once the insert comes back.
+    const rowSelections: (ExtractionPartySelection | undefined)[] = []
+    for (const { seg, originalIndex } of segmentEntries) {
       let tourDateId: string | null = null
       if (seg.depart_at) {
         const localDate = localDateInZone(seg.depart_at, timezone)
@@ -173,6 +226,7 @@ export async function confirmExtraction(
         }
         tourDateId = resolved.id
       }
+      const selection = partySelections.transport_segments?.[String(originalIndex)]
       rows.push({
         tour_id: tourId,
         tour_date_id: tourDateId,
@@ -185,33 +239,76 @@ export async function confirmExtraction(
         vehicle_or_flight_no: seg.vehicle_or_flight_no ?? null,
         booking_reference: seg.booking_reference ?? null,
         status: 'planned',
+        // Omitted (rather than null) when there is no selection, so the
+        // column's own default ('whole_party') applies.
+        created_as: selection?.created_as,
       })
+      rowSelections.push(selection)
     }
 
     if (rows.length > 0) {
-      const { error } = await supabase.from('transport_segments').insert(rows)
-      if (error) errors.push(`Segments: ${error.message}`)
+      const { data: insertedSegments, error } = await supabase
+        .from('transport_segments')
+        .insert(rows)
+        .select('id')
+      if (error) {
+        errors.push(`Segments: ${error.message}`)
+      } else if (insertedSegments) {
+        const assignments: TablesInsert<'transport_assignments'>[] = []
+        insertedSegments.forEach((row, i) => {
+          for (const person_id of rowSelections[i]?.people ?? []) {
+            assignments.push({ tour_id: tourId, segment_id: row.id, person_id })
+          }
+        })
+        if (assignments.length > 0) {
+          const { error: assignError } = await supabase.from('transport_assignments').insert(assignments)
+          if (assignError) errors.push(`Segment party: ${assignError.message}`)
+        }
+      }
     }
   }
 
-  // Hotel stays: batch insert in a single round trip.
-  const hotels = confirmed.hotel_stays.filter((h) => !!(h.name || h.city))
-  if (hotels.length > 0) {
-    const { error } = await supabase.from('hotel_stays').insert(
-      hotels.map((hotel) => ({
-        tour_id: tourId,
-        name: hotel.name ?? null,
-        city: hotel.city ?? null,
-        address: hotel.address ?? null,
-        check_in_date: hotel.check_in_date ?? null,
-        check_out_date: hotel.check_out_date ?? null,
-        check_in_time: hotel.check_in_time ?? null,
-        check_out_time: hotel.check_out_time ?? null,
-        confirmation_number: hotel.confirmation_number ?? null,
-        status: 'planned',
-      }))
-    )
-    if (error) errors.push(`Hotels: ${error.message}`)
+  // Same index pairing as segments above.
+  const hotelEntries = confirmed.hotel_stays
+    .map((hotel, i) => ({ hotel, originalIndex: parsedKeep.data.hotel_stays[i] }))
+    .filter((e) => !!(e.hotel.name || e.hotel.city))
+
+  if (hotelEntries.length > 0) {
+    const rows: TablesInsert<'hotel_stays'>[] = hotelEntries.map(({ hotel, originalIndex }) => ({
+      tour_id: tourId,
+      name: hotel.name ?? null,
+      city: hotel.city ?? null,
+      address: hotel.address ?? null,
+      check_in_date: hotel.check_in_date ?? null,
+      check_out_date: hotel.check_out_date ?? null,
+      check_in_time: hotel.check_in_time ?? null,
+      check_out_time: hotel.check_out_time ?? null,
+      confirmation_number: hotel.confirmation_number ?? null,
+      status: 'planned',
+      created_as: partySelections.hotel_stays?.[String(originalIndex)]?.created_as,
+    }))
+
+    const { data: insertedStays, error } = await supabase.from('hotel_stays').insert(rows).select('id')
+    if (error) {
+      errors.push(`Hotels: ${error.message}`)
+    } else if (insertedStays) {
+      const assignments: TablesInsert<'room_assignments'>[] = []
+      insertedStays.forEach((row, i) => {
+        const selection = partySelections.hotel_stays?.[String(hotelEntries[i].originalIndex)]
+        for (const person_id of selection?.people ?? []) {
+          assignments.push({
+            tour_id: tourId,
+            hotel_stay_id: row.id,
+            person_id,
+            room_tier: roomTierFor(peopleTypes.get(person_id) ?? 'crew'),
+          })
+        }
+      })
+      if (assignments.length > 0) {
+        const { error: assignError } = await supabase.from('room_assignments').insert(assignments)
+        if (assignError) errors.push(`Hotel party: ${assignError.message}`)
+      }
+    }
   }
 
   // Before the error branch, not after it, because this action is not atomic:

@@ -1,8 +1,11 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import dynamic from 'next/dynamic'
 import { PanelShell } from '@/components/layout/panel-shell'
 import { useSidePanel } from '@/stores/side-panel-store'
+import { getTourRoster } from '@/lib/actions/people'
+import type { PartyPickerPerson } from '@/lib/party/presets'
 
 // The four categories the add-to-day panel can render, one per dedicated add
 // form. flight/drive/rail/hotel are the things with structure beyond a time; the
@@ -48,7 +51,23 @@ const CATEGORY_TITLES: Record<AddCategory, string> = {
 // DayViewClient; this component never shows it.
 export function AddFlow({ tourId, tourDateId, date, timezone, category, initialClock, onBack }: AddFlowProps) {
   const { close } = useSidePanel()
-  const formProps = { tourId, tourDateId, date, timezone, initialClock, onBack, onSuccess: close }
+
+  // REE-169: fetched once here, not by each category form, so switching
+  // category (via Back) does not re-fetch. The party picker step each form
+  // adds resolves 'everyone'/'artist'/'crew' against this list.
+  const [people, setPeople] = useState<PartyPickerPerson[]>([])
+
+  useEffect(() => {
+    let cancelled = false
+    getTourRoster(tourId).then((result) => {
+      if (!cancelled && !result.error) setPeople(result.people)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [tourId])
+
+  const formProps = { tourId, tourDateId, date, timezone, initialClock, onBack, onSuccess: close, people }
 
   return (
     <PanelShell title={CATEGORY_TITLES[category]}>

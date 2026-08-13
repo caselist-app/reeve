@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { ExtractionProposal } from '@/lib/ai/extract'
+import { CREATED_AS_VALUES } from '@/lib/party/presets'
 
 // The keep argument confirmExtraction takes (REE-154): which proposed rows the
 // TM toggled on in the review panel, by index into the arrays proposed_rows
@@ -13,6 +14,31 @@ export const extractionKeepSchema = z.object({
 })
 
 export type ExtractionKeep = z.infer<typeof extractionKeepSchema>
+
+// REE-169: the party a kept transport_segment or hotel_stay row applies to,
+// keyed by the same original proposed_rows index `keep` above uses (a
+// string key, since object keys are always strings; confirmExtraction looks
+// this up with String(index)). Optional and additive: a row with no entry
+// here still saves, with zero assignment rows, the same as before this
+// existed. created_as is checked against CREATED_AS_VALUES rather than a
+// second hand-copied literal list, so it cannot drift from the check
+// constraint that list is already tied to.
+const partySelectionSchema = z.object({
+  people: z.array(z.string().uuid()),
+  created_as: z
+    .string()
+    .refine((v): v is (typeof CREATED_AS_VALUES)[number] => (CREATED_AS_VALUES as readonly string[]).includes(v))
+    .optional(),
+})
+
+export type ExtractionPartySelection = z.infer<typeof partySelectionSchema>
+
+export const extractionPartySchema = z.object({
+  transport_segments: z.record(z.string(), partySelectionSchema).optional(),
+  hotel_stays: z.record(z.string(), partySelectionSchema).optional(),
+})
+
+export type ExtractionParty = z.infer<typeof extractionPartySchema>
 
 export type NarrowExtractionResult =
   | { proposal: ExtractionProposal; error: null }

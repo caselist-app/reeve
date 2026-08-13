@@ -13,6 +13,7 @@ import { localDateInZone } from '@/lib/schedule/datetime'
 import { localBroadcastDateInZone } from '@/lib/schedule/day-window'
 import { boardingPassSendAt } from '@/lib/comms/boarding-pass-timing'
 import type { DateMove } from '@/lib/schedule/date-move'
+import type { CreatedAs } from '@/lib/party/presets'
 
 // `moved` is set only when the segment actually landed on a day other than the
 // one the TM was looking at. See lib/schedule/date-move.ts.
@@ -189,22 +190,47 @@ export async function createTransportSegment(
     actual_depart_at?: string | null
     actual_arrive_at?: string | null
     last_tracked_at?: string | null
+    // REE-169: the party this segment applies to, from the add form's party
+    // picker step. people are person ids to attach via transport_assignments;
+    // created_as records which preset produced them, provenance only. An
+    // empty or omitted list writes zero assignment rows and never blocks the
+    // segment from saving.
+    people?: string[]
+    created_as?: CreatedAs
   },
 ): Promise<TransportActionState> {
   await requireUser()
 
   const supabase = await createClient()
 
+  const { people = [], created_as, ...segmentData } = data
+
+  // Same cross-tour check as createHotelStay/recordTransportOption: RLS scopes
+  // rows by tour but does not check that ids arriving in the same payload
+  // belong to the same tour. Validated before anything is written, so a bad id
+  // never gets as far as a created segment with no party attached.
+  if (people.length > 0) {
+    const { data: validPeople } = await supabase
+      .from('people')
+      .select('id')
+      .eq('tour_id', tourId)
+      .in('id', people)
+
+    if ((validPeople?.length ?? 0) !== new Set(people).size) {
+      return { error: 'One or more people are not on this tour.' }
+    }
+  }
+
   // Ownership of the segment itself is covered by RLS: owns_tour(tour_id) on
   // insert. tour_date_id is not, because RLS cannot see that a day row from
   // another tour was passed alongside a tour_id this account does own. An
   // unchecked one attaches the segment to a day in a different tour, so it
   // disappears from the day the TM added it to.
-  if (data.tour_date_id) {
+  if (segmentData.tour_date_id) {
     const { data: tourDate } = await supabase
       .from('tour_dates')
       .select('id')
-      .eq('id', data.tour_date_id)
+      .eq('id', segmentData.tour_date_id)
       .eq('tour_id', tourId)
       .single()
 
@@ -222,11 +248,11 @@ export async function createTransportSegment(
   // Deriving the link from the departure here is what makes create and edit
   // obey one rule. The create/edit split is the whole root cause of Brief 36,
   // so closing it on both sides is the fix, not just repairing the edit half.
-  let tourDateId = data.tour_date_id ?? null
+  let tourDateId = segmentData.tour_date_id ?? null
   let dayCreated = false
   let landedOn: string | null = null
 
-  if (data.depart_at || data.arrive_at) {
+  if (segmentData.depart_at || segmentData.arrive_at) {
     const { data: tourRow } = await supabase
       .from('tours')
       .select('timezone')
@@ -235,13 +261,13 @@ export async function createTransportSegment(
 
     const timezone = tourRow?.timezone ?? 'UTC'
 
-    if (data.depart_at) {
+    if (segmentData.depart_at) {
       // The broadcast day, not the plain calendar day: a departure just after
       // local midnight is still tonight's flight (REE-161, REE-111). Deriving
       // this from the plain calendar date moved the segment onto a fresh day
       // the moment its departure crossed midnight, even when the TM added it
       // against the day they were looking at.
-      const localDate = localBroadcastDateInZone(data.depart_at, timezone)
+      const localDate = localBroadcastDateInZone(segmentData.depart_at, timezone)
       // A day that exists only because a departure landed on it is a travel day,
       // not a day off. dayType only labels a newly created row, so a segment
       // moving onto an existing show or off day leaves that day's type alone.
@@ -260,8 +286,8 @@ export async function createTransportSegment(
     // continuation view (REE-124) is what renders it there once the row
     // exists. Compared by the arrival's plain calendar date, not its own
     // broadcast day: that is the date a TM would look for it under.
-    if (data.arrive_at) {
-      const arrivalDate = localDateInZone(data.arrive_at, timezone)
+    if (segmentData.arrive_at) {
+      const arrivalDate = localDateInZone(segmentData.arrive_at, timezone)
       if (arrivalDate !== landedOn) {
         const arrivalResolved = await resolveTourDateId(supabase, tourId, arrivalDate, {
           dayType: 'travel',
@@ -280,17 +306,26 @@ export async function createTransportSegment(
   // here, only that day's id, and both ids are on this tour (checked above). A
   // caller with no tour_date_id has no opened day to have moved away from.
   const movedFromOpenedDay =
-    !!data.tour_date_id && !!tourDateId && tourDateId !== data.tour_date_id
+    !!segmentData.tour_date_id && !!tourDateId && tourDateId !== segmentData.tour_date_id
 
   const { data: row, error } = await supabase
     .from('transport_segments')
     // tour_date_id after the spread: the derived link wins over the one the
-    // form passed.
-    .insert({ tour_id: tourId, status: 'planned', ...data, tour_date_id: tourDateId })
+    // form passed. created_as omitted (rather than null) when the caller does
+    // not pass one, so the column's own default ('whole_party') applies.
+    .insert({ tour_id: tourId, status: 'planned', ...segmentData, tour_date_id: tourDateId, created_as })
     .select('id')
     .single()
 
   if (error || !row) return { error: error?.message ?? 'Failed to create segment.' }
+
+  if (people.length > 0) {
+    const { error: assignError } = await supabase
+      .from('transport_assignments')
+      .insert(people.map((person_id) => ({ tour_id: tourId, segment_id: row.id, person_id })))
+
+    if (assignError) return { error: assignError.message }
+  }
 
   void bustTourContextCache(tourId)
   revalidatePath(`/tours/${tourId}/schedule`)
