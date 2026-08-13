@@ -104,7 +104,9 @@ test('a rail item with no time set opens its detail panel', async ({ page }) => 
   await railItem.click()
 
   // The same detail panel a grid block opens: the title and the (empty) Starts
-  // field the TM can now fill in.
+  // field the TM can now fill in. By field name rather than by label: the
+  // panel's time labels carry no htmlFor and the input no id, so getByLabel
+  // cannot see them (see revalidate.spec.ts for the same note).
   await expect(page.getByRole('heading', { name: 'Soundcheck' })).toBeVisible()
-  await expect(page.getByLabel('Starts')).toHaveValue('')
+  await expect(page.locator('input[name="start_clock"]')).toHaveValue('')
 })
