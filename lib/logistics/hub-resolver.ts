@@ -14,22 +14,33 @@ type KnownVenueEntry = {
   iata: string | null
   rail: string | null
   ground_minutes: number
+  // Known venues are not geocoded, so there is no lat/lng to cache on the
+  // show row. The venue map block simply has nothing to show for these.
+  lat: null
+  lng: null
 }
 
 // Keyed by lowercase venue name or city. Expand this map as the known-venue
 // KB grows. Festivals go here first because geocoding a festival site fails.
 const KNOWN_VENUES: Record<string, KnownVenueEntry> = {
-  hellfest: { iata: 'NTE', rail: null, ground_minutes: 40 },
-  clisson: { iata: 'NTE', rail: null, ground_minutes: 40 },
-  glastonbury: { iata: 'BRS', rail: 'Castle Cary', ground_minutes: 35 },
-  'download festival': { iata: 'EMA', rail: 'Derby', ground_minutes: 20 },
-  'reading festival': { iata: 'LHR', rail: 'Reading', ground_minutes: 15 },
-  'leeds festival': { iata: 'LBA', rail: 'Leeds', ground_minutes: 25 },
-  coachella: { iata: 'PSP', rail: null, ground_minutes: 25 },
-  lollapalooza: { iata: 'ORD', rail: null, ground_minutes: 30 },
+  hellfest: { iata: 'NTE', rail: null, ground_minutes: 40, lat: null, lng: null },
+  clisson: { iata: 'NTE', rail: null, ground_minutes: 40, lat: null, lng: null },
+  glastonbury: { iata: 'BRS', rail: 'Castle Cary', ground_minutes: 35, lat: null, lng: null },
+  'download festival': { iata: 'EMA', rail: 'Derby', ground_minutes: 20, lat: null, lng: null },
+  'reading festival': { iata: 'LHR', rail: 'Reading', ground_minutes: 15, lat: null, lng: null },
+  'leeds festival': { iata: 'LBA', rail: 'Leeds', ground_minutes: 25, lat: null, lng: null },
+  coachella: { iata: 'PSP', rail: null, ground_minutes: 25, lat: null, lng: null },
+  lollapalooza: { iata: 'ORD', rail: null, ground_minutes: 30, lat: null, lng: null },
 }
 
-function lookupKnownVenue(venueName: string): KnownVenueEntry | null {
+// A resolution that may or may not carry a geocode, unlike KnownVenueEntry
+// whose lat/lng are always absent.
+type Resolution = Omit<KnownVenueEntry, 'lat' | 'lng'> & {
+  lat: number | null
+  lng: number | null
+}
+
+function lookupKnownVenue(venueName: string): Resolution | null {
   const key = venueName.toLowerCase().trim()
   return KNOWN_VENUES[key] ?? null
 }
@@ -39,7 +50,7 @@ function lookupKnownVenue(venueName: string): KnownVenueEntry | null {
 // haversine distance. Ground time is estimated from straight-line distance.
 async function resolveViaGoogleMaps(
   address: string
-): Promise<KnownVenueEntry | null> {
+): Promise<Resolution | null> {
   const apiKey = process.env.GOOGLE_MAPS_API_KEY
   if (!apiKey || !address) return null
 
@@ -63,6 +74,8 @@ async function resolveViaGoogleMaps(
     iata: airport.iata,
     rail: null,
     ground_minutes: groundMin,
+    lat,
+    lng,
   }
 }
 
@@ -129,16 +142,25 @@ export async function resolveHub(show_id: string): Promise<HubResolution> {
 
   const { data: show, error } = await admin
     .from('shows')
-    .select('id, venue_name, address, hub_resolved_at, transport_hub_iata, transport_hub_rail, hub_ground_minutes')
+    .select('id, venue_name, address, hub_resolved_at, transport_hub_iata, transport_hub_rail, hub_ground_minutes, venue_lat, venue_lng')
     .eq('id', show_id)
     .single()
 
   if (error || !show) throw new Error(`Show not found: ${show_id}`)
 
+  // A known venue is never geocoded, so it never gets coordinates: treat that
+  // case as coordinate-complete on its own. Anything resolved through Maps
+  // needs venue_lat/venue_lng actually stored, or the venue map block below
+  // has nothing to render, which is what REE-204 found: hub resolution ran,
+  // cached the hub, and threw the geocode away, so a show resolved before this
+  // fix stays without a map until this branch reruns it.
+  const isKnownVenue = lookupKnownVenue(show.venue_name ?? '') !== null
+  const hasCoordinates = isKnownVenue || (show.venue_lat != null && show.venue_lng != null)
+
   // Return cached resolution only if it produced a usable hub code.
   // A prior run that yielded null/null (standardFallback) is NOT treated as
   // resolved so we retry when the TM later adds an address.
-  if (show.hub_resolved_at && (show.transport_hub_iata || show.transport_hub_rail)) {
+  if (show.hub_resolved_at && (show.transport_hub_iata || show.transport_hub_rail) && hasCoordinates) {
     return {
       iata: show.transport_hub_iata,
       rail: show.transport_hub_rail,
@@ -149,7 +171,7 @@ export async function resolveHub(show_id: string): Promise<HubResolution> {
   }
 
   // Resolution: known-venue -> Maps geocode -> give up (no hub available).
-  const resolved: KnownVenueEntry | null =
+  const resolved: Resolution | null =
     lookupKnownVenue(show.venue_name ?? '') ??
     (await resolveViaGoogleMaps(show.address ?? '')) ??
     null
@@ -163,7 +185,9 @@ export async function resolveHub(show_id: string): Promise<HubResolution> {
   }
 
   // Cache the result on the show row. Only mark hub_resolved_at when we have
-  // a usable code so empty results are always retried.
+  // a usable code so empty results are always retried. The geocode, when we
+  // have one, is cached alongside it: it is what the venue map block in day
+  // info renders from, and it would otherwise never be stored anywhere.
   const hasCode = !!(resolved.iata || resolved.rail)
   await admin
     .from('shows')
@@ -172,6 +196,9 @@ export async function resolveHub(show_id: string): Promise<HubResolution> {
       transport_hub_rail: resolved.rail,
       hub_ground_minutes: resolved.ground_minutes,
       hub_resolved_at: hasCode ? new Date().toISOString() : null,
+      ...(resolved.lat != null && resolved.lng != null
+        ? { venue_lat: resolved.lat, venue_lng: resolved.lng }
+        : {}),
     })
     .eq('id', show_id)
 
