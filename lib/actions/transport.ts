@@ -10,6 +10,7 @@ import type { TablesUpdate } from '@/lib/types/database'
 import { bustTourContextCache } from '@/lib/ai/context'
 import { resolveTourDateId } from '@/lib/schedule/day-link'
 import { localDateInZone } from '@/lib/schedule/datetime'
+import { localBroadcastDateInZone } from '@/lib/schedule/day-window'
 import { boardingPassSendAt } from '@/lib/comms/boarding-pass-timing'
 import type { DateMove } from '@/lib/schedule/date-move'
 
@@ -87,17 +88,24 @@ export async function recordTransportOption(
   // it even queries transport). It then surfaced only as the clamped
   // continuation on the day its arrival reached into, reading as a same-day
   // block that started at the top of that grid (REE-158).
-  const localDate = localDateInZone(option.depart_at, tour.timezone ?? 'UTC')
+  //
+  // The broadcast day, not the plain calendar day: a departure just after
+  // local midnight is still tonight's flight (REE-161). Using the plain
+  // calendar date here re-homed a segment onto a fresh day the moment its
+  // departure crossed midnight, even though the TM added it against tonight.
+  const localDate = localBroadcastDateInZone(option.depart_at, tour.timezone ?? 'UTC')
   const resolved = await resolveTourDateId(supabase, tourId, localDate, {
     dayType: 'travel',
   })
   if (resolved.id === null) return { error: resolved.error }
 
-  // The segment lands on its departure day; this only makes sure an arrival
-  // that breaks over into another day has a tour_dates row to be seen on. A
-  // date with no row is invisible in the Dates sidebar, unreachable by
-  // ?date=, and fetchDayRecords' continuation view (REE-124) has nothing to
-  // render onto (REE-161).
+  // The segment lands on its departure's broadcast day; this only makes sure
+  // an arrival that breaks over into another day has a tour_dates row to be
+  // seen on. A date with no row is invisible in the Dates sidebar, unreachable
+  // by ?date=, and fetchDayRecords' continuation view (REE-124) has nothing to
+  // render onto (REE-161). The arrival is compared by its plain calendar date,
+  // not its own broadcast day: it is the date a TM would look for it under,
+  // and it is what needs a row to be reachable at all.
   const arrivalDate = localDateInZone(option.arrive_at, tour.timezone ?? 'UTC')
   if (arrivalDate !== localDate) {
     const arrivalResolved = await resolveTourDateId(supabase, tourId, arrivalDate, {
@@ -228,7 +236,12 @@ export async function createTransportSegment(
     const timezone = tourRow?.timezone ?? 'UTC'
 
     if (data.depart_at) {
-      const localDate = localDateInZone(data.depart_at, timezone)
+      // The broadcast day, not the plain calendar day: a departure just after
+      // local midnight is still tonight's flight (REE-161, REE-111). Deriving
+      // this from the plain calendar date moved the segment onto a fresh day
+      // the moment its departure crossed midnight, even when the TM added it
+      // against the day they were looking at.
+      const localDate = localBroadcastDateInZone(data.depart_at, timezone)
       // A day that exists only because a departure landed on it is a travel day,
       // not a day off. dayType only labels a newly created row, so a segment
       // moving onto an existing show or off day leaves that day's type alone.
@@ -241,10 +254,12 @@ export async function createTransportSegment(
       landedOn = localDate
     }
 
-    // The segment lands on its departure day; this only makes sure an arrival
-    // that breaks over into another day has a tour_dates row to be seen on
-    // (REE-161). It does not relink the segment: fetchDayRecords' continuation
-    // view (REE-124) is what renders it there once the row exists.
+    // The segment lands on its departure's broadcast day; this only makes sure
+    // an arrival that breaks over into another day has a tour_dates row to be
+    // seen on (REE-161). It does not relink the segment: fetchDayRecords'
+    // continuation view (REE-124) is what renders it there once the row
+    // exists. Compared by the arrival's plain calendar date, not its own
+    // broadcast day: that is the date a TM would look for it under.
     if (data.arrive_at) {
       const arrivalDate = localDateInZone(data.arrive_at, timezone)
       if (arrivalDate !== landedOn) {
@@ -364,7 +379,10 @@ export async function updateTransportSegment(
     const effectiveDepartAt = data.depart_at !== undefined ? data.depart_at : existing.depart_at
 
     if (effectiveDepartAt) {
-      const localDate = localDateInZone(effectiveDepartAt, timezone)
+      // The broadcast day, not the plain calendar day: a departure just after
+      // local midnight is still tonight's flight (REE-161, REE-111). See the
+      // create path for the same reasoning.
+      const localDate = localBroadcastDateInZone(effectiveDepartAt, timezone)
 
       // Only re-resolve the segment's own link when the departure itself
       // changed. Editing the arrival alone must not relabel or move it.
@@ -388,17 +406,20 @@ export async function updateTransportSegment(
         // the one record type with no database constraint holding the link and the
         // date together, so a UTC comparison would announce a move on any tour not
         // on UTC every time a departure crossed a UTC midnight without changing its
-        // local day.
+        // local day. Compared by broadcast day too, so a departure edited from
+        // 23:00 to 00:30 the same night is not reported as a move.
         const previousDate =
           existing.tour_dates?.date ??
-          (existing.depart_at ? localDateInZone(existing.depart_at, timezone) : null)
+          (existing.depart_at ? localBroadcastDateInZone(existing.depart_at, timezone) : null)
 
         if (localDate !== previousDate) movedTo = localDate
       }
 
-      // The segment stays linked to its departure day; this only makes sure an
-      // arrival that breaks over into another day has a tour_dates row to be
-      // seen on (REE-161), the same as the create path.
+      // The segment stays linked to its departure's broadcast day; this only
+      // makes sure an arrival that breaks over into another day has a
+      // tour_dates row to be seen on (REE-161), the same as the create path.
+      // Compared by the arrival's plain calendar date, not its own broadcast
+      // day: that is the date a TM would look for it under.
       const effectiveArriveAt = data.arrive_at !== undefined ? data.arrive_at : existing.arrive_at
       if (effectiveArriveAt) {
         const arrivalDate = localDateInZone(effectiveArriveAt, timezone)

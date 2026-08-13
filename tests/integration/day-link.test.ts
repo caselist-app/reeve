@@ -561,11 +561,14 @@ describe('the day link survives an edit', () => {
     it('creates the arrival day when only the arrival is edited, leaving the segment link alone', async () => {
       fixture = await createFixture({ date: DATE })
 
+      // Both ends land well before local midnight, so the segment is
+      // unambiguously on DATE and there is nothing yet for the arrival to
+      // break over into.
       const created = await createTransportSegment(fixture.tourId, {
         tour_date_id: fixture.tourDateId,
         mode: 'flight',
-        depart_at: `${DATE}T23:00:00.000Z`,
-        arrive_at: `${DATE}T23:45:00.000Z`,
+        depart_at: `${DATE}T20:00:00.000Z`,
+        arrive_at: `${DATE}T20:45:00.000Z`,
       })
       if (created.error || !created.segmentId) throw new Error(created.error ?? 'no segment created')
       expect(await tourDateFor(NEXT_DAY)).toBeNull()
