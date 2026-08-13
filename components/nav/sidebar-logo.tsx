@@ -27,9 +27,9 @@ export function SidebarLogo({ collapsed }: SidebarLogoProps) {
       <Image
         src={isDark ? '/logo/reeve-mark-dark.png' : '/logo/reeve-mark-light.png'}
         alt="Reeve"
-        width={38}
-        height={32}
-        className="h-8 w-auto"
+        width={29}
+        height={24}
+        className="h-6 w-auto"
       />
     )
   }

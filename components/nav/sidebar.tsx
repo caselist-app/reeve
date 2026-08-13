@@ -350,7 +350,7 @@ export function Sidebar({
 
       <div className="flex-1" />
 
-      <div className={cn('flex justify-center pb-4', collapsed ? 'px-2' : 'px-3')}>
+      <div className={cn('flex justify-center', collapsed ? 'px-2 pb-4' : 'px-3 pb-8')}>
         <SidebarLogo collapsed={collapsed} />
       </div>
 
