@@ -201,7 +201,7 @@ export function Sidebar({
                     {inboxCount > 0 && (
                       <span
                         aria-hidden="true"
-                        className="absolute -right-1 -top-1 h-1.5 w-1.5 rounded-full bg-primary"
+                        className="absolute -right-1 -top-1 h-1.5 w-1.5 rounded-full bg-destructive"
                       />
                     )}
                   </span>
@@ -219,8 +219,7 @@ export function Sidebar({
               Inbox
               {inboxCount > 0 && (
                 <span
-                  className="ml-auto rounded border px-1 py-0.5 text-[10px] leading-none tabular-nums"
-                  style={{ borderColor: 'var(--sidebar-border)', color: 'var(--sidebar-muted-foreground)' }}
+                  className="ml-auto flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[10px] leading-none font-semibold text-white tabular-nums"
                   aria-label={`${inboxCount} open`}
                 >
                   {inboxCount}
