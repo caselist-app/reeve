@@ -27,6 +27,7 @@ const DAY_ITEM_PANEL: Extract<PanelDescriptor, { type: 'day-item' }> = {
 const TRANSPORT_PANEL: Extract<PanelDescriptor, { type: 'transport' }> = {
   type: 'transport',
   key: 'segment:xyz',
+  tourId: 'tour-1',
   timezone: 'Europe/London',
   segment: {
     id: 'xyz',

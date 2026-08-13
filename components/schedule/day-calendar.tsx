@@ -409,10 +409,10 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
         if (item) openSidePanel({ type: 'day-item', key, tourId, item, timezone })
       } else if (source === 'segment') {
         const segment = segmentsById.get(recordId)
-        if (segment) openSidePanel({ type: 'transport', key, segment, timezone })
+        if (segment) openSidePanel({ type: 'transport', key, tourId, segment, timezone })
       } else {
         const stay = hotelsById.get(recordId)
-        if (stay) openSidePanel({ type: 'hotel', key, stay })
+        if (stay) openSidePanel({ type: 'hotel', key, tourId, stay })
       }
     }
   }, [itemsById, segmentsById, hotelsById, openSidePanel, tourId, timezone])

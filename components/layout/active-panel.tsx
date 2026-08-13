@@ -140,11 +140,12 @@ export function ActivePanel() {
           key={`${panel.segment.depart_at ?? ''}|${panel.segment.arrive_at ?? ''}`}
           segment={panel.segment}
           timezone={panel.timezone}
+          tourId={panel.tourId}
         />
       )
     case 'hotel':
       return (
-        <HotelPanel stay={panel.stay} />
+        <HotelPanel stay={panel.stay} tourId={panel.tourId} />
       )
     case 'add-to-day':
       return (

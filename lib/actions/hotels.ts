@@ -395,6 +395,88 @@ export async function getHotelGeocodeStatus(stayId: string): Promise<{ resolved:
   return { resolved: data?.lat != null && data?.lng != null }
 }
 
+// Replaces who is attached to an existing stay. Used by the timeline edit
+// panel's party field (REE-226): the add flow only ever inserts fresh rows,
+// but an edit has to diff against whatever is already attached and remove
+// what the TM unchecked, not just add what they checked. room_tier is
+// re-derived from each person's current type server-side rather than trusted
+// from the client, the same as createHotelStay.
+export async function updateRoomParty(
+  tourId: string,
+  stayId: string,
+  personIds: string[],
+): Promise<{ error: string | null }> {
+  const user = await requireUser()
+
+  const supabase = await createClient()
+
+  const { data: tour } = await supabase
+    .from('tours')
+    .select('id')
+    .eq('id', tourId)
+    .eq('account_id', user.id)
+    .single()
+
+  if (!tour) return { error: 'Tour not found.' }
+
+  const { data: stay } = await supabase
+    .from('hotel_stays')
+    .select('id')
+    .eq('id', stayId)
+    .eq('tour_id', tourId)
+    .single()
+
+  if (!stay) return { error: 'Hotel stay not found on this tour.' }
+
+  let peopleTypes = new Map<string, string>()
+  if (personIds.length > 0) {
+    const { data: validPeople } = await supabase
+      .from('people')
+      .select('id, person_type')
+      .eq('tour_id', tourId)
+      .in('id', personIds)
+
+    if ((validPeople?.length ?? 0) !== new Set(personIds).size) {
+      return { error: 'One or more people are not on this tour.' }
+    }
+
+    peopleTypes = new Map(validPeople!.map((p) => [p.id, p.person_type]))
+  }
+
+  const { data: existing } = await supabase
+    .from('room_assignments')
+    .select('id, person_id')
+    .eq('tour_id', tourId)
+    .eq('hotel_stay_id', stayId)
+
+  const desiredIds = new Set(personIds)
+  const toRemove = (existing ?? []).filter((a) => !desiredIds.has(a.person_id)).map((a) => a.id)
+  const existingIds = new Set((existing ?? []).map((a) => a.person_id))
+  const toAdd = personIds.filter((id) => !existingIds.has(id))
+
+  if (toRemove.length > 0) {
+    const { error } = await supabase.from('room_assignments').delete().in('id', toRemove)
+    if (error) return { error: error.message }
+  }
+
+  if (toAdd.length > 0) {
+    const { error } = await supabase.from('room_assignments').insert(
+      toAdd.map((person_id) => ({
+        tour_id: tourId,
+        hotel_stay_id: stayId,
+        person_id,
+        room_tier: roomTierFor(peopleTypes.get(person_id) ?? 'crew'),
+      })),
+    )
+    if (error) return { error: error.message }
+  }
+
+  void bustTourContextCache(tourId)
+  revalidatePath(`/tours/${tourId}/schedule`)
+
+  return { error: null }
+}
+
 // Updates the confirmation number and promotes status to 'booked'.
 // This is the only place in the codebase that sets status='booked', 
 // and only after the TM has explicitly entered the reference.
