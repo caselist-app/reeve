@@ -37,7 +37,7 @@ export function NotesTextarea({ tourId, date, initialValue }: NotesTextareaProps
   return (
     <textarea
       className={cn(
-        'w-full resize-none rounded-md border border-border bg-transparent',
+        'w-full resize-none rounded-md bg-muted',
         'px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground',
         'focus:outline-none focus:ring-1 focus:ring-ring min-h-[80px]',
       )}
