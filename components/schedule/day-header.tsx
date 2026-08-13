@@ -4,6 +4,13 @@ import {
   Moon,
   Clock,
   BedDouble,
+  Sun,
+  CloudSun,
+  CloudFog,
+  CloudRain,
+  Snowflake,
+  CloudLightning,
+  Cloud,
   type LucideIcon,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
@@ -11,6 +18,8 @@ import { cn } from '@/lib/utils'
 import { parseLocation, parseCity } from '@/lib/schedule/format'
 import { EditableDayTitle } from '@/components/schedule/editable-day-title'
 import { fetchDayItems, firstItemOfKind } from '@/lib/schedule/day-items'
+import { resolveShowWeather, type ShowWeather } from '@/lib/schedule/venue-weather'
+import { wmoToIcon } from '@/lib/weather/wmo-codes'
 
 interface DayHeaderProps {
   tourId: string
@@ -34,6 +43,24 @@ const PILL: Record<string, { label: string; cls: string }> = {
 interface MetaItem {
   icon: LucideIcon
   text: string
+}
+
+// wmoToIcon names its icon as a lucide component name; resolved through an
+// explicit map rather than a dynamic lucide-react lookup, same reasoning as
+// EVENT_ICONS in day-calendar.tsx: the dynamic form pulls the entire icon
+// set into this route's bundle. Every name wmo-codes.ts can emit is covered.
+const WEATHER_ICONS: Record<string, LucideIcon> = {
+  Sun,
+  CloudSun,
+  CloudFog,
+  CloudRain,
+  Snowflake,
+  CloudLightning,
+  Cloud,
+}
+
+function weatherIcon(name: string): LucideIcon {
+  return WEATHER_ICONS[name] ?? Cloud
 }
 
 interface Derived {
@@ -184,10 +211,35 @@ async function derive(props: DayHeaderProps): Promise<Derived> {
   }
 }
 
+// The chip in the eyebrow row, separate from derive()'s per-day-type meta:
+// travel and press hardcode meta: [], and weather only ever applies to a
+// show day, so folding it in there would mean touching every branch for a
+// fact that belongs to one of them. Only a show day looks up weather at all.
+async function deriveWeather(props: DayHeaderProps): Promise<ShowWeather> {
+  const { tourId, tourDateId, dayType } = props
+  if (dayType !== 'show') return null
+
+  const supabase = await createClient()
+  const { data: show } = await supabase
+    .from('shows')
+    .select('id')
+    .eq('tour_id', tourId)
+    .eq('tour_date_id', tourDateId)
+    .maybeSingle()
+
+  if (!show) return null
+
+  return resolveShowWeather(supabase, show.id)
+}
+
 export async function DayHeader(props: DayHeaderProps) {
   const { tourDateId, date, dayType, tourName, customTitle } = props
   const pill = PILL[dayType] ?? PILL.day_off
-  const { title, subtitle, meta } = await derive(props)
+  const [{ title, subtitle, meta }, weather] = await Promise.all([
+    derive(props),
+    deriveWeather(props),
+  ])
+  const WeatherIcon = weather ? weatherIcon(wmoToIcon(weather.code)) : null
 
   return (
     <div className="shrink-0 px-4 pt-3 pb-3 lg:px-8 lg:pt-6 lg:pb-4">
@@ -196,14 +248,23 @@ export async function DayHeader(props: DayHeaderProps) {
         <DateBadge date={date} />
 
         <div className="flex min-w-0 flex-1 flex-col gap-1">
-          {/* Eyebrow: day type + weekday + tour */}
-          <div className="flex flex-wrap items-center gap-2 min-w-0">
-            <span className={cn('shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide', pill.cls)}>
-              {pill.label}
-            </span>
-            <span className="whitespace-normal text-[11px] font-medium uppercase tracking-wider text-muted-foreground lg:truncate">
-              {weekdayName(date)} · {tourName}
-            </span>
+          {/* Eyebrow: day type + weekday + tour, weather chip pushed right */}
+          <div className="flex flex-wrap items-center justify-between gap-2 min-w-0">
+            <div className="flex flex-wrap items-center gap-2 min-w-0">
+              <span className={cn('shrink-0 rounded-md px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide', pill.cls)}>
+                {pill.label}
+              </span>
+              <span className="whitespace-normal text-[11px] font-medium uppercase tracking-wider text-muted-foreground lg:truncate">
+                {weekdayName(date)} · {tourName}
+              </span>
+            </div>
+
+            {weather && WeatherIcon && (
+              <span className="inline-flex shrink-0 items-center gap-1 text-[13px] text-muted-foreground">
+                <WeatherIcon className="h-3.5 w-3.5 text-muted-foreground/70" />
+                {Math.round(weather.tempC)}°C
+              </span>
+            )}
           </div>
 
           {/* Title (editable; blank reverts to the derived default) */}
