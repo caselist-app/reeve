@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useId, useRef, useTransition, useEffect } from 'react'
+import { useState, useId, useRef, useEffect } from 'react'
 import { updateTourAction, archiveTourAction } from '@/lib/actions/tours'
 import { useEntityForm } from '@/hooks/use-entity-form'
 import { useTourNameStore } from '@/stores/tour-name-store'
@@ -19,17 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
 const CURRENCIES = ['GBP', 'USD', 'EUR', 'AUD', 'CAD', 'CHF', 'DKK', 'NOK', 'SEK', 'JPY', 'NZD']
 
@@ -78,15 +68,12 @@ export function TourSettingsForm({ tour }: Props) {
   }, [tour.timezone])
   const [morningMsg, setMorningMsg] = useState(tour.morning_message_enabled ?? false)
 
-  const [archivePending, startArchive] = useTransition()
-  const [archiveError, setArchiveError] = useState<string | null>(null)
+  const [archiveOpen, setArchiveOpen] = useState(false)
 
-  async function handleArchive() {
-    startArchive(async () => {
-      const result = await archiveTourAction(tour.id)
-      if (result.error) setArchiveError(result.error)
-      // On success archiveTourAction redirects, so this line is unreachable.
-    })
+  async function handleArchive(): Promise<string | null> {
+    const result = await archiveTourAction(tour.id)
+    // On success archiveTourAction redirects, so the return below is unreachable.
+    return result.error
   }
 
   return (
@@ -217,33 +204,18 @@ export function TourSettingsForm({ tour }: Props) {
         <p className="text-sm text-muted-foreground">
           The tour will be hidden from your active list. No data is deleted.
         </p>
-        {archiveError && (
-          <p className="text-sm text-destructive">{archiveError}</p>
-        )}
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="destructive" size="sm" disabled={archivePending}>
-              {archivePending ? 'Archiving...' : 'Archive tour'}
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Archive this tour?</AlertDialogTitle>
-              <AlertDialogDescription>
-                The tour will be hidden from your active list. No data is deleted.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleArchive}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                Archive
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <Button variant="destructive" size="sm" onClick={() => setArchiveOpen(true)}>
+          Archive tour
+        </Button>
+        <ConfirmDialog
+          open={archiveOpen}
+          onOpenChange={setArchiveOpen}
+          title="Archive this tour?"
+          description="The tour will be hidden from your active list. No data is deleted."
+          confirmLabel="Archive"
+          pendingLabel="Archiving..."
+          onConfirm={handleArchive}
+        />
       </div>
     </div>
   )

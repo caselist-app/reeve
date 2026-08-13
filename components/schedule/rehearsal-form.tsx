@@ -9,17 +9,7 @@ import { Input } from '@/components/ui/input'
 import { PlacesAddressInput } from '@/components/shows/places-address-input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
 interface RehearsalFormProps {
   tourId: string
@@ -48,16 +38,14 @@ export function RehearsalForm({ tourId, rehearsalId, initialData, className }: R
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [deleting, setDeleting] = useState(false)
   // Controlled so the Places widget can write the selected address back in.
   const [address, setAddress] = useState(initialData.address ?? '')
 
-  async function handleDelete() {
-    setDeleting(true)
+  async function handleDelete(): Promise<string | null> {
     const result = await deleteRehearsal(rehearsalId)
-    setDeleting(false)
-    if (result.error) { setError(result.error); return }
+    if (result.error) return result.error
     router.push(`/tours/${tourId}/schedule`)
+    return null
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -161,31 +149,18 @@ export function RehearsalForm({ tourId, rehearsalId, initialData, className }: R
       {saved && <p className="text-sm text-muted-foreground">Saved.</p>}
 
       <div className="border-t border-border pt-5">
-        <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
-          <AlertDialogTrigger asChild>
-            <Button type="button" variant="destructive" size="sm">
-              Delete rehearsal
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete this rehearsal?</AlertDialogTitle>
-              <AlertDialogDescription>
-                The day reverts to travel or day off. This cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleDelete}
-                disabled={deleting}
-                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              >
-                {deleting ? 'Deleting...' : 'Delete rehearsal'}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <Button type="button" variant="destructive" size="sm" onClick={() => setDeleteOpen(true)}>
+          Delete rehearsal
+        </Button>
+        <ConfirmDialog
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          title="Delete this rehearsal?"
+          description="The day reverts to travel or day off. This cannot be undone."
+          confirmLabel="Delete rehearsal"
+          pendingLabel="Deleting..."
+          onConfirm={handleDelete}
+        />
       </div>
     </form>
   )
