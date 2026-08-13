@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { patchScheduleItemTimes, type PanelDescriptor } from '@/stores/side-panel-store'
+import { patchScheduleItemTimes, useSidePanel, type PanelDescriptor } from '@/stores/side-panel-store'
 
 // REE-85. Resizing a block on the grid persists a new end, but the detail panel
 // holds a snapshot captured when the block was clicked, so without this patch it
@@ -116,5 +116,29 @@ describe('patchScheduleItemTimes', () => {
 
   it('no-ops on a closed panel (null)', () => {
     expect(patchScheduleItemTimes(null, 'day_item:abc', '2026-08-31T05:00:00.000Z', null)).toBeNull()
+  })
+})
+
+// REE-224: the connect-telegram descriptor, moved off its own AlertDialog
+// onto the global side panel.
+describe('connect-telegram descriptor', () => {
+  const CONNECT_TELEGRAM_PANEL: Extract<PanelDescriptor, { type: 'connect-telegram' }> = {
+    type: 'connect-telegram',
+    contactId: 'contact-1',
+    contactName: 'Jamie Roe',
+    onBack: () => {},
+  }
+
+  it('round-trips through open()', () => {
+    useSidePanel.getState().open(CONNECT_TELEGRAM_PANEL)
+    expect(useSidePanel.getState().panel).toBe(CONNECT_TELEGRAM_PANEL)
+    expect(useSidePanel.getState().isOpen).toBe(true)
+    useSidePanel.getState().close()
+  })
+
+  it('is left alone by patchScheduleItemTimes, the guard that stops a grid drag patching a non-schedule panel', () => {
+    expect(
+      patchScheduleItemTimes(CONNECT_TELEGRAM_PANEL, 'day_item:abc', '2026-08-31T05:00:00.000Z', null),
+    ).toBeNull()
   })
 })

@@ -9,7 +9,6 @@ import type { Tables } from '@/lib/types/database'
 import { passportStatus, formatExpiry } from '@/lib/roster/passport'
 import { deleteContact } from '@/lib/actions/contacts'
 import { PageHeader } from '@/components/layout/page-header'
-import { ConnectTelegramDialog } from '@/components/roster/connect-telegram-dialog'
 import { Button } from '@/components/ui/button'
 import { Separator } from '@/components/ui/separator'
 import { DataField } from '@/components/ui/data-field'
@@ -36,9 +35,8 @@ interface Props {
 
 export function ContactDetail({ contact, tours }: Props) {
   const router = useRouter()
-  const { open } = useSidePanel()
+  const { open, close } = useSidePanel()
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [telegramOpen, setTelegramOpen] = useState(false)
 
   const status = passportStatus(contact.passport_expiry)
 
@@ -54,6 +52,15 @@ export function ContactDetail({ contact, tours }: Props) {
       type: 'contact',
       contact,
       onSuccess: () => router.refresh(),
+    })
+  }
+
+  function handleConnectTelegram() {
+    open({
+      type: 'connect-telegram',
+      contactId: contact.id,
+      contactName: contact.name,
+      onBack: close,
     })
   }
 
@@ -76,7 +83,7 @@ export function ContactDetail({ contact, tours }: Props) {
               Edit
             </Button>
             {!contact.telegram_chat_id && (
-              <Button size="sm" variant="outline" onClick={() => setTelegramOpen(true)}>
+              <Button size="sm" variant="outline" onClick={handleConnectTelegram}>
                 <Send className="mr-1.5 h-3.5 w-3.5" />
                 Connect Telegram
               </Button>
@@ -100,13 +107,6 @@ export function ContactDetail({ contact, tours }: Props) {
             />
           </>
         }
-      />
-
-      <ConnectTelegramDialog
-        contactId={contact.id}
-        contactName={contact.name}
-        open={telegramOpen}
-        onOpenChange={setTelegramOpen}
       />
 
       {/* Passport expiry alert, only shown when flagged */}

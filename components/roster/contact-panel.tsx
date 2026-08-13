@@ -10,7 +10,6 @@ import type { TourMembership } from '@/lib/actions/contacts'
 import type { ContactTourContext } from '@/stores/side-panel-store'
 import { useSidePanel } from '@/stores/side-panel-store'
 import { PanelShell } from '@/components/layout/panel-shell'
-import { ConnectTelegramDialog } from '@/components/roster/connect-telegram-dialog'
 import { Button } from '@/components/ui/button'
 import { ListRow } from '@/components/ui/list-row'
 import { Separator } from '@/components/ui/separator'
@@ -40,7 +39,6 @@ export function ContactPanel({ contactId, tourContext, onSuccess }: Props) {
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
-  const [telegramOpen, setTelegramOpen] = useState(false)
 
   useEffect(() => {
     getContact(contactId)
@@ -69,6 +67,18 @@ export function ContactPanel({ contactId, tourContext, onSuccess }: Props) {
     })
   }
 
+  function handleConnectTelegram() {
+    if (!contact) return
+    open({
+      type: 'connect-telegram',
+      contactId: contact.id,
+      contactName: contact.name,
+      // Reopens this same view underneath rather than closing outright,
+      // since this panel replaces it in the store while it's open.
+      onBack: () => open({ type: 'contact-view', contactId, tourContext, onSuccess }),
+    })
+  }
+
   async function handleDelete(): Promise<string | null> {
     const result = await deleteContact(contactId)
     if (result.error) return result.error
@@ -93,7 +103,7 @@ export function ContactPanel({ contactId, tourContext, onSuccess }: Props) {
             Edit
           </DropdownMenuItem>
           {!contact.telegram_chat_id && (
-            <DropdownMenuItem onSelect={() => setTelegramOpen(true)}>
+            <DropdownMenuItem onSelect={handleConnectTelegram}>
               <Send className="mr-2 h-4 w-4" />
               Connect Telegram
             </DropdownMenuItem>
@@ -107,13 +117,6 @@ export function ContactPanel({ contactId, tourContext, onSuccess }: Props) {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-
-      <ConnectTelegramDialog
-        contactId={contact.id}
-        contactName={contact.name}
-        open={telegramOpen}
-        onOpenChange={setTelegramOpen}
-      />
 
       <ConfirmDialog
         open={deleteOpen}

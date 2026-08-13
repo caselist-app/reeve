@@ -227,6 +227,17 @@ export type PanelDescriptor =
       tourId: string
       onSuccess: () => void
     }
+  // REE-224: the one non-destructive AlertDialog in the repo, moved here.
+  // onBack, not onSuccess: there's nothing to report back, only somewhere to
+  // return to. From contact-panel.tsx that's the contact-view panel
+  // underneath; from contact-detail.tsx, opened off a page rather than
+  // another panel, it's just close(). Same shape as add-to-day's onBack.
+  | {
+      type: 'connect-telegram'
+      contactId: string
+      contactName: string
+      onBack: () => void
+    }
 
 // The subset of PanelDescriptor that day-calendar.tsx can open: the variants
 // that carry a stable key, used for active-state comparison instead of
