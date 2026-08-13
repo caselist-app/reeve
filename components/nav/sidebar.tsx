@@ -15,6 +15,7 @@ import {
 import { cn } from '@/lib/utils'
 import { TourSelector } from '@/components/nav/tour-selector'
 import { TourSettingsPanel } from '@/components/nav/tour-settings-panel'
+import { SidebarLogo } from '@/components/nav/sidebar-logo'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { useCommandPalette } from '@/stores/command-palette-store'
 import { useTourNameStore } from '@/stores/tour-name-store'
@@ -348,6 +349,10 @@ export function Sidebar({
       )}
 
       <div className="flex-1" />
+
+      <div className={cn('flex justify-center pb-4', collapsed ? 'px-2' : 'px-3')}>
+        <SidebarLogo collapsed={collapsed} />
+      </div>
 
       {/* Tour settings overlay, slides over the sidebar. openSettings() forces
           an expand before opening, and ResizableSidebar additionally keeps
