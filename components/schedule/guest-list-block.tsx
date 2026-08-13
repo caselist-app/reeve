@@ -73,7 +73,10 @@ export function GuestListBlock({ tourId, showId, venueName, summary }: GuestList
           </>
         )}
       </span>
-      <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
+      <span className="mt-0.5 flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground transition-colors group-hover:text-foreground">
+        view
+        <ChevronRight className="h-3.5 w-3.5" />
+      </span>
     </button>
   )
 }
