@@ -46,6 +46,28 @@ function lookupKnownVenue(venueName: string): Resolution | null {
   return KNOWN_VENUES[key] ?? null
 }
 
+// REE-214: the nearest-hub lookup is a local haversine calculation against a
+// bundled airport list, no network call, so it can run inline in the same
+// request as the save rather than waiting on the async resolve-hub job. That
+// job exists only to wait on a server-side geocode; once coordinates are
+// already known (a Places pick, REE-213) or the venue is a known-venue match,
+// there is nothing left to wait for. Returns null when neither applies (an
+// address typed by hand with no Places selection), which is the caller's
+// signal to fall back to the async job.
+export function resolveHubSync(
+  venueName: string,
+  lat: number | null,
+  lng: number | null,
+): HubResolution | null {
+  const known = lookupKnownVenue(venueName)
+  if (known) return { iata: known.iata, rail: known.rail, ground_minutes: known.ground_minutes }
+
+  if (lat == null || lng == null) return null
+
+  const { airport, distKm } = nearestAirport(lat, lng)
+  return { iata: airport.iata, rail: null, ground_minutes: estimateGroundMinutes(distKm) }
+}
+
 // Google Maps geocode + nearest airport from the bundled airport list.
 // Geocodes the venue address to lat/lng, then finds the nearest airport by
 // haversine distance. Ground time is estimated from straight-line distance.

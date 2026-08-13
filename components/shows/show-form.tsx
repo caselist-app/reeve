@@ -70,6 +70,17 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
 
   const [address, setAddress] = useState(initialData?.address ?? '')
   const [venueName, setVenueName] = useState(initialData?.venue_name ?? '')
+  // Captured from the Places Autocomplete selection and submitted as
+  // showSchema's lat/lng (REE-213). Not seeded from initialData: the row
+  // carries these as venue_lat/venue_lng, not lat/lng, and it does not need to
+  // be, since the submitted value only matters when the address changes in
+  // this session (see the addressChanged branch in updateShow) and is always
+  // freshly captured then. Cleared whenever the address is edited by hand, so
+  // a coordinate from a previous selection never rides along with a
+  // hand-typed address that has moved away from it.
+  const [coordinates, setCoordinates] = useState<{ lat: number; lng: number } | undefined>(
+    undefined
+  )
   const [venueType, setVenueType] = useState(initialData?.venue_type ?? '')
   // A Radix Select contributes nothing to FormData, so this is state and gets
   // merged into the payload by hand, the same way venue_type is. Falls back to
@@ -114,6 +125,8 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
         venue_type: (venueType as ShowData['venue_type']) || null,
         catering_type: cateringType as ShowData['catering_type'],
         capacity: fields.capacity,
+        lat: coordinates?.lat,
+        lng: coordinates?.lng,
         stage_dimensions: fields.stage_dimensions,
         parking: fields.parking,
         shore_power: fields.shore_power,
@@ -190,13 +203,22 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
           id={`${formId}-address`}
           name="address"
           value={address}
-          onChange={setAddress}
-          onPlaceSelect={(addr, name) => {
+          onChange={(value) => {
+            setAddress(value)
+            // Hand-typing invalidates whatever was captured from the last
+            // Places selection. onPlaceSelect below re-sets this in the same
+            // call when a selection is what triggered the change, so a real
+            // pick still ends up with coordinates.
+            setCoordinates(undefined)
+          }}
+          onPlaceSelect={(addr, name, lat, lng) => {
             setAddress(addr)
             // Only fill venue name if it is empty, don't overwrite what the TM typed.
             if (name && !venueName) setVenueName(name)
+            setCoordinates(lat !== undefined && lng !== undefined ? { lat, lng } : undefined)
           }}
           placeholder="211 Stockwell Rd, London SW9 9SL"
+          includeGeometry
         />
       </div>
 

@@ -38,6 +38,14 @@ export const showSchema = z.object({
   showers: z.boolean().nullable().optional(),
   house_pa_spec: z.string().nullable().optional(),
   house_lighting_plot: z.string().nullable().optional(),
+  // REE-213: set only when the TM picked the venue from Places Autocomplete
+  // (components/shows/places-address-input.tsx, includeGeometry). Undefined
+  // for a manually typed address, never null: the form has no way to clear a
+  // coordinate on its own, only to not have captured one. updateShow still
+  // nulls venue_lat/venue_lng itself when the address changes and neither of
+  // these arrives, which is the "we don't know where this is" state.
+  lat: z.number().optional(),
+  lng: z.number().optional(),
 })
 
 export type Show = z.infer<typeof showSchema>

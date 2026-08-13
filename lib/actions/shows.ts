@@ -15,6 +15,7 @@ import {
   type ShareRow,
 } from '@/lib/shows/advance'
 import { resolveHubJob } from '@/trigger/jobs/resolve-hub'
+import { resolveHubSync } from '@/lib/logistics/hub-resolver'
 import { revertDayTypeIfOrphaned } from '@/lib/schedule/day-type-revert'
 import { resolveTourDateId } from '@/lib/schedule/day-link'
 import { shiftDayItemsToDate } from '@/lib/schedule/day-items'
@@ -69,10 +70,31 @@ export async function createShow(
     return { error: error.message }
   }
 
-  // Enqueue hub resolution asynchronously. The show is saved and returned
-  // immediately. The job writes transport_hub_iata, transport_hub_rail,
-  // hub_ground_minutes, and hub_resolved_at once it completes.
-  await resolveHubJob.trigger({ show_id: showId })
+  // REE-214: resolve the hub inline when it can be, rather than always
+  // waiting on the async job. resolveHubSync only succeeds when there is
+  // nothing left to wait for: a known-venue match, or coordinates already
+  // captured from a Places pick (REE-213). Both are local, no network call.
+  const inlineHub = resolveHubSync(parsed.data.venue_name, parsed.data.lat ?? null, parsed.data.lng ?? null)
+
+  if (inlineHub) {
+    const hasCode = !!(inlineHub.iata || inlineHub.rail)
+    await supabase
+      .from('shows')
+      .update({
+        transport_hub_iata: inlineHub.iata,
+        transport_hub_rail: inlineHub.rail,
+        hub_ground_minutes: inlineHub.ground_minutes,
+        hub_resolved_at: hasCode ? new Date().toISOString() : null,
+      })
+      .eq('id', showId)
+  } else {
+    // Fallback: an address typed by hand with no Places selection, which
+    // still needs a server-side geocode before the hub can be resolved. The
+    // show is saved and returned immediately; the job writes
+    // transport_hub_iata, transport_hub_rail, hub_ground_minutes, and
+    // hub_resolved_at once it completes.
+    await resolveHubJob.trigger({ show_id: showId })
+  }
 
   void bustTourContextCache(tourId)
 
@@ -117,6 +139,24 @@ export async function updateShow(
   const addressChanged = (parsed.data.address ?? null) !== (existing.address ?? null)
   const dateChanged = parsed.data.date !== existing.date
 
+  // lat/lng are not shows columns (venue_lat/venue_lng are), so they cannot
+  // ride along in the spread below the way every other schema field does.
+  // Pulled out here rather than left in showFields and overwritten, so a
+  // stray `lat`/`lng` key never reaches supabase-js and errors on an unknown
+  // column.
+  const { lat, lng, ...showFields } = parsed.data
+  const hasCoordinates = lat != null && lng != null
+
+  // REE-214: resolve the hub inline when it can be, rather than always
+  // waiting on the async job. Only meaningful when the address is changing
+  // (that is what invalidates the cached hub below); null otherwise so it
+  // never masks the "no resolution needed" case with a stale computation.
+  // resolveHubSync only succeeds when there is nothing left to wait for: a
+  // known-venue match, or coordinates already captured from a Places pick.
+  const inlineHub = addressChanged
+    ? resolveHubSync(parsed.data.venue_name, hasCoordinates ? lat : null, hasCoordinates ? lng : null)
+    : null
+
   // showSchema always carries a date, so this action has always written one.
   // What it never did was move the tour_date_id with it, which is the whole of
   // bug 1a: the schedule queries by the link and stayed on the old day while
@@ -139,26 +179,36 @@ export async function updateShow(
   const { error } = await supabase
     .from('shows')
     .update({
-      ...parsed.data,
+      ...showFields,
       ...(dateChanged ? { tour_date_id: nextTourDateId } : {}),
       // Clear the hub cache whenever the address changes so the planner UI
-      // shows "Resolving..." until the job completes.
+      // shows "Resolving..." until it is re-resolved.
       //
-      // venue_lat and venue_lng go with it. They were left behind, and both
-      // planners treat a stored geocode as authoritative rather than
-      // re-geocoding, so correcting a venue address left hotel and transport
-      // search running against the coordinates of the old one. Nothing about
-      // that is visible: the address on screen is the corrected one, the hub
-      // re-resolves, and the results are simply for somewhere else. Of the
-      // three fields this clears, it is the only one with no symptom.
+      // venue_lat and venue_lng go with it, unless the TM picked the new
+      // address from the Places dropdown and the form already has a geocode
+      // for it (REE-213): write that straight onto the row rather than
+      // waiting on the async job, which is exactly the case this issue exists
+      // for. Falling back to null is still correct for a manually typed
+      // address: both planners treat a stored geocode as authoritative rather
+      // than re-geocoding, so leaving the old coordinates in place would run
+      // hotel and transport search against somewhere the venue no longer is,
+      // with the address on screen showing the corrected one and nothing
+      // visible saying the coordinates disagree.
+      //
+      // The hub itself is resolved inline in the same write when inlineHub
+      // resolved something (REE-214), so the "Resolving venue location" banner
+      // never has to appear for that case. Otherwise it is cleared here and
+      // left null until the async fallback job below completes it.
       ...(addressChanged
         ? {
-            hub_resolved_at: null,
-            transport_hub_iata: null,
-            transport_hub_rail: null,
-            hub_ground_minutes: null,
-            venue_lat: null,
-            venue_lng: null,
+            venue_lat: hasCoordinates ? lat : null,
+            venue_lng: hasCoordinates ? lng : null,
+            transport_hub_iata: inlineHub?.iata ?? null,
+            transport_hub_rail: inlineHub?.rail ?? null,
+            hub_ground_minutes: inlineHub?.ground_minutes ?? null,
+            hub_resolved_at: inlineHub && (inlineHub.iata || inlineHub.rail)
+              ? new Date().toISOString()
+              : null,
           }
         : {}),
     })
@@ -201,7 +251,9 @@ export async function updateShow(
     await revertDayTypeIfOrphaned(supabase, existing.tour_date_id, 'show')
   }
 
-  if (addressChanged) {
+  // Fallback: an address changed by hand, with no Places pick and no
+  // known-venue match, so the hub still needs a server-side geocode.
+  if (addressChanged && !inlineHub) {
     await resolveHubJob.trigger({ show_id: showId })
   }
 
