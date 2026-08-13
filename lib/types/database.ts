@@ -1222,6 +1222,9 @@ export type Database = {
           venue_lng: number | null
           venue_name: string
           venue_type: string | null
+          weather_code: number | null
+          weather_fetched_at: string | null
+          weather_temp_c: number | null
         }
         Insert: {
           address?: string | null
@@ -1254,6 +1257,9 @@ export type Database = {
           venue_lng?: number | null
           venue_name: string
           venue_type?: string | null
+          weather_code?: number | null
+          weather_fetched_at?: string | null
+          weather_temp_c?: number | null
         }
         Update: {
           address?: string | null
@@ -1286,6 +1292,9 @@ export type Database = {
           venue_lng?: number | null
           venue_name?: string
           venue_type?: string | null
+          weather_code?: number | null
+          weather_fetched_at?: string | null
+          weather_temp_c?: number | null
         }
         Relationships: [
           {
