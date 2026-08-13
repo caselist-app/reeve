@@ -239,9 +239,13 @@ export async function confirmExtraction(
         vehicle_or_flight_no: seg.vehicle_or_flight_no ?? null,
         booking_reference: seg.booking_reference ?? null,
         status: 'planned',
-        // Omitted (rather than null) when there is no selection, so the
-        // column's own default ('whole_party') applies.
-        created_as: selection?.created_as,
+        // Defaulted here rather than left to the column's own default.
+        // PostgREST's bulk array insert (this call inserts every kept segment
+        // in one round trip) populates a missing key as SQL NULL, not the
+        // table DEFAULT: that only applies to a single-object insert, which
+        // is what createTransportSegment uses and why it can omit the key.
+        // Confirmed by CI: this NOT NULL-violated on every row until fixed.
+        created_as: selection?.created_as ?? 'whole_party',
       })
       rowSelections.push(selection)
     }
@@ -285,7 +289,10 @@ export async function confirmExtraction(
       check_out_time: hotel.check_out_time ?? null,
       confirmation_number: hotel.confirmation_number ?? null,
       status: 'planned',
-      created_as: partySelections.hotel_stays?.[String(originalIndex)]?.created_as,
+      // Same reason as the transport_segments rows above: this is also a
+      // bulk array insert, so the column's own default does not apply to an
+      // omitted key here.
+      created_as: partySelections.hotel_stays?.[String(originalIndex)]?.created_as ?? 'whole_party',
     }))
 
     const { data: insertedStays, error } = await supabase.from('hotel_stays').insert(rows).select('id')
