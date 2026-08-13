@@ -4,6 +4,7 @@ import { ChevronLeft } from 'lucide-react'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { HotelStayDetail } from '@/components/planner/hotel-stay-detail'
+import { PageLayout } from '@/components/layout/page-layout'
 
 export default async function HotelStayPage({
   params,
@@ -41,7 +42,7 @@ export default async function HotelStayPage({
   if (!show || !stay) redirect(`/tours/${id}/shows/${showId}/hotels`)
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-10">
+    <PageLayout maxWidth="max-w-2xl">
       <Link
         href={`/tours/${id}/shows/${showId}/hotels`}
         className="mb-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
@@ -57,6 +58,6 @@ export default async function HotelStayPage({
       </div>
 
       <HotelStayDetail stay={stay} tourId={id} />
-    </div>
+    </PageLayout>
   )
 }
