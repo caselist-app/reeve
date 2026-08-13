@@ -14,9 +14,10 @@ import { PlacesAddressInput } from '@/components/shows/places-address-input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { StatusBadge, TRANSPORT_VARIANT } from '@/components/ui/status-badge'
-import { updateTransportSegment, deleteTransportSegment } from '@/lib/actions/transport'
+import { updateTransportSegment, deleteTransportSegment, updateTransportParty } from '@/lib/actions/transport'
 import { useSidePanel } from '@/stores/side-panel-store'
 import { DateMoveNotice } from '@/components/schedule/date-move-notice'
+import { PartyField } from '@/components/schedule/party-field'
 import type { Tables } from '@/lib/types/database'
 import { fromDatetimeLocal, toDatetimeLocal } from '@/lib/schedule/datetime'
 import { useEntityForm } from '@/hooks/use-entity-form'
@@ -33,6 +34,7 @@ type Segment = Pick<
 interface TransportPanelProps {
   segment: Segment
   timezone: string
+  tourId: string
 }
 
 const MODE_LABELS: Record<string, string> = {
@@ -350,7 +352,7 @@ function EditableSegmentForm({ segment, timezone }: { segment: Segment; timezone
   )
 }
 
-export function TransportPanel({ segment, timezone }: TransportPanelProps) {
+export function TransportPanel({ segment, timezone, tourId }: TransportPanelProps) {
   const modeLabel = MODE_LABELS[segment.mode] ?? segment.mode
 
   return (
@@ -363,11 +365,18 @@ export function TransportPanel({ segment, timezone }: TransportPanelProps) {
       }
       headerAction={<DeleteMenu segmentId={segment.id} modeLabel={modeLabel} />}
     >
-      {segment.mode === 'flight' ? (
-        <FlightCard segment={segment} timezone={timezone} />
-      ) : (
-        <EditableSegmentForm segment={segment} timezone={timezone} />
-      )}
+      <div className="space-y-4">
+        {segment.mode === 'flight' ? (
+          <FlightCard segment={segment} timezone={timezone} />
+        ) : (
+          <EditableSegmentForm segment={segment} timezone={timezone} />
+        )}
+        <PartyField
+          tourId={tourId}
+          entity={{ kind: 'transport_segment', ids: [segment.id] }}
+          onSave={(personIds) => updateTransportParty(tourId, segment.id, personIds)}
+        />
+      </div>
     </PanelShell>
   )
 }
