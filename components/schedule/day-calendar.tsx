@@ -60,6 +60,7 @@ import { localTimeInZone, localDayWindowUtc } from '@/lib/schedule/datetime'
 import { fromGridInstant, toGridInstant } from '@/lib/schedule/day-window'
 import { slotToDayFormInput } from '@/lib/schedule/day-form-prefill'
 import { buildDayCalendarView } from '@/lib/schedule/day-calendar-view'
+import { eventChipTimeLabel } from '@/lib/schedule/event-chip-label'
 import { nowMarker } from '@/lib/schedule/now-marker'
 import { assignOverlapDepths } from '@/lib/schedule/overlap-layout'
 import { fromDropOrResize, type CalendarEvent, type EventSource } from '@/lib/schedule/calendar-adapter'
@@ -447,26 +448,10 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
       // time of its own, so it renders as a bare tinted block (REE-68).
       if (event.id === PENDING_SELECTION_ID) return null
       const Icon = eventIcon(event.icon)
-      // Time range only when the end is real. A synthesised end is not a claim
-      // about duration (see the adapter), so surfacing it as "10:00 to 10:30"
-      // would invent a window the TM never set; the start alone is shown, which
-      // already carries that the end is open. Read off event.start/event.end via
-      // fromGridInstant rather than realStart/realEnd: RBC's drag addon updates
-      // start/end live on every snapped step, so this is what makes the label
-      // track the gesture instead of jumping to the new time only on drop. It
-      // round-trips exactly to realStart/realEnd outside a drag. The one
-      // exception is a continuesBefore block: its grid.start is clamped to the
-      // grid's top boundary (a read-only projection of a row filed on the
-      // previous day), so deriving its start from event.start would show the
-      // 04:00 boundary instead of the real start. Those blocks are never
-      // draggable (draggableAccessor excludes continuesBefore), so realStart is
-      // always correct for them and never goes stale.
-      const startLabel = event.continuesBefore
-        ? localTimeInZone(event.realStart.toISOString(), timezone)
-        : localTimeInZone(fromGridInstant(event.start.toISOString(), timezone), timezone)
-      const timeLabel = event.syntheticEnd
-        ? startLabel
-        : `${startLabel}–${localTimeInZone(fromGridInstant(event.end.toISOString(), timezone), timezone)}`
+      // The label tracks a live drag/resize (REE-187) and keeps a continuesBefore
+      // block's real start rather than its clamped grid.start; see
+      // eventChipTimeLabel for why.
+      const timeLabel = eventChipTimeLabel(event, timezone)
       // Title first, then time. On a tall block the body flips to a column (the
       // @container branch in day-calendar.css) so the title sits above the time;
       // on a short block it stays this single row. The time is shrink-0 and the
