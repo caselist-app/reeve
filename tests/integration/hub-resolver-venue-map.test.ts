@@ -10,6 +10,29 @@ import { resolveHub } from '@/lib/logistics/hub-resolver'
 // job, which is every show with an address. Only the logistics planner and
 // hotel search wrote those columns, and a TM adding a show never necessarily
 // opens either.
+//
+// supabase-js makes its own requests through the global fetch, the same one
+// resolveViaGoogleMaps calls through, so a blanket global.fetch mock would
+// swallow resolveHub's own read of the show too and fail every test with a
+// misleading "Show not found". mockGeocodeFetch only intercepts requests to
+// the Maps geocode endpoint and passes everything else, including
+// supabase-js's own calls, through to the real fetch.
+function mockGeocodeFetch(
+  response: { status: string; results: { geometry: { location: { lat: number; lng: number } } }[] }
+) {
+  const real = global.fetch
+  const geocodeCalls: string[] = []
+  global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === 'string' ? input : input.toString()
+    if (url.startsWith('https://maps.googleapis.com/maps/api/geocode/json')) {
+      geocodeCalls.push(url)
+      return { json: async () => response } as Response
+    }
+    return real(input, init)
+  }) as unknown as typeof fetch
+  return geocodeCalls
+}
+
 describe('resolveHub stores the geocode it already computed', () => {
   let fixture: Fixture
   const originalApiKey = process.env.GOOGLE_MAPS_API_KEY
@@ -33,12 +56,10 @@ describe('resolveHub stores the geocode it already computed', () => {
       .update({ address: '1 Elm Street, Springfield' })
       .eq('id', fixture.showId)
 
-    global.fetch = vi.fn().mockResolvedValue({
-      json: async () => ({
-        status: 'OK',
-        results: [{ geometry: { location: { lat: 51.5074, lng: -0.1278 } } }],
-      }),
-    }) as unknown as typeof fetch
+    mockGeocodeFetch({
+      status: 'OK',
+      results: [{ geometry: { location: { lat: 51.5074, lng: -0.1278 } } }],
+    })
 
     const result = await resolveHub(fixture.showId)
     expect(result.iata).toBeTruthy()
@@ -72,12 +93,10 @@ describe('resolveHub stores the geocode it already computed', () => {
       })
       .eq('id', fixture.showId)
 
-    global.fetch = vi.fn().mockResolvedValue({
-      json: async () => ({
-        status: 'OK',
-        results: [{ geometry: { location: { lat: 51.5074, lng: -0.1278 } } }],
-      }),
-    }) as unknown as typeof fetch
+    mockGeocodeFetch({
+      status: 'OK',
+      results: [{ geometry: { location: { lat: 51.5074, lng: -0.1278 } } }],
+    })
 
     await resolveHub(fixture.showId)
 
@@ -97,17 +116,16 @@ describe('resolveHub stores the geocode it already computed', () => {
       .update({ venue_name: 'Hellfest', address: 'Clisson, France' })
       .eq('id', fixture.showId)
 
-    const fetchSpy = vi.fn()
-    global.fetch = fetchSpy as unknown as typeof fetch
+    const geocodeCalls = mockGeocodeFetch({ status: 'OK', results: [] })
 
     const result = await resolveHub(fixture.showId)
     expect(result.iata).toBe('NTE')
     // No Maps call for a known venue, and a second resolveHub call should
     // still not make one: hasCoordinates treats "known venue" as satisfied.
-    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(geocodeCalls).toHaveLength(0)
 
     const second = await resolveHub(fixture.showId)
     expect(second.iata).toBe('NTE')
-    expect(fetchSpy).not.toHaveBeenCalled()
+    expect(geocodeCalls).toHaveLength(0)
   })
 })
