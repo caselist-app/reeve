@@ -45,7 +45,9 @@ export async function resolveParty(
           .in('segment_id', entity.ids)
       : await supabase
           .from('room_assignments')
-          .select('people(id, person_type, contacts(name, whatsapp_number, contact_email))')
+          .select(
+            'people!room_assignments_person_id_fkey(id, person_type, contacts(name, whatsapp_number, contact_email))'
+          )
           .eq('tour_id', tourId)
           .in('hotel_stay_id', entity.ids)
 
