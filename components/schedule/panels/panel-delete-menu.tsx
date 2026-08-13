@@ -9,16 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
 // The one delete affordance every schedule panel uses: a three-dots menu in the
 // panel header (via PanelShell's headerAction) whose one item opens a confirm
@@ -32,6 +23,8 @@ import {
 // navigation (close the panel, refresh) and returns an error string, or null on
 // success. On success the whole panel unmounts, so this component only has to
 // hold the dialog open until then and surface an error if one comes back.
+// The dialog itself, its pending/error state and its preventDefault handling
+// all live in ConfirmDialog (Brief 51): this is a menu wired to it.
 
 interface PanelDeleteMenuProps {
   // The destructive menu item and the confirm button, e.g. "Delete flight",
@@ -62,24 +55,6 @@ export function PanelDeleteMenu({
   extraItems,
 }: PanelDeleteMenuProps) {
   const [open, setOpen] = useState(false)
-  const [pending, setPending] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function handleConfirm(e: React.MouseEvent) {
-    // Radix closes the dialog on Action click by default. Hold it open across
-    // the await so an error can render inside it; the parent unmounts the whole
-    // panel on success, so there is nothing left to close on the happy path.
-    e.preventDefault()
-    setError(null)
-    setPending(true)
-    const err = await onConfirm()
-    setPending(false)
-    if (err) {
-      setError(err)
-      return
-    }
-    setOpen(false)
-  }
 
   return (
     <>
@@ -105,27 +80,15 @@ export function PanelDeleteMenu({
         </DropdownMenuContent>
       </DropdownMenu>
 
-      <AlertDialog open={open} onOpenChange={setOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{dialogTitle}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {dialogDescription}
-              {error && <span className="mt-2 block text-destructive">{error}</span>}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleConfirm}
-              disabled={pending}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {pending ? pendingLabel : confirmLabel}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDialog
+        open={open}
+        onOpenChange={setOpen}
+        title={dialogTitle}
+        description={dialogDescription}
+        confirmLabel={confirmLabel}
+        pendingLabel={pendingLabel}
+        onConfirm={onConfirm}
+      />
     </>
   )
 }
