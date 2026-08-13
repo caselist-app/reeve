@@ -373,20 +373,30 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
     [timezone],
   )
 
-  const openEvent = useMemo(() => {
-    return (event: CalendarEvent) => {
-      if (event.source === 'day_item') {
-        const item = itemsById.get(event.recordId)
-        if (item) openSidePanel({ type: 'day-item', key: event.id, tourId, item, timezone })
-      } else if (event.source === 'segment') {
-        const segment = segmentsById.get(event.recordId)
-        if (segment) openSidePanel({ type: 'transport', key: event.id, segment, timezone })
+  // Shared by grid blocks and the "No time set" rail: both point at a
+  // source/recordId pair (an event's own recordId, or an UnpositionedRecord's
+  // id), and both open the same detail panel. The key mirrors the adapter's own
+  // `${source}:${id}` event id format, so a rail item and the same record once it
+  // gains a time and lands on the grid open the identical panel key.
+  const openRecord = useMemo(() => {
+    return (source: EventSource, recordId: string) => {
+      const key = `${source}:${recordId}`
+      if (source === 'day_item') {
+        const item = itemsById.get(recordId)
+        if (item) openSidePanel({ type: 'day-item', key, tourId, item, timezone })
+      } else if (source === 'segment') {
+        const segment = segmentsById.get(recordId)
+        if (segment) openSidePanel({ type: 'transport', key, segment, timezone })
       } else {
-        const stay = hotelsById.get(event.recordId)
-        if (stay) openSidePanel({ type: 'hotel', key: event.id, stay })
+        const stay = hotelsById.get(recordId)
+        if (stay) openSidePanel({ type: 'hotel', key, stay })
       }
     }
   }, [itemsById, segmentsById, hotelsById, openSidePanel, tourId, timezone])
+
+  const openEvent = useMemo(() => {
+    return (event: CalendarEvent) => openRecord(event.source, event.recordId)
+  }, [openRecord])
 
   // The event whose detail panel is currently open, so its block can paint as
   // selected: a solid accent fill with white text, matching the reference
@@ -593,8 +603,10 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
             {view.unpositioned.map((record) => {
               const Icon = eventIcon(record.icon)
               return (
-                <span
+                <button
                   key={`${record.source}:${record.id}`}
+                  type="button"
+                  onClick={() => openRecord(record.source, record.id)}
                   className={cn(
                     accentClassName(record.source, record.accent),
                     'inline-flex items-center gap-1.5 rounded-md bg-[var(--evt-tint)] px-2 py-1 text-xs text-[var(--evt-text)]',
@@ -602,7 +614,7 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
                 >
                   <Icon className="h-3 w-3 shrink-0" aria-hidden />
                   {record.title}
-                </span>
+                </button>
               )
             })}
           </div>
