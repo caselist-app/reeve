@@ -74,7 +74,7 @@ export function DayInfoPanel({ tourId, tourDateId, dayType, date, show, dayNotes
       )}
 
       {/* Notes: saves on blur, no save button. */}
-      <section className="flex-1">
+      <section>
         <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
           Notes
         </p>
