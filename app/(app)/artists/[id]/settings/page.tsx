@@ -3,6 +3,7 @@ import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { DeleteArtistDialog } from '@/components/artists/delete-artist-dialog'
 import { tourFromAddress } from '@/lib/comms/email'
+import { PageLayout } from '@/components/layout/page-layout'
 
 interface Props {
   params: Promise<{ id: string }>
@@ -28,11 +29,11 @@ export default async function ArtistSettingsPage({ params }: Props) {
     .eq('artist_id', id)
 
   return (
-    <div className="mx-auto max-w-lg px-4 py-12 space-y-10">
+    <PageLayout maxWidth="max-w-lg" className="space-y-10">
       <div>
         <h1 className="text-2xl font-semibold">{artist.name}</h1>
         {artist.slug && (
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-1 break-words text-sm text-muted-foreground">
             {tourFromAddress(artist.slug)}
           </p>
         )}
@@ -53,6 +54,6 @@ export default async function ArtistSettingsPage({ params }: Props) {
           tourCount={count ?? 0}
         />
       </div>
-    </div>
+    </PageLayout>
   )
 }

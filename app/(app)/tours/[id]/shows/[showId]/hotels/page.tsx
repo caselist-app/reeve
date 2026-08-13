@@ -4,6 +4,7 @@ import { ChevronLeft } from 'lucide-react'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { HotelWorkspace } from '@/components/planner/hotel-workspace'
+import { PageLayout } from '@/components/layout/page-layout'
 
 export default async function HotelsPage({
   params,
@@ -65,7 +66,7 @@ export default async function HotelsPage({
   })
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-10">
+    <PageLayout maxWidth="max-w-4xl">
       <Link
         href={`/tours/${id}/schedule?date=${show.date}`}
         className="mb-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
@@ -89,6 +90,6 @@ export default async function HotelsPage({
         defaultArriveAt={segment?.arrive_at ?? null}
         defaultDepartAt={segment?.depart_at ?? null}
       />
-    </div>
+    </PageLayout>
   )
 }

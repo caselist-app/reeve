@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 interface PageLayoutProps {
   children: ReactNode
   /** Tailwind max-width class. Defaults to max-w-5xl. */
-  maxWidth?: 'max-w-lg' | 'max-w-2xl' | 'max-w-3xl' | 'max-w-5xl' | 'max-w-7xl'
+  maxWidth?: 'max-w-lg' | 'max-w-2xl' | 'max-w-3xl' | 'max-w-4xl' | 'max-w-5xl' | 'max-w-7xl'
   className?: string
 }
 

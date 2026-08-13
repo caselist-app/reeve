@@ -4,6 +4,7 @@ import { ChevronLeft } from 'lucide-react'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { FreeformPlanner } from '@/components/transport/freeform-planner'
+import { PageLayout } from '@/components/layout/page-layout'
 
 export default async function TransportPlannerPage({
   params,
@@ -37,7 +38,7 @@ export default async function TransportPlannerPage({
     .sort((a, b) => a.name.localeCompare(b.name))
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10">
+    <PageLayout maxWidth="max-w-3xl">
       <Link
         href={`/tours/${id}/transport`}
         className="mb-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
@@ -59,6 +60,6 @@ export default async function TransportPlannerPage({
         people={people}
         timezone={tour.timezone}
       />
-    </div>
+    </PageLayout>
   )
 }

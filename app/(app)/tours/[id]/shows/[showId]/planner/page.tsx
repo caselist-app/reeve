@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { PlannerWorkspace } from '@/components/planner/planner-workspace'
 import { BoardingPassUploader, type TransportAssignmentRow } from '@/components/planner/boarding-pass-uploader'
 import { requiredSiteArrivalFor } from '@/lib/shows/load-in'
+import { PageLayout } from '@/components/layout/page-layout'
 
 export default async function PlannerPage({
   params,
@@ -128,7 +129,7 @@ export default async function PlannerPage({
   })
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-10">
+    <PageLayout maxWidth="max-w-3xl">
       <Link
         href={`/tours/${id}/schedule?date=${show.date}`}
         className="mb-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
@@ -169,6 +170,6 @@ export default async function PlannerPage({
           )}
         </div>
       )}
-    </div>
+    </PageLayout>
   )
 }
