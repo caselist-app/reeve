@@ -67,3 +67,37 @@ test('the one door adds a timed item and opens a book form', async ({ page }) =>
   await expect(page.getByRole('heading', { name: 'Add hotel' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'Add to day' })).toHaveCount(0)
 })
+
+// REE-127. A TIMES row typed with no time commits a day_item with starts_at
+// null, which the grid cannot place, so it lands in the "No time set" rail
+// instead. Before this fix the rail rendered a plain <span>: display-only, no
+// way to open it, no way to give it the time it was missing. This proves the
+// rail item is a real button that opens the same detail panel a grid block
+// does.
+test('a rail item with no time set opens its detail panel', async ({ page }) => {
+  const seed = readSeed()
+
+  await page.goto(`/tours/${seed.a.tourId}/schedule?date=${seed.a.rehearsalDate}`)
+
+  const input = page.getByPlaceholder('Try "load in 2pm" or "flight"')
+  await page.keyboard.press('/')
+  await expect(input).toBeVisible()
+
+  // No time on the line, so the preview reads "no time yet" rather than a clock.
+  await input.fill('soundcheck')
+  await expect(page.getByText(/Soundcheck.*no time yet.*Enter adds it/)).toBeVisible()
+  await page.keyboard.press('Enter')
+
+  // It lands in the rail, not on the grid.
+  await expect(page.getByText('No time set')).toBeVisible()
+  const railItem = page.getByRole('button', { name: 'Soundcheck' })
+  await expect(railItem).toBeVisible()
+  await expect(page.locator('.rbc-event').filter({ hasText: 'Soundcheck' })).toHaveCount(0)
+
+  await railItem.click()
+
+  // The same detail panel a grid block opens: the title and the (empty) Starts
+  // field the TM can now fill in.
+  await expect(page.getByRole('heading', { name: 'Soundcheck' })).toBeVisible()
+  await expect(page.getByLabel('Starts')).toHaveValue('')
+})
