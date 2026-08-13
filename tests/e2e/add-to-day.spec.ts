@@ -88,9 +88,16 @@ test('a rail item with no time set opens its detail panel', async ({ page }) => 
   await expect(page.getByText(/Soundcheck.*no time yet.*Enter adds it/)).toBeVisible()
   await page.keyboard.press('Enter')
 
+  // Wait for the day-form panel to fully close: it stays mounted for its 200ms
+  // exit animation, and its own combo-box rows ("Soundcheck no time yet",
+  // "Custom: “Soundcheck” no time") also contain the substring
+  // "Soundcheck", which makes an exact-name query below ambiguous while they
+  // are still in the DOM.
+  await expect(input).toBeHidden()
+
   // It lands in the rail, not on the grid.
   await expect(page.getByText('No time set')).toBeVisible()
-  const railItem = page.getByRole('button', { name: 'Soundcheck' })
+  const railItem = page.getByRole('button', { name: 'Soundcheck', exact: true })
   await expect(railItem).toBeVisible()
   await expect(page.locator('.rbc-event').filter({ hasText: 'Soundcheck' })).toHaveCount(0)
 
