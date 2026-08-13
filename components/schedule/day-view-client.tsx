@@ -234,7 +234,7 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
         {/* Day info: static block, desktop only (mobile uses the dock + sheet).
             Never swaps for anything; detail and add forms live in the global
             side panel instead. */}
-        <div className="hidden lg:flex lg:flex-col w-[260px] shrink-0 min-h-0">
+        <div className="hidden lg:flex lg:flex-col w-[320px] shrink-0 min-h-0">
           {toolbar}
           <div className="flex-1 min-h-0">
             {dayInfoPanel}
