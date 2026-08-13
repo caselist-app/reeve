@@ -94,12 +94,44 @@ describe('eventChipTimeLabel', () => {
     )
   })
 
-  it('shows a single start-only label when the end is synthetic, fed a live mid-drag start', () => {
+  it('keeps a synthetic end start-only through a move (start and end shift by the same delta)', () => {
     const event = baseEvent({ syntheticEnd: true })
+    // A move shifts start and end by the same delta, so the duration (30 min
+    // in the adapter, 1h here) is unchanged and the synthesised end stays
+    // unstated for the whole gesture, same as on drop (fromDropOrResize).
+    const draggedStart = atLocal('20:30')
+    const draggedEnd = atLocal('21:30')
+    event.start = new Date(toGridInstant(draggedStart.toISOString(), TZ))
+    event.end = new Date(toGridInstant(draggedEnd.toISOString(), TZ))
+
+    expect(eventChipTimeLabel(event, TZ)).toBe(localTimeInZone(draggedStart.toISOString(), TZ))
+  })
+
+  it('REE-189: grows a synthetic end into a live range mid-resize as the bottom edge is dragged', () => {
+    const event = baseEvent({ syntheticEnd: true })
+    // A bottom-edge resize holds the start and drags the end, changing the
+    // duration, so the drag is stating a real end live, same as it will on
+    // drop: the ghost should grow into a range as the gesture happens, not
+    // only once the drop lands.
+    const draggedEnd = atLocal('21:45')
+    event.end = new Date(toGridInstant(draggedEnd.toISOString(), TZ))
+
+    expect(eventChipTimeLabel(event, TZ)).toBe(
+      `${localTimeInZone(event.realStart.toISOString(), TZ)}–${localTimeInZone(draggedEnd.toISOString(), TZ)}`,
+    )
+  })
+
+  it('REE-189: a top-edge resize on a synthetic end also flips to a live range once the duration changes', () => {
+    const event = baseEvent({ syntheticEnd: true })
+    // A top-edge resize holds the end and drags the start, which changes the
+    // duration exactly like a bottom-edge resize does, and fromDropOrResize
+    // treats both the same way on drop: the live label mirrors that.
     const draggedStart = atLocal('20:45')
     event.start = new Date(toGridInstant(draggedStart.toISOString(), TZ))
 
-    expect(eventChipTimeLabel(event, TZ)).toBe(localTimeInZone(draggedStart.toISOString(), TZ))
+    expect(eventChipTimeLabel(event, TZ)).toBe(
+      `${localTimeInZone(draggedStart.toISOString(), TZ)}–${localTimeInZone(event.realEnd.toISOString(), TZ)}`,
+    )
   })
 
   it('shows a start–end range when the end is real, fed live mid-drag instants', () => {
