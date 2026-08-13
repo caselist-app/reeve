@@ -6,9 +6,45 @@ import { createClient } from '@/lib/supabase/server'
 import { definedOnly } from '@/lib/forms/write-row'
 import { personSchema, crewDetailSchema } from '@/lib/validators/person'
 import { bustTourContextCache } from '@/lib/ai/context'
+import type { PartyPickerPerson } from '@/lib/party/presets'
 import type { z } from 'zod'
 
 export type PeopleActionState = { error: string | null; personId?: string }
+
+// REE-169: the one client-callable roster fetch in PartyPickerPerson shape.
+// lib/party/resolve.ts and lib/schedule/day-roster.ts answer "who is already
+// attached to this record"; this answers "who is on the tour at all", which
+// is what the party picker's 'everyone'/'artist'/'crew' presets resolve
+// against, so every add-to-day form (a client component) needs it on open.
+export async function getTourRoster(
+  tourId: string
+): Promise<{ error: string | null; people: PartyPickerPerson[] }> {
+  const user = await requireUser()
+  const supabase = await createClient()
+
+  const { data: tour } = await supabase
+    .from('tours')
+    .select('id')
+    .eq('id', tourId)
+    .eq('account_id', user.id)
+    .single()
+
+  if (!tour) return { error: 'Tour not found.', people: [] }
+
+  const { data, error } = await supabase
+    .from('people')
+    .select('id, person_type, contacts(name)')
+    .eq('tour_id', tourId)
+
+  if (error) return { error: error.message, people: [] }
+
+  const people: PartyPickerPerson[] = (data ?? []).map((row) => {
+    const contact = Array.isArray(row.contacts) ? row.contacts[0] : row.contacts
+    return { id: row.id, person_type: row.person_type, name: contact?.name ?? '' }
+  })
+
+  return { error: null, people }
+}
 
 // Maps the form DTO's identity fields to a contacts row, on the same rule as
 // toRow in lib/actions/contacts.ts: undefined is dropped, null is written.

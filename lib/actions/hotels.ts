@@ -9,6 +9,8 @@ import { bustTourContextCache } from '@/lib/ai/context'
 import { resolveTourDateId } from '@/lib/schedule/day-link'
 import type { DateMove } from '@/lib/schedule/date-move'
 import { resolveHotelGeocodeJob } from '@/trigger/jobs/resolve-hotel-geocode'
+import type { CreatedAs } from '@/lib/party/presets'
+import { roomTierFor } from '@/lib/party/room-tier'
 
 // `moved` is set only when the stay actually landed on a day other than the one
 // the TM was looking at. See lib/schedule/date-move.ts.
@@ -141,13 +143,15 @@ export async function createHotelStay(
     check_out_date?: string | null
     check_out_time?: string | null
     people?: string[]   // person ids for room_assignments
+    // REE-169: which party picker preset produced `people`, provenance only.
+    created_as?: CreatedAs
   },
 ): Promise<HotelActionState> {
   const user = await requireUser()
 
   const supabase = await createClient()
 
-  const { people = [], ...stayData } = data
+  const { people = [], created_as, ...stayData } = data
 
   // Same cross-tour check as recordHotelOption. tour_date_id is verified too:
   // an unchecked one attaches the stay to a day row in a different tour, so it
@@ -172,16 +176,22 @@ export async function createHotelStay(
     if (!tourDate) return { error: 'Day not found on this tour.' }
   }
 
+  // Selects person_type as well as id: room_tier below is derived from each
+  // person's real type rather than a hardcoded value, so this validation
+  // query doubles as the tier lookup.
+  let peopleTypes = new Map<string, string>()
   if (people.length > 0) {
     const { data: validPeople } = await supabase
       .from('people')
-      .select('id')
+      .select('id, person_type')
       .eq('tour_id', tourId)
       .in('id', people)
 
     if ((validPeople?.length ?? 0) !== new Set(people).size) {
       return { error: 'One or more people are not on this tour.' }
     }
+
+    peopleTypes = new Map(validPeople!.map((p) => [p.id, p.person_type]))
   }
 
   // Same rule as updateHotelStay, for the same reason. The Add Hotel form
@@ -217,8 +227,9 @@ export async function createHotelStay(
   const { data: stay, error } = await supabase
     .from('hotel_stays')
     // tour_date_id after the spread: the derived link wins over the one the
-    // form passed.
-    .insert({ tour_id: tourId, status: 'planned', ...stayData, tour_date_id: tourDateId })
+    // form passed. created_as omitted (rather than null) when the caller does
+    // not pass one, so the column's own default ('whole_party') applies.
+    .insert({ tour_id: tourId, status: 'planned', ...stayData, tour_date_id: tourDateId, created_as })
     .select('id')
     .single()
 
@@ -233,7 +244,7 @@ export async function createHotelStay(
       tour_id: tourId,
       hotel_stay_id: stay.id,
       person_id,
-      room_tier: 'crew' as const,
+      room_tier: roomTierFor(peopleTypes.get(person_id) ?? 'crew'),
     }))
     const { error: assignError } = await supabase.from('room_assignments').insert(assignments)
     if (assignError) return { error: assignError.message }

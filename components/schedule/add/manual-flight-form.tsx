@@ -5,59 +5,109 @@
 // the flat form add-flight-form.tsx replaced - no AirLabs involved. Split
 // into its own file per Brief 32 Phase 2, since it is a genuine standalone
 // form (unlike the rest of the wizard, which is one multi-step component
-// with shared state across steps) and migrates cleanly to useEntityForm.
+// with shared state across steps).
+//
+// REE-169: two local steps, fields then party, the same shape as
+// AddDriveForm/AddRailForm/AddHotelForm. createTransportSegment does not fire
+// until the party step, since the segment does not exist until the TM picks
+// who it applies to.
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { createTransportSegment } from '@/lib/actions/transport'
 import { fromDatetimeLocal } from '@/lib/schedule/datetime'
-import { useEntityForm } from '@/hooks/use-entity-form'
 import { readForm } from '@/lib/forms/read-form'
 import { DateMoveNotice } from '@/components/schedule/date-move-notice'
+import { PartyPickerFields } from '@/components/schedule/party-picker'
+import { createdAsForPreset, type PartyPickerPerson, type PartyPreset } from '@/lib/party/presets'
 
 interface ManualFlightFormProps {
   tourId: string
   tourDateId: string
   date: string
   timezone: string
+  people: PartyPickerPerson[]
   onBack: () => void
   onSuccess: () => void
 }
 
-export function ManualFlightForm({ tourId, tourDateId, date, timezone, onBack, onSuccess }: ManualFlightFormProps) {
+type PendingManualFlight = {
+  origin: string | null | undefined
+  destination: string | null | undefined
+  depart_at: string | null | undefined
+  arrive_at: string | null | undefined
+  carrier_operator: string | null | undefined
+  vehicle_or_flight_no: string | null | undefined
+  booking_reference: string | null | undefined
+}
+
+export function ManualFlightForm({ tourId, tourDateId, date, timezone, people, onBack, onSuccess }: ManualFlightFormProps) {
+  const router = useRouter()
   const [departLocal, setDepartLocal] = useState(`${date}T07:00`)
 
-  const { submit, pending, error } = useEntityForm({
-    refreshOnSuccess: true,
-    onSuccess,
-    action: (fd) => {
-      const data = readForm(fd, {
-        origin: 'string',
-        destination: 'string',
-        depart_at: 'string',
-        arrive_at: 'string',
-        carrier_operator: 'string',
-        vehicle_or_flight_no: 'string',
-        booking_reference: 'string',
-      })
-      return createTransportSegment(tourId, {
+  // REE-169: fields, then party, one createTransportSegment call from the
+  // party step. Same shape as AddDriveForm/AddRailForm.
+  const [pending, setPending] = useState<PendingManualFlight | null>(null)
+  const [saving, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+
+  function handleFieldsSubmit(fd: FormData) {
+    const data = readForm(fd, {
+      origin: 'string',
+      destination: 'string',
+      depart_at: 'string',
+      arrive_at: 'string',
+      carrier_operator: 'string',
+      vehicle_or_flight_no: 'string',
+      booking_reference: 'string',
+    })
+    setPending({
+      origin: data.origin,
+      destination: data.destination,
+      depart_at: fromDatetimeLocal(data.depart_at, timezone),
+      arrive_at: fromDatetimeLocal(data.arrive_at, timezone),
+      carrier_operator: data.carrier_operator,
+      vehicle_or_flight_no: data.vehicle_or_flight_no,
+      booking_reference: data.booking_reference,
+    })
+  }
+
+  function handlePartySave(preset: PartyPreset, resolved: PartyPickerPerson[]) {
+    if (!pending) return
+    setError(null)
+    startTransition(async () => {
+      const result = await createTransportSegment(tourId, {
         tour_date_id: tourDateId,
         mode: 'flight',
-        origin: data.origin,
-        destination: data.destination,
-        depart_at: fromDatetimeLocal(data.depart_at, timezone),
-        arrive_at: fromDatetimeLocal(data.arrive_at, timezone),
-        carrier_operator: data.carrier_operator,
-        vehicle_or_flight_no: data.vehicle_or_flight_no,
-        booking_reference: data.booking_reference,
+        ...pending,
+        people: resolved.map((p) => p.id),
+        created_as: createdAsForPreset(preset),
       })
-    },
-  })
+      if (result.error) {
+        setError(result.error)
+        setPending(null)
+        return
+      }
+      router.refresh()
+      onSuccess()
+    })
+  }
+
+  if (pending) {
+    return (
+      <div className="space-y-3">
+        <PartyPickerFields people={people} onSave={handlePartySave} />
+        {saving && <p className="text-xs text-muted-foreground">Adding...</p>}
+        {error && <p className="text-xs text-destructive">{error}</p>}
+      </div>
+    )
+  }
 
   return (
-    <form onSubmit={submit} className="space-y-3">
+    <form onSubmit={(e) => { e.preventDefault(); handleFieldsSubmit(new FormData(e.currentTarget)) }} className="space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">Airline</Label>
@@ -104,8 +154,8 @@ export function ManualFlightForm({ tourId, tourDateId, date, timezone, onBack, o
         <Button type="button" variant="ghost" size="sm" onClick={onBack} className="flex-1">
           Back
         </Button>
-        <Button type="submit" size="sm" disabled={pending} className="flex-1">
-          {pending ? 'Adding...' : 'Add flight'}
+        <Button type="submit" size="sm" className="flex-1">
+          Next
         </Button>
       </div>
     </form>

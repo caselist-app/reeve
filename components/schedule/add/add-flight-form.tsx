@@ -23,20 +23,23 @@ import { fromDatetimeLocal } from '@/lib/schedule/datetime'
 import { ManualFlightForm } from '@/components/schedule/add/manual-flight-form'
 import { FlightChips, highlightMatch, type Airline } from '@/components/schedule/add/flight-form-ui'
 import { timeOfDay, detectFlightCode, weekdayCodeFor, STATUS_LABEL } from '@/components/schedule/add/flight-form-helpers'
+import { PartyPickerFields } from '@/components/schedule/party-picker'
+import { createdAsForPreset, type PartyPickerPerson, type PartyPreset } from '@/lib/party/presets'
 
 interface AddFlightFormProps {
   tourId: string
   tourDateId: string
   date: string
   timezone: string
+  people: PartyPickerPerson[]
   onBack: () => void
   onSuccess: () => void
 }
 
 type Airport = { iataCode: string; icaoCode: string | null; name: string; city: string | null }
-type Step = 'search' | 'date' | 'card' | 'reference' | 'route' | 'manual'
+type Step = 'search' | 'date' | 'card' | 'party' | 'reference' | 'route' | 'manual'
 
-export function AddFlightForm({ tourId, tourDateId, date, timezone, onBack, onSuccess }: AddFlightFormProps) {
+export function AddFlightForm({ tourId, tourDateId, date, timezone, people, onBack, onSuccess }: AddFlightFormProps) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -203,7 +206,16 @@ export function AddFlightForm({ tourId, tourDateId, date, timezone, onBack, onSu
     }
   }, [flightIata, parsedDate])
 
+  // REE-169: no longer creates the segment. The segment does not exist until
+  // the TM picks who it applies to, so this only advances to the party step;
+  // handlePartySave below does the actual createTransportSegment call.
   function handleCommit() {
+    if (!lookup || !parsedDate) return
+    setError(null)
+    setStep('party')
+  }
+
+  function handlePartySave(preset: PartyPreset, resolved: PartyPickerPerson[]) {
     if (!lookup || !parsedDate) return
     setError(null)
 
@@ -234,10 +246,13 @@ export function AddFlightForm({ tourId, tourDateId, date, timezone, onBack, onSu
         actual_depart_at: sameDateAsLookup ? lookup.actual_depart_at : null,
         actual_arrive_at: sameDateAsLookup ? lookup.actual_arrive_at : null,
         last_tracked_at: sameDateAsLookup ? new Date().toISOString() : null,
+        people: resolved.map((p) => p.id),
+        created_as: createdAsForPreset(preset),
       })
 
       if (result.error || !result.segmentId) {
         setError(result.error ?? 'Failed to add flight.')
+        setStep('card')
         return
       }
 
@@ -361,6 +376,7 @@ export function AddFlightForm({ tourId, tourDateId, date, timezone, onBack, onSu
         tourDateId={tourDateId}
         date={date}
         timezone={timezone}
+        people={people}
         onBack={() => setStep('search')}
         onSuccess={onSuccess}
       />
@@ -834,12 +850,22 @@ export function AddFlightForm({ tourId, tourDateId, date, timezone, onBack, onSu
         </div>
 
         {error && <p className="text-xs text-destructive">{error}</p>}
-        <Button type="button" size="sm" disabled={pending} onClick={handleCommit} className="w-full">
-          {pending ? 'Adding...' : 'Add flight'}
+        <Button type="button" size="sm" onClick={handleCommit} className="w-full">
+          Next
         </Button>
         <Button type="button" variant="ghost" size="sm" onClick={() => setStep('date')} className="w-full">
           Back
         </Button>
+      </div>
+    )
+  }
+
+  if (step === 'party') {
+    return (
+      <div className="space-y-3">
+        <PartyPickerFields people={people} onSave={handlePartySave} />
+        {pending && <p className="text-xs text-muted-foreground">Adding...</p>}
+        {error && <p className="text-xs text-destructive">{error}</p>}
       </div>
     )
   }

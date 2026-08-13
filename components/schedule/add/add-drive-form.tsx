@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
@@ -8,9 +9,10 @@ import { PlacesAddressInput } from '@/components/shows/places-address-input'
 import { createTransportSegment } from '@/lib/actions/transport'
 import { getDriveTime } from '@/lib/actions/drive-time'
 import { fromDatetimeLocal } from '@/lib/schedule/datetime'
-import { useEntityForm } from '@/hooks/use-entity-form'
 import { readForm } from '@/lib/forms/read-form'
 import { DateMoveNotice } from '@/components/schedule/date-move-notice'
+import { PartyPickerFields } from '@/components/schedule/party-picker'
+import { createdAsForPreset, type PartyPickerPerson, type PartyPreset } from '@/lib/party/presets'
 
 interface AddDriveFormProps {
   tourId: string
@@ -21,11 +23,20 @@ interface AddDriveFormProps {
   // Seeds the departure so a drive added after clicking 2pm departs at 2pm.
   // Falls back to 09:00 when the line carried no time.
   initialClock?: string
+  people: PartyPickerPerson[]
   onBack: () => void
   onSuccess: () => void
 }
 
-export function AddDriveForm({ tourId, tourDateId, date, timezone, initialClock, onBack, onSuccess }: AddDriveFormProps) {
+type PendingDrive = {
+  origin: string | null | undefined
+  destination: string | null | undefined
+  depart_at: string | null | undefined
+  arrive_at: string | null
+}
+
+export function AddDriveForm({ tourId, tourDateId, date, timezone, initialClock, people, onBack, onSuccess }: AddDriveFormProps) {
+  const router = useRouter()
   const departDefault = `${date}T${initialClock ?? '09:00'}`
   const [computedArrival, setComputedArrival] = useState<string>('')
   const [computing, setComputing] = useState(false)
@@ -35,6 +46,13 @@ export function AddDriveForm({ tourId, tourDateId, date, timezone, initialClock,
   // reading the sibling fields off the form.
   const [origin, setOrigin] = useState('')
   const [destination, setDestination] = useState('')
+
+  // REE-169: fields, then party. The segment does not exist until the TM
+  // picks who it applies to, so createTransportSegment fires once, from the
+  // party step, carrying both at once.
+  const [pending, setPending] = useState<PendingDrive | null>(null)
+  const [saving, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
 
   async function computeArrival(origin: string, destination: string, departAt: string) {
     if (!origin || !destination || !departAt) return
@@ -47,39 +65,59 @@ export function AddDriveForm({ tourId, tourDateId, date, timezone, initialClock,
     }
   }
 
-  const { submit, pending, error } = useEntityForm({
-    refreshOnSuccess: true,
-    onSuccess,
-    action: async (fd) => {
-      const data = readForm(fd, {
-        origin: 'string',
-        destination: 'string',
-        depart_at: 'string',
-      })
-      const departUtc = fromDatetimeLocal(data.depart_at, timezone)
+  async function handleFieldsSubmit(fd: FormData) {
+    const data = readForm(fd, {
+      origin: 'string',
+      destination: 'string',
+      depart_at: 'string',
+    })
+    const departUtc = fromDatetimeLocal(data.depart_at, timezone)
 
-      // If no computed arrival yet, compute now before saving.
-      let arriveUtc: string | null = null
-      if (computedArrival) {
-        arriveUtc = computedArrival
-      } else if (data.origin && data.destination && data.depart_at) {
-        const dr = await getDriveTime(data.origin, data.destination, data.depart_at, timezone)
-        arriveUtc = dr.arrive_at ?? null
-      }
+    // If no computed arrival yet, compute now before saving.
+    let arriveUtc: string | null = null
+    if (computedArrival) {
+      arriveUtc = computedArrival
+    } else if (data.origin && data.destination && data.depart_at) {
+      const dr = await getDriveTime(data.origin, data.destination, data.depart_at, timezone)
+      arriveUtc = dr.arrive_at ?? null
+    }
 
-      return createTransportSegment(tourId, {
+    setPending({ origin: data.origin, destination: data.destination, depart_at: departUtc, arrive_at: arriveUtc })
+  }
+
+  function handlePartySave(preset: PartyPreset, resolved: PartyPickerPerson[]) {
+    if (!pending) return
+    setError(null)
+    startTransition(async () => {
+      const result = await createTransportSegment(tourId, {
         tour_date_id: tourDateId,
         mode: 'ground',
-        origin: data.origin,
-        destination: data.destination,
-        depart_at: departUtc,
-        arrive_at: arriveUtc,
+        ...pending,
+        people: resolved.map((p) => p.id),
+        created_as: createdAsForPreset(preset),
       })
-    },
-  })
+      if (result.error) {
+        setError(result.error)
+        setPending(null)
+        return
+      }
+      router.refresh()
+      onSuccess()
+    })
+  }
+
+  if (pending) {
+    return (
+      <div className="space-y-3">
+        <PartyPickerFields people={people} onSave={handlePartySave} />
+        {saving && <p className="text-xs text-muted-foreground">Adding...</p>}
+        {error && <p className="text-xs text-destructive">{error}</p>}
+      </div>
+    )
+  }
 
   return (
-    <form onSubmit={submit} className="space-y-3">
+    <form onSubmit={(e) => { e.preventDefault(); handleFieldsSubmit(new FormData(e.currentTarget)) }} className="space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">From</Label>
@@ -145,9 +183,7 @@ export function AddDriveForm({ tourId, tourDateId, date, timezone, initialClock,
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex gap-2">
         <Button type="button" variant="ghost" size="sm" onClick={onBack} className="flex-1">Back</Button>
-        <Button type="submit" size="sm" disabled={pending} className="flex-1">
-          {pending ? 'Adding...' : 'Add drive'}
-        </Button>
+        <Button type="submit" size="sm" className="flex-1">Next</Button>
       </div>
     </form>
   )

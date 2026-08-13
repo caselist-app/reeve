@@ -35,3 +35,21 @@ export function resolvePreset<T extends { id: string; person_type: string }>(
     }
   }
 }
+
+// REE-169: the write side. `created_as` on transport_segments / hotel_stays
+// records which preset produced a row's assignment rows, provenance only. The
+// picker's own vocabulary is 'everyone'; the column's is 'whole_party', the
+// name the brief specifies for the same idea, so this is the one place the
+// two are translated.
+//
+// CREATED_AS_VALUES is exported (not just the type) so lib/validators/extraction.ts
+// can validate against the same list rather than a second hand-copied one,
+// the same drift-avoidance shape as DAY_ITEM_KIND_NAMES. It has to agree with
+// the check constraint in supabase/migrations/20260813145327_add_party_created_as.sql.
+export const CREATED_AS_VALUES = ['whole_party', 'artist', 'crew', 'named'] as const
+
+export type CreatedAs = (typeof CREATED_AS_VALUES)[number]
+
+export function createdAsForPreset(preset: PartyPreset): CreatedAs {
+  return preset.type === 'everyone' ? 'whole_party' : preset.type
+}
