@@ -11,6 +11,14 @@ export default defineConfig({
   resolve: {
     alias: { '@': fileURLToPath(new URL('./', import.meta.url)) },
   },
+  // tsconfig.json sets "jsx": "preserve" for Next's own compiler, and Vite's
+  // esbuild transform inherits that by default, so a .tsx module imported
+  // for its non-component exports (a pure reducer sitting next to a 'use
+  // client' component, per COMPONENTS.md's no-render-testing rule) would
+  // otherwise fail to parse. Override just for esbuild's own transform.
+  oxc: {
+    jsx: 'automatic',
+  },
   test: {
     environment: 'node',
     include: ['tests/unit/**/*.test.ts'],
