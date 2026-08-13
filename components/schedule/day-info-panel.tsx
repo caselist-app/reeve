@@ -35,7 +35,7 @@ export function DayInfoPanel({ tourId, tourDateId, dayType, date, show, dayNotes
   const venue = dayType ? venueSectionState(dayType, show !== null) : { kind: 'absent' as const }
 
   return (
-    <div data-testid="day-info-panel" className="flex flex-col h-full px-4 py-4 gap-5 overflow-y-auto">
+    <div data-testid="day-info-panel" className="flex flex-col h-full px-4 lg:pr-6 py-4 gap-5 overflow-y-auto">
       {/* Venue. Clickable since Brief 36 step 6: this is the way into a show's
           venue detail now that the show page is gone. */}
       {venue.kind === 'venue' && show && (
