@@ -806,6 +806,7 @@ export type Database = {
           check_out_time: string | null
           city: string | null
           confirmation_number: string | null
+          created_as: string
           created_at: string
           id: string
           incidentals_policy: string | null
@@ -835,6 +836,7 @@ export type Database = {
           check_out_time?: string | null
           city?: string | null
           confirmation_number?: string | null
+          created_as?: string
           created_at?: string
           id?: string
           incidentals_policy?: string | null
@@ -864,6 +866,7 @@ export type Database = {
           check_out_time?: string | null
           city?: string | null
           confirmation_number?: string | null
+          created_as?: string
           created_at?: string
           id?: string
           incidentals_policy?: string | null
@@ -1561,6 +1564,7 @@ export type Database = {
           booking_reference: string | null
           carrier_operator: string | null
           company: string | null
+          created_as: string
           created_at: string
           depart_at: string | null
           destination: string | null
@@ -1591,6 +1595,7 @@ export type Database = {
           booking_reference?: string | null
           carrier_operator?: string | null
           company?: string | null
+          created_as?: string
           created_at?: string
           depart_at?: string | null
           destination?: string | null
@@ -1621,6 +1626,7 @@ export type Database = {
           booking_reference?: string | null
           carrier_operator?: string | null
           company?: string | null
+          created_as?: string
           created_at?: string
           depart_at?: string | null
           destination?: string | null
