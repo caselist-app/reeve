@@ -166,7 +166,7 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
   }
 
   const toolbar = (
-    <div className="flex items-center justify-end gap-1.5 px-4 pt-4 pb-1 shrink-0">
+    <div className="flex items-center justify-end gap-1.5 px-4 lg:pr-6 pt-4 pb-1 shrink-0">
       {dayMeta && (
         <DayOptionsMenu
           onEdit={handleEditDay}
