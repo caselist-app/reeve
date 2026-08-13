@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ChevronLeft, Send } from 'lucide-react'
@@ -17,17 +17,7 @@ import { ListRow } from '@/components/ui/list-row'
 import { SectionHeader } from '@/components/ui/section-header'
 import { StatusBadge, PASSPORT_VARIANT } from '@/components/ui/status-badge'
 import { useSidePanel } from '@/stores/side-panel-store'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from '@/components/ui/alert-dialog'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
 type TourMembership = {
   personId: string
@@ -47,22 +37,16 @@ interface Props {
 export function ContactDetail({ contact, tours }: Props) {
   const router = useRouter()
   const { open } = useSidePanel()
-  const [error, setError] = useState<string | null>(null)
+  const [deleteOpen, setDeleteOpen] = useState(false)
   const [telegramOpen, setTelegramOpen] = useState(false)
-  const [pending, startTransition] = useTransition()
 
   const status = passportStatus(contact.passport_expiry)
 
-  function handleDelete() {
-    setError(null)
-    startTransition(async () => {
-      const result = await deleteContact(contact.id)
-      if (result.error) {
-        setError(result.error)
-      } else {
-        router.push('/roster')
-      }
-    })
+  async function handleDelete(): Promise<string | null> {
+    const result = await deleteContact(contact.id)
+    if (result.error) return result.error
+    router.push('/roster')
+    return null
   }
 
   function handleEdit() {
@@ -97,32 +81,23 @@ export function ContactDetail({ contact, tours }: Props) {
                 Connect Telegram
               </Button>
             )}
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive">
-                  Delete
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Delete {contact.name}?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This removes them from your roster. A contact who is on a tour cannot be deleted;
-                    remove them from their tours first. This cannot be undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={handleDelete}
-                    disabled={pending}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  >
-                    Delete
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-destructive hover:text-destructive"
+              onClick={() => setDeleteOpen(true)}
+            >
+              Delete
+            </Button>
+            <ConfirmDialog
+              open={deleteOpen}
+              onOpenChange={setDeleteOpen}
+              title={`Delete ${contact.name}?`}
+              description="This removes them from your roster. A contact who is on a tour cannot be deleted; remove them from their tours first. This cannot be undone."
+              confirmLabel="Delete"
+              pendingLabel="Deleting..."
+              onConfirm={handleDelete}
+            />
           </>
         }
       />
@@ -133,8 +108,6 @@ export function ContactDetail({ contact, tours }: Props) {
         open={telegramOpen}
         onOpenChange={setTelegramOpen}
       />
-
-      {error && <p className="mb-4 text-sm text-destructive">{error}</p>}
 
       {/* Passport expiry alert, only shown when flagged */}
       {(status === 'expired' || status === 'soon') && contact.passport_expiry && (
