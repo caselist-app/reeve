@@ -70,6 +70,11 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
 
   const [address, setAddress] = useState(initialData?.address ?? '')
   const [venueName, setVenueName] = useState(initialData?.venue_name ?? '')
+  // Captured from the Places Autocomplete selection, not yet persisted: the
+  // show row has no lat/lng columns until the follow-up issue adds them (REE-212).
+  const [coordinates, setCoordinates] = useState<{ lat: number; lng: number } | undefined>(
+    undefined
+  )
   const [venueType, setVenueType] = useState(initialData?.venue_type ?? '')
   // A Radix Select contributes nothing to FormData, so this is state and gets
   // merged into the payload by hand, the same way venue_type is. Falls back to
@@ -191,12 +196,14 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
           name="address"
           value={address}
           onChange={setAddress}
-          onPlaceSelect={(addr, name) => {
+          onPlaceSelect={(addr, name, lat, lng) => {
             setAddress(addr)
             // Only fill venue name if it is empty, don't overwrite what the TM typed.
             if (name && !venueName) setVenueName(name)
+            setCoordinates(lat !== undefined && lng !== undefined ? { lat, lng } : undefined)
           }}
           placeholder="211 Stockwell Rd, London SW9 9SL"
+          includeGeometry
         />
       </div>
 
