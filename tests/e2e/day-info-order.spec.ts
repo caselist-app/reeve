@@ -32,7 +32,7 @@ test('the desktop day info panel reads Venue, Guest list, Notes, Hotel and has n
   await expect(panel).toBeVisible()
 
   const venue = panel.getByText('Venue', { exact: true })
-  const guestList = panel.getByRole('button', { name: /Guest list/ })
+  const guestList = panel.getByText('Guest list', { exact: true })
   const notes = panel.getByText('Notes', { exact: true })
   const hotel = panel.getByText('Hotel', { exact: true })
 

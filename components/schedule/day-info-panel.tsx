@@ -18,7 +18,7 @@ interface DayInfoPanelProps {
   date: string
   show: DayShow | null
   dayNotes: string | null
-  // The guest list count for the block under Venue, resolved in DayContent.
+  // The guest list count for the Guest list section's block, resolved in DayContent.
   guestListSummary: GuestListSummary
   // The night's hotel, resolved once in DayContent (resolveHotelForDay). Null
   // when no hotel resolves for this day: the whole section is then absent,
@@ -44,14 +44,6 @@ export function DayInfoPanel({ tourId, tourDateId, dayType, date, show, dayNotes
             Venue
           </p>
           <VenueBlock tourId={tourId} show={show} />
-          {/* Guest list sits directly under Venue: it hangs off the show, so it
-              only exists where a show does. Brief 52, step 4. */}
-          <GuestListBlock
-            tourId={tourId}
-            showId={show.id}
-            venueName={show.venue_name}
-            summary={guestListSummary}
-          />
         </section>
       )}
       {venue.kind === 'needs-venue' && tourDateId && (
@@ -61,6 +53,23 @@ export function DayInfoPanel({ tourId, tourDateId, dayType, date, show, dayNotes
           </p>
           <p className="text-xs text-muted-foreground">No venue yet.</p>
           <AddVenueButton tourId={tourId} tourDateId={tourDateId} date={date} notes={dayNotes} />
+        </section>
+      )}
+
+      {/* Guest list: its own section (REE-209), no longer nested under Venue.
+          Still only rendered on a show day with a show, since it hangs off
+          the show. */}
+      {venue.kind === 'venue' && show && (
+        <section>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+            Guest list
+          </p>
+          <GuestListBlock
+            tourId={tourId}
+            showId={show.id}
+            venueName={show.venue_name}
+            summary={guestListSummary}
+          />
         </section>
       )}
 
