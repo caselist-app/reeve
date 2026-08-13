@@ -22,9 +22,9 @@ function humanizeKind(kind: string): string {
 }
 
 // The Inbox (brief 53): every open attention_items row across every tour the
-// account owns, grouped by artist. Clicking a row is the read action: it marks
-// the item read and nothing else. A read item is not a resolved one (REE-148),
-// so it stays in the list, just no longer marked unread.
+// account owns, grouped by artist. Clicking a row marks the item read and
+// navigates to its detail route (/inbox/[itemId]). A read item is not a
+// resolved one (REE-148), so it stays in the list, just no longer marked unread.
 export function InboxView({ groups, error }: Props) {
   const [, startTransition] = useTransition()
   const [readIds, setReadIds] = useState<Set<string>>(
@@ -74,6 +74,7 @@ export function InboxView({ groups, error }: Props) {
                   return (
                     <ListRow
                       key={item.id}
+                      href={`/inbox/${item.id}`}
                       onClick={() => handleOpen(item)}
                       className="flex items-center gap-4"
                     >

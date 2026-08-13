@@ -163,14 +163,20 @@ test('the Inbox badge tracks read without moving and decide without a reload', a
     .single()
   if (entryError || !entry) throw new Error(`could not seed guest request: ${entryError?.message}`)
 
-  const { error: attentionError } = await testDb.from('attention_items').insert({
-    tour_id: seed.a.tourId,
-    kind: 'guest_request',
-    title: 'Guest request: Nav Badge for Test Venue',
-    related_table: 'guest_list_entries',
-    related_id: entry.id,
-  })
-  if (attentionError) throw new Error(`could not seed attention item: ${attentionError.message}`)
+  const { data: attentionItem, error: attentionError } = await testDb
+    .from('attention_items')
+    .insert({
+      tour_id: seed.a.tourId,
+      kind: 'guest_request',
+      title: 'Guest request: Nav Badge for Test Venue',
+      related_table: 'guest_list_entries',
+      related_id: entry.id,
+    })
+    .select('id')
+    .single()
+  if (attentionError || !attentionItem) {
+    throw new Error(`could not seed attention item: ${attentionError?.message}`)
+  }
 
   // The badge, scoped to the desktop rail's Inbox link (the mobile drawer's copy
   // is unmounted while its Sheet is closed, so this is the only one in the DOM).
@@ -181,7 +187,12 @@ test('the Inbox badge tracks read without moving and decide without a reload', a
   await page.goto('/inbox')
   await expect(badge).toHaveText('1')
 
-  await page.getByRole('button', { name: /Guest request: Nav Badge/ }).click()
+  // A link, not a button: the row navigates to its detail route (REE-174) as
+  // well as marking the item read, and ListRow renders as a next/link anchor
+  // whenever href is set. Before this fix the row had no href at all, so
+  // ListRow fell back to a plain button and a click never left /inbox.
+  await page.getByRole('link', { name: /Guest request: Nav Badge/ }).click()
+  await expect(page).toHaveURL(`/inbox/${attentionItem.id}`)
 
   // Read is not decided: the badge counts open items, not unread ones
   // (REE-148), so marking this one read must not move it.
