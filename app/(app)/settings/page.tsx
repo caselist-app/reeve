@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { PageLayout } from '@/components/layout/page-layout'
 import { PageHeader } from '@/components/layout/page-header'
 import { ConnectTelegramAccount } from '@/components/account/connect-telegram-account'
+import { AppearanceSettings } from '@/components/account/appearance-settings'
 
 // Account settings, distinct from a tour's settings: this is about the account
 // holder (the TM), not one of their tours. First and currently only row is the
@@ -25,7 +26,10 @@ export default async function AccountSettingsPage() {
   return (
     <PageLayout maxWidth="max-w-lg">
       <PageHeader eyebrow={account.name} title="Account settings" />
-      <ConnectTelegramAccount connected={account.telegram_chat_id !== null} />
+      <div className="flex flex-col gap-4">
+        <ConnectTelegramAccount connected={account.telegram_chat_id !== null} />
+        <AppearanceSettings />
+      </div>
     </PageLayout>
   )
 }
