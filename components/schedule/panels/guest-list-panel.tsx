@@ -15,6 +15,7 @@ import { readForm } from '@/lib/forms/read-form'
 import {
   getGuestList,
   createGuestEntry,
+  updateGuestEntry,
   approveGuestEntry,
   declineGuestEntry,
   removeGuestEntry,
@@ -143,7 +144,13 @@ export function GuestListPanel({ tourId, showId, venueName }: GuestListPanelProp
             tourId={tourId}
             showId={showId}
             onChanged={refresh}
-            action={<SendConfirmations showId={showId} disabled={approved.length === 0} />}
+            action={
+              <SendConfirmations
+                showId={showId}
+                disabled={approved.length === 0}
+                missingEmailCount={approved.filter((e) => !e.email && !e.notified_at).length}
+              />
+            }
           />
 
           {declined.length > 0 && (
@@ -198,15 +205,17 @@ function AddGuestForm({
 }) {
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
+  const [email, setEmail] = useState('')
 
   const { submit, pending, error } = useEntityForm({
     action: (fd) => {
-      const data = readForm(fd, { first_name: 'string', last_name: 'string' })
+      const data = readForm(fd, { first_name: 'string', last_name: 'string', email: 'string' })
       return createGuestEntry({
         tour_id: tourId,
         show_id: showId,
         first_name: data.first_name,
         last_name: data.last_name,
+        email: data.email,
       })
     },
     // No refreshOnSuccess: the day-info block updates through the guest count
@@ -214,6 +223,7 @@ function AddGuestForm({
     onSuccess: () => {
       setFirstName('')
       setLastName('')
+      setEmail('')
       onAdded()
     },
   })
@@ -239,6 +249,16 @@ function AddGuestForm({
             className="h-7 text-xs"
           />
         </div>
+      </div>
+      <div className="space-y-1">
+        <Label className="text-xs">Email (optional)</Label>
+        <Input
+          type="email"
+          name="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="h-7 text-xs"
+        />
       </div>
       {error && <p className="text-xs text-destructive">{error}</p>}
       <Button type="submit" size="sm" disabled={pending} className="w-full">
@@ -316,6 +336,33 @@ function GuestRow({
   const [pending, startTransition] = useTransition()
   const [sending, startSend] = useTransition()
   const [sendNote, setSendNote] = useState<string | null>(null)
+  const [editingEmail, setEditingEmail] = useState(false)
+  const [emailDraft, setEmailDraft] = useState(entry.email ?? '')
+  const [savingEmail, startSaveEmail] = useTransition()
+  const [emailError, setEmailError] = useState<string | null>(null)
+
+  // The TM's own add only ever collects a name (AddGuestForm), and a chat
+  // request can skip the email question, so this is the one place either kind
+  // of guest gets an email on file after the fact. updateGuestEntry already
+  // supported this write; nothing in the UI called it (REE-172).
+  function saveEmail() {
+    setEmailError(null)
+    startSaveEmail(async () => {
+      const result = await updateGuestEntry(entry.id, { email: emailDraft })
+      if (result.error) {
+        setEmailError(result.error)
+        return
+      }
+      setEditingEmail(false)
+      onChanged()
+    })
+  }
+
+  function cancelEmailEdit() {
+    setEmailDraft(entry.email ?? '')
+    setEmailError(null)
+    setEditingEmail(false)
+  }
 
   // onChanged re-reads the panel's list, which also writes the day-info block's
   // count into the guest count store. No server refresh: the block updates from
@@ -377,6 +424,38 @@ function GuestRow({
     return null
   }
 
+  if (editingEmail) {
+    return (
+      <ListRow className="space-y-2 px-3 py-2" interactive={false}>
+        <span className="block truncate text-sm font-medium">{guestName(entry)}</span>
+        <div className="flex items-center gap-1.5">
+          <Input
+            type="email"
+            value={emailDraft}
+            onChange={(e) => setEmailDraft(e.target.value)}
+            placeholder="Email"
+            className="h-7 flex-1 text-xs"
+            autoFocus
+          />
+          <Button type="button" size="sm" className="h-7 shrink-0 text-xs" disabled={savingEmail} onClick={saveEmail}>
+            Save
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="ghost"
+            className="h-7 shrink-0 text-xs"
+            disabled={savingEmail}
+            onClick={cancelEmailEdit}
+          >
+            Cancel
+          </Button>
+        </div>
+        {emailError && <p className="text-[11px] text-destructive">{emailError}</p>}
+      </ListRow>
+    )
+  }
+
   return (
     <ListRow className="flex items-center gap-2 px-3 py-2" interactive={false}>
       <span className="min-w-0 flex-1">
@@ -403,21 +482,38 @@ function GuestRow({
         dialogDescription="This takes them off the door. The record of who asked is kept. This cannot be undone."
         onConfirm={remove}
         extraItems={
-          // Only an approved, not-yet-told guest can be sent to. A second send to
-          // an already-notified entry is a no-op by design (the action filters on
-          // notified_at), so a "Resend" item would lie: it is omitted instead.
-          entry.status === 'approved' && !entry.notified_at ? (
-            <DropdownMenuItem disabled={sending} onSelect={sendConfirmation}>
-              Send confirmation
+          <>
+            <DropdownMenuItem onSelect={() => setEditingEmail(true)}>
+              {entry.email ? 'Edit email' : 'Add email'}
             </DropdownMenuItem>
-          ) : undefined
+            {/* Only an approved, not-yet-told guest can be sent to. A second send to
+               an already-notified entry is a no-op by design (the action filters on
+               notified_at), so a "Resend" item would lie: it is omitted instead. */}
+            {entry.status === 'approved' && !entry.notified_at && (
+              <DropdownMenuItem disabled={sending} onSelect={sendConfirmation}>
+                Send confirmation
+              </DropdownMenuItem>
+            )}
+          </>
         }
       />
     </ListRow>
   )
 }
 
-function SendConfirmations({ showId, disabled }: { showId: string; disabled: boolean }) {
+function SendConfirmations({
+  showId,
+  disabled,
+  missingEmailCount,
+}: {
+  showId: string
+  disabled: boolean
+  // Approved, not-yet-told guests with no email on file. A zero count from the
+  // send is otherwise indistinguishable between "everyone already notified"
+  // and "no one here has an email", and the latter used to read as a silent
+  // no-op the TM had no way to explain (REE-172).
+  missingEmailCount: number
+}) {
   const [pending, startTransition] = useTransition()
   const [note, setNote] = useState<string | null>(null)
 
@@ -426,8 +522,13 @@ function SendConfirmations({ showId, disabled }: { showId: string; disabled: boo
     startTransition(async () => {
       const result = await sendGuestConfirmations(showId)
       if (result.error) setNote(result.error)
-      else if (result.count === 0) setNote('No one to notify.')
-      else setNote(`Sent to ${result.count}.`)
+      else if (result.count === 0) {
+        setNote(
+          missingEmailCount > 0
+            ? `No one to notify (${missingEmailCount} with no email on file).`
+            : 'No one to notify.',
+        )
+      } else setNote(`Sent to ${result.count}.`)
     })
   }
 
