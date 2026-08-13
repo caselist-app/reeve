@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { nearestAirport, estimateGroundMinutes } from '@/lib/logistics/airports'
 import { AIRPORT_TRANSIT_MIN, RAIL_TRANSIT_MIN } from '@/lib/logistics/constants'
+import { geocodeAddress } from '@/lib/logistics/geocode'
 import type { HubResolution } from '@/lib/logistics/types'
 
 // Resolution order (stops at first hit):
@@ -51,22 +52,10 @@ function lookupKnownVenue(venueName: string): Resolution | null {
 async function resolveViaGoogleMaps(
   address: string
 ): Promise<Resolution | null> {
-  const apiKey = process.env.GOOGLE_MAPS_API_KEY
-  if (!apiKey || !address) return null
+  const geocoded = await geocodeAddress(address)
+  if (!geocoded) return null
 
-  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${apiKey}`
-
-  let data: { status: string; results: { geometry: { location: { lat: number; lng: number } } }[] }
-  try {
-    const res = await fetch(url)
-    data = (await res.json()) as typeof data
-  } catch {
-    return null
-  }
-
-  if (data.status !== 'OK' || !data.results[0]) return null
-
-  const { lat, lng } = data.results[0].geometry.location
+  const { lat, lng } = geocoded
   const { airport, distKm } = nearestAirport(lat, lng)
   const groundMin = estimateGroundMinutes(distKm)
 

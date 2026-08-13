@@ -1,10 +1,19 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { testDb } from './test-db'
 import { createFixture, createSecondTour, destroyFixture, type Fixture } from './fixture'
 import { recordTransportOption, createTransportSegment } from '@/lib/actions/transport'
 import { recordHotelOption, createHotelStay } from '@/lib/actions/hotels'
 import { createDayItem, updateDayItem } from '@/lib/actions/day-items'
 import { sendBroadcast, previewBroadcast } from '@/lib/actions/broadcast'
+
+// REE-206. recordHotelOption now awaits resolveHotelGeocodeJob.trigger() when the
+// option carries an address, which needs TRIGGER_SECRET_KEY and a running
+// Trigger.dev, neither of which exists here. Mock it so the "accepts" case
+// reaches its own return rather than throwing on the enqueue, same as
+// create-show-revalidate.test.ts does for resolve-hub.
+vi.mock('@/trigger/jobs/resolve-hotel-geocode', () => ({
+  resolveHotelGeocodeJob: { trigger: vi.fn() },
+}))
 
 // CLAUDE.md: "RLS scopes rows by tour, it does not check that two ids in the
 // same payload belong to the same tour."
