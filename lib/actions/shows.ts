@@ -117,6 +117,14 @@ export async function updateShow(
   const addressChanged = (parsed.data.address ?? null) !== (existing.address ?? null)
   const dateChanged = parsed.data.date !== existing.date
 
+  // lat/lng are not shows columns (venue_lat/venue_lng are), so they cannot
+  // ride along in the spread below the way every other schema field does.
+  // Pulled out here rather than left in showFields and overwritten, so a
+  // stray `lat`/`lng` key never reaches supabase-js and errors on an unknown
+  // column.
+  const { lat, lng, ...showFields } = parsed.data
+  const hasCoordinates = lat != null && lng != null
+
   // showSchema always carries a date, so this action has always written one.
   // What it never did was move the tour_date_id with it, which is the whole of
   // bug 1a: the schedule queries by the link and stayed on the old day while
@@ -139,26 +147,29 @@ export async function updateShow(
   const { error } = await supabase
     .from('shows')
     .update({
-      ...parsed.data,
+      ...showFields,
       ...(dateChanged ? { tour_date_id: nextTourDateId } : {}),
       // Clear the hub cache whenever the address changes so the planner UI
       // shows "Resolving..." until the job completes.
       //
-      // venue_lat and venue_lng go with it. They were left behind, and both
-      // planners treat a stored geocode as authoritative rather than
-      // re-geocoding, so correcting a venue address left hotel and transport
-      // search running against the coordinates of the old one. Nothing about
-      // that is visible: the address on screen is the corrected one, the hub
-      // re-resolves, and the results are simply for somewhere else. Of the
-      // three fields this clears, it is the only one with no symptom.
+      // venue_lat and venue_lng go with it, unless the TM picked the new
+      // address from the Places dropdown and the form already has a geocode
+      // for it (REE-213): write that straight onto the row rather than
+      // waiting on the async job, which is exactly the case this issue exists
+      // for. Falling back to null is still correct for a manually typed
+      // address: both planners treat a stored geocode as authoritative rather
+      // than re-geocoding, so leaving the old coordinates in place would run
+      // hotel and transport search against somewhere the venue no longer is,
+      // with the address on screen showing the corrected one and nothing
+      // visible saying the coordinates disagree.
       ...(addressChanged
         ? {
             hub_resolved_at: null,
             transport_hub_iata: null,
             transport_hub_rail: null,
             hub_ground_minutes: null,
-            venue_lat: null,
-            venue_lng: null,
+            venue_lat: hasCoordinates ? lat : null,
+            venue_lng: hasCoordinates ? lng : null,
           }
         : {}),
     })
