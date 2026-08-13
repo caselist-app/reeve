@@ -48,6 +48,13 @@ interface ShowFormProps {
   showId?: string
   initialData?: Partial<ShowData>
   onSuccess?: (showId: string) => void
+  // Fires on every successful save, create or update, in addition to
+  // whichever branch below runs. Additive rather than a replacement for
+  // onSuccess: VenuePanel needs to know a save landed so it can refetch and
+  // watch for the async hub/geocode resolution (REE-227), without taking over
+  // onSuccess and losing the crew-notify branch that only runs when the
+  // caller has not passed one.
+  onSaved?: () => void
   className?: string
 }
 
@@ -57,7 +64,14 @@ function parseBool(val: string): boolean | null {
   return null
 }
 
-export function ShowForm({ tourId, showId, initialData, onSuccess, className }: ShowFormProps) {
+export function ShowForm({
+  tourId,
+  showId,
+  initialData,
+  onSuccess,
+  onSaved,
+  className,
+}: ShowFormProps) {
   const formId = useId()
   const router = useRouter()
   // Set after a successful update if a notification-worthy field changed.
@@ -142,6 +156,8 @@ export function ShowForm({ tourId, showId, initialData, onSuccess, className }: 
       return showId ? updateShow(showId, data) : createShow(tourId, data)
     },
     onSuccess: (result) => {
+      onSaved?.()
+
       if (onSuccess && result.showId) {
         onSuccess(result.showId)
         return

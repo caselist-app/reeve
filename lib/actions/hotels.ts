@@ -373,6 +373,28 @@ export async function updateHotelStay(
   }
 }
 
+// Whether a stay's geocode has landed yet. A changed address queues
+// resolveHotelGeocodeJob (Trigger.dev), which writes lat/lng straight to
+// Supabase via the admin client, outside any Next.js request, so nothing
+// revalidates the schedule route when it finishes. hotel-panel.tsx polls this
+// after an address-changing save and refreshes once it flips, so the day
+// view's map appears without a manual reload. REE-227.
+export async function getHotelGeocodeStatus(stayId: string): Promise<{ resolved: boolean }> {
+  await requireUser()
+
+  const supabase = await createClient()
+
+  // RLS scopes by owns_tour, so a stay on another tour reads as unresolved
+  // rather than needing a separate ownership query.
+  const { data } = await supabase
+    .from('hotel_stays')
+    .select('lat, lng')
+    .eq('id', stayId)
+    .maybeSingle()
+
+  return { resolved: data?.lat != null && data?.lng != null }
+}
+
 // Replaces who is attached to an existing stay. Used by the timeline edit
 // panel's party field (REE-226): the add flow only ever inserts fresh rows,
 // but an edit has to diff against whatever is already attached and remove
