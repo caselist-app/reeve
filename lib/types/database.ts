@@ -809,7 +809,9 @@ export type Database = {
           created_at: string
           id: string
           incidentals_policy: string | null
+          lat: number | null
           late_checkout: boolean | null
+          lng: number | null
           name: string | null
           negotiated_rate: number | null
           parking_json: Json
@@ -836,7 +838,9 @@ export type Database = {
           created_at?: string
           id?: string
           incidentals_policy?: string | null
+          lat?: number | null
           late_checkout?: boolean | null
+          lng?: number | null
           name?: string | null
           negotiated_rate?: number | null
           parking_json?: Json
@@ -863,7 +867,9 @@ export type Database = {
           created_at?: string
           id?: string
           incidentals_policy?: string | null
+          lat?: number | null
           late_checkout?: boolean | null
+          lng?: number | null
           name?: string | null
           negotiated_rate?: number | null
           parking_json?: Json

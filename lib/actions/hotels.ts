@@ -8,6 +8,7 @@ import type { TablesUpdate } from '@/lib/types/database'
 import { bustTourContextCache } from '@/lib/ai/context'
 import { resolveTourDateId } from '@/lib/schedule/day-link'
 import type { DateMove } from '@/lib/schedule/date-move'
+import { resolveHotelGeocodeJob } from '@/trigger/jobs/resolve-hotel-geocode'
 
 // `moved` is set only when the stay actually landed on a day other than the one
 // the TM was looking at. See lib/schedule/date-move.ts.
@@ -86,6 +87,10 @@ export async function recordHotelOption(
 
   if (stayError || !stay) {
     return { error: stayError?.message ?? 'Failed to record hotel stay.' }
+  }
+
+  if (option.address) {
+    await resolveHotelGeocodeJob.trigger({ stay_id: stay.id })
   }
 
   // Insert room_assignments for each person in the party.
@@ -219,6 +224,10 @@ export async function createHotelStay(
 
   if (error || !stay) return { error: error?.message ?? 'Failed to create hotel stay.' }
 
+  if (stayData.address) {
+    await resolveHotelGeocodeJob.trigger({ stay_id: stay.id })
+  }
+
   if (people.length > 0) {
     const assignments = people.map((person_id) => ({
       tour_id: tourId,
@@ -271,7 +280,7 @@ export async function updateHotelStay(
 
   const { data: existing } = await supabase
     .from('hotel_stays')
-    .select('tour_id, tour_date_id, check_in_date')
+    .select('tour_id, tour_date_id, check_in_date, address')
     .eq('id', stayId)
     .single()
 
@@ -316,12 +325,25 @@ export async function updateHotelStay(
   const dateChanged =
     data.check_in_date !== undefined && data.check_in_date !== existing.check_in_date
 
+  // A changed address invalidates the cached geocode immediately: without
+  // this the static map keeps showing the old location while the async job
+  // re-resolves. Same shape as shows.ts nulling venue_lat/venue_lng.
+  const addressChanged = data.address !== undefined && data.address !== existing.address
+  if (addressChanged) {
+    update.lat = null
+    update.lng = null
+  }
+
   const { error } = await supabase
     .from('hotel_stays')
     .update(update)
     .eq('id', stayId)
 
   if (error) return { error: error.message }
+
+  if (addressChanged && data.address) {
+    await resolveHotelGeocodeJob.trigger({ stay_id: stayId })
+  }
 
   void bustTourContextCache(existing.tour_id)
   revalidatePath(`/tours/${existing.tour_id}/schedule`)

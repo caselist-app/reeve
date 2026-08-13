@@ -9,10 +9,11 @@ export type DayHotel = Pick<
   | 'check_in_date' | 'check_in_time'
   | 'check_out_date' | 'check_out_time'
   | 'wifi_network' | 'wifi_password'
+  | 'lat' | 'lng'
 >
 
 const HOTEL_SELECT =
-  'id, name, address, check_in_date, check_in_time, check_out_date, check_out_time, wifi_network, wifi_password'
+  'id, name, address, check_in_date, check_in_time, check_out_date, check_out_time, wifi_network, wifi_password, lat, lng'
 
 // The one hotel to show in the day info block: the same link-first,
 // date-matched-fallback shape lib/schedule/day-records.ts already uses for
