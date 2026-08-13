@@ -1,5 +1,6 @@
 'use server'
 
+import { redirect } from 'next/navigation'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 
@@ -36,4 +37,14 @@ export async function createAccountTelegramLinkToken(): Promise<{
   }
 
   return { error: null, deepLink: `https://t.me/${botUsername}?start=${row.token}` }
+}
+
+// Ends the account holder's session and returns them to login.
+export async function signOutAction(): Promise<void> {
+  await requireUser()
+
+  const supabase = await createClient()
+  await supabase.auth.signOut()
+
+  redirect('/login')
 }
