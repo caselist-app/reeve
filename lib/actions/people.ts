@@ -7,6 +7,7 @@ import { definedOnly } from '@/lib/forms/write-row'
 import { personSchema, crewDetailSchema } from '@/lib/validators/person'
 import { bustTourContextCache } from '@/lib/ai/context'
 import type { PartyPickerPerson } from '@/lib/party/presets'
+import { findRosterBackfillCandidates, writeRosterBackfillAttention } from '@/lib/party/roster-backfill'
 import type { z } from 'zod'
 
 export type PeopleActionState = { error: string | null; personId?: string }
@@ -186,6 +187,27 @@ export async function addPerson(
   // The day view's roster panel renders the same membership rows as the people
   // page, so a person added from either surface has to invalidate both.
   revalidatePath(`/tours/${tourId}/schedule`)
+
+  // REE-171 (brief 35, D3): batch every upcoming whole-party or by-type item
+  // this person is missing from into one Inbox row, never blocking the save.
+  // A detection failure is logged and swallowed here, the same as the
+  // producers in lib/guest-list/attention.ts: the person is already saved.
+  const { candidates, error: backfillError } = await findRosterBackfillCandidates(
+    supabase,
+    tourId,
+    p.person_type
+  )
+  if (backfillError) {
+    console.error('[roster-backfill] could not detect candidates:', backfillError)
+  } else if (candidates.length > 0) {
+    await writeRosterBackfillAttention(supabase, {
+      tourId,
+      personId: person.id,
+      personName: p.name,
+      count: candidates.length,
+    })
+    revalidatePath('/inbox')
+  }
 
   return { error: null, personId: person.id }
 }
