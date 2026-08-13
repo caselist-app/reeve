@@ -1,16 +1,23 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { PanelShell } from '@/components/layout/panel-shell'
 import { DateMoveNotice } from '@/components/schedule/date-move-notice'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { PlacesAddressInput } from '@/components/shows/places-address-input'
-import { updateHotelStay } from '@/lib/actions/hotels'
+import { updateHotelStay, getHotelGeocodeStatus } from '@/lib/actions/hotels'
 import type { Tables } from '@/lib/types/database'
 import { useEntityForm } from '@/hooks/use-entity-form'
 import { readForm } from '@/lib/forms/read-form'
+
+// How long to keep polling for a geocode before giving up. Generous relative
+// to a typical Google Maps geocode (a few seconds), short enough not to leave
+// a timer running indefinitely if the job never resolves the address.
+const GEOCODE_POLL_INTERVAL_MS = 4000
+const GEOCODE_POLL_MAX_ATTEMPTS = 20
 
 type Stay = Pick<
   Tables<'hotel_stays'>,
@@ -25,6 +32,7 @@ interface HotelPanelProps {
 }
 
 export function HotelPanel({ stay }: HotelPanelProps) {
+  const router = useRouter()
   // Mirrors the check-in input so the notice can react to it. The input stays
   // uncontrolled: this only reads what the TM typed, it does not drive the field,
   // so React 19's post-action reset to defaultValue still behaves as CLAUDE.md
@@ -32,6 +40,17 @@ export function HotelPanel({ stay }: HotelPanelProps) {
   const [checkInDate, setCheckInDate] = useState(stay.check_in_date ?? '')
   // Controlled so the Places widget can write the selected address back in.
   const [address, setAddress] = useState(stay.address ?? '')
+  // Tracks the address this panel last saved, so a second save in the same
+  // session is compared against what actually landed rather than the prop the
+  // panel opened with.
+  const lastSavedAddressRef = useRef(stay.address ?? '')
+  const geocodePollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (geocodePollRef.current) clearInterval(geocodePollRef.current)
+    }
+  }, [])
 
   const { submit, pending, error, saved } = useEntityForm({
     action: (fd) => {
@@ -46,6 +65,30 @@ export function HotelPanel({ stay }: HotelPanelProps) {
         wifi_password: 'string',
       })
       return updateHotelStay(stay.id, data)
+    },
+    onSuccess: () => {
+      // updateHotelStay nulls lat/lng and queues resolveHotelGeocodeJob
+      // (Trigger.dev) whenever the address changes. That job writes the new
+      // coordinates via the admin client, outside any Next.js request, so
+      // nothing tells the schedule route's Router Cache to refetch when it
+      // finishes. Poll until the geocode lands, then refresh so the hotel's
+      // map appears on the day view without a manual reload. REE-227.
+      if (address === lastSavedAddressRef.current) return
+      lastSavedAddressRef.current = address
+
+      if (geocodePollRef.current) clearInterval(geocodePollRef.current)
+      let attempts = 0
+      geocodePollRef.current = setInterval(() => {
+        attempts += 1
+        getHotelGeocodeStatus(stay.id).then(({ resolved }) => {
+          if (resolved) {
+            if (geocodePollRef.current) clearInterval(geocodePollRef.current)
+            router.refresh()
+          } else if (attempts >= GEOCODE_POLL_MAX_ATTEMPTS && geocodePollRef.current) {
+            clearInterval(geocodePollRef.current)
+          }
+        })
+      }, GEOCODE_POLL_INTERVAL_MS)
     },
   })
 

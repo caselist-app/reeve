@@ -373,6 +373,28 @@ export async function updateHotelStay(
   }
 }
 
+// Whether a stay's geocode has landed yet. A changed address queues
+// resolveHotelGeocodeJob (Trigger.dev), which writes lat/lng straight to
+// Supabase via the admin client, outside any Next.js request, so nothing
+// revalidates the schedule route when it finishes. hotel-panel.tsx polls this
+// after an address-changing save and refreshes once it flips, so the day
+// view's map appears without a manual reload. REE-227.
+export async function getHotelGeocodeStatus(stayId: string): Promise<{ resolved: boolean }> {
+  await requireUser()
+
+  const supabase = await createClient()
+
+  // RLS scopes by owns_tour, so a stay on another tour reads as unresolved
+  // rather than needing a separate ownership query.
+  const { data } = await supabase
+    .from('hotel_stays')
+    .select('lat, lng')
+    .eq('id', stayId)
+    .maybeSingle()
+
+  return { resolved: data?.lat != null && data?.lng != null }
+}
+
 // Updates the confirmation number and promotes status to 'booked'.
 // This is the only place in the codebase that sets status='booked', 
 // and only after the TM has explicitly entered the reference.
