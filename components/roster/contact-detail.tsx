@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { ChevronLeft, Send } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Tables } from '@/lib/types/database'
-import { passportStatus, formatExpiry } from '@/lib/roster/passport'
+import { expiryStatus, formatExpiry } from '@/lib/roster/expiry'
 import { deleteContact } from '@/lib/actions/contacts'
 import { PageHeader } from '@/components/layout/page-header'
 import { Button } from '@/components/ui/button'
@@ -38,7 +38,7 @@ export function ContactDetail({ contact, tours }: Props) {
   const { open, close } = useSidePanel()
   const [deleteOpen, setDeleteOpen] = useState(false)
 
-  const status = passportStatus(contact.passport_expiry)
+  const status = expiryStatus(contact.passport_expiry)
 
   async function handleDelete(): Promise<string | null> {
     const result = await deleteContact(contact.id)

@@ -1,9 +1,10 @@
-// Passport expiry status, shared by the roster list and contact detail.
-// "soon" is within 90 days, the window where a TM should be chasing a renewal.
+// Expiry status, shared by passports and visas across the Roster and a
+// tour's People page. "soon" is within 90 days, the window where a TM
+// should be chasing a renewal.
 
-export type PassportStatus = 'none' | 'expired' | 'soon' | 'ok'
+export type ExpiryStatus = 'none' | 'expired' | 'soon' | 'ok'
 
-export function passportStatus(expiry: string | null): PassportStatus {
+export function expiryStatus(expiry: string | null): ExpiryStatus {
   if (!expiry) return 'none'
   const today = new Date()
   today.setHours(0, 0, 0, 0)
