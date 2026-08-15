@@ -905,6 +905,90 @@ export type Database = {
           },
         ]
       }
+      identity_documents: {
+        Row: {
+          account_id: string
+          byte_size: number
+          contact_id: string
+          created_at: string
+          document_number: string | null
+          expiry_date: string | null
+          file_name: string
+          given_names: string | null
+          id: string
+          is_primary: boolean
+          issue_date: string | null
+          issuing_country: string | null
+          kind: string
+          mime_type: string
+          notes: string | null
+          storage_path: string
+          surname: string | null
+          updated_at: string
+          valid_for_country: string | null
+          visa_type: string | null
+        }
+        Insert: {
+          account_id: string
+          byte_size: number
+          contact_id: string
+          created_at?: string
+          document_number?: string | null
+          expiry_date?: string | null
+          file_name: string
+          given_names?: string | null
+          id?: string
+          is_primary?: boolean
+          issue_date?: string | null
+          issuing_country?: string | null
+          kind: string
+          mime_type: string
+          notes?: string | null
+          storage_path: string
+          surname?: string | null
+          updated_at?: string
+          valid_for_country?: string | null
+          visa_type?: string | null
+        }
+        Update: {
+          account_id?: string
+          byte_size?: number
+          contact_id?: string
+          created_at?: string
+          document_number?: string | null
+          expiry_date?: string | null
+          file_name?: string
+          given_names?: string | null
+          id?: string
+          is_primary?: boolean
+          issue_date?: string | null
+          issuing_country?: string | null
+          kind?: string
+          mime_type?: string
+          notes?: string | null
+          storage_path?: string
+          surname?: string | null
+          updated_at?: string
+          valid_for_country?: string | null
+          visa_type?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "identity_documents_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "identity_documents_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notification_log: {
         Row: {
           account_id: string | null
