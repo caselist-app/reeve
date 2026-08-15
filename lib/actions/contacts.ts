@@ -5,6 +5,7 @@ import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { definedOnly } from '@/lib/forms/write-row'
 import { contactSchema } from '@/lib/validators/contact'
+import { sortIdentityDocuments } from '@/lib/identity/kinds'
 import type { Tables } from '@/lib/types/database'
 import type { z } from 'zod'
 
@@ -23,6 +24,7 @@ export type TourMembership = {
 export type ContactWithTours = {
   contact: Tables<'contacts'>
   tours: TourMembership[]
+  identityDocuments: Tables<'identity_documents'>[]
 }
 
 // Returns roster contacts that are not yet on the given tour, ordered by name.
@@ -64,19 +66,17 @@ export async function getContact(
   const user = await requireUser()
   const supabase = await createClient()
 
-  const { data: contact } = await supabase
-    .from('contacts')
-    .select('*')
-    .eq('id', contactId)
-    .eq('account_id', user.id)
-    .single()
+  // None of these three depend on each other's result, only on contactId.
+  const [{ data: contact }, { data: memberships }, { data: documents }] = await Promise.all([
+    supabase.from('contacts').select('*').eq('id', contactId).eq('account_id', user.id).single(),
+    supabase
+      .from('people')
+      .select('id, person_type, role, tour_id, tours(name, artists(name), status)')
+      .eq('contact_id', contactId),
+    supabase.from('identity_documents').select('*').eq('contact_id', contactId),
+  ])
 
   if (!contact) return { data: null, error: 'Contact not found.' }
-
-  const { data: memberships } = await supabase
-    .from('people')
-    .select('id, person_type, role, tour_id, tours(name, artists(name), status)')
-    .eq('contact_id', contactId)
 
   const tours: TourMembership[] = (memberships ?? []).map((m) => {
     const t = m.tours as { name: string; artists: { name: string } | null; status: string } | null
@@ -91,7 +91,9 @@ export async function getContact(
     }
   })
 
-  return { data: { contact, tours }, error: null }
+  const identityDocuments = sortIdentityDocuments(documents ?? [])
+
+  return { data: { contact, tours, identityDocuments }, error: null }
 }
 
 // Maps the contact form DTO to a contacts row.
