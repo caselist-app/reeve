@@ -1,95 +1,16 @@
 import { redirect } from 'next/navigation'
-import Link from 'next/link'
-import { ChevronLeft } from 'lucide-react'
-import { requireUser } from '@/lib/auth/helpers'
-import { createClient } from '@/lib/supabase/server'
-import { HotelWorkspace } from '@/components/planner/hotel-workspace'
-import { PageLayout } from '@/components/layout/page-layout'
 
+// Hotel search is hidden for launch (REE-228): every hotel adapter
+// (RateHawk, Hotelbeds, Expedia Rapid) is an unbuilt stub returning `[]`,
+// so HotelWorkspace's real spinner used to resolve to a confident
+// "No artist options found." that read as no hotels near the venue rather
+// than not built yet. Backend (planHotels, the adapters, lib/logistics/hotels.ts)
+// is untouched, so re-enabling this route is the only step needed later.
 export default async function HotelsPage({
   params,
 }: {
-  params: Promise<{ id: string; showId: string }>
+  params: Promise<{ id: string }>
 }) {
-  const { id, showId } = await params
-  const user = await requireUser()
-  const supabase = await createClient()
-
-  const { data: tour } = await supabase
-    .from('tours')
-    .select('id, name, artists(name), timezone')
-    .eq('id', id)
-    .eq('account_id', user.id)
-    .single()
-
-  if (!tour) redirect('/')
-
-  const [{ data: show }, { data: people }] = await Promise.all([
-    supabase
-      .from('shows')
-      .select('id, tour_id, venue_name, date, address, venue_lat, venue_lng')
-      .eq('id', showId)
-      .eq('tour_id', id)
-      .single(),
-    supabase
-      .from('people')
-      .select('id, person_type, contacts(name)')
-      .eq('tour_id', id),
-  ])
-
-  if (!show) redirect(`/tours/${id}/schedule`)
-
-  // Pre-fill arrive_at / depart_at from any planned transport segment for this show.
-  // This is best-effort: if no segment exists the TM fills in manually.
-  const { data: segment } = await supabase
-    .from('transport_segments')
-    .select('arrive_at, depart_at')
-    .eq('tour_id', id)
-    .not('arrive_at', 'is', null)
-    .order('depart_at', { ascending: true })
-    .limit(1)
-    .maybeSingle()
-
-  // Name lives on the contact; flatten to the hotel workspace's Person shape.
-  const peopleList = (people ?? [])
-    .map((p) => ({
-      id: p.id,
-      name: (p.contacts as { name: string } | null)?.name ?? '',
-      person_type: p.person_type,
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name))
-
-  const formattedDate = new Date(`${show.date}T00:00:00`).toLocaleDateString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  })
-
-  return (
-    <PageLayout maxWidth="max-w-4xl">
-      <Link
-        href={`/tours/${id}/schedule?date=${show.date}`}
-        className="mb-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ChevronLeft className="h-4 w-4" />
-        {show.venue_name}
-      </Link>
-
-      <div className="mb-8">
-        <p className="text-sm text-muted-foreground">{tour.artists?.name ?? ''}</p>
-        <h1 className="text-2xl font-semibold">Hotel search</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {show.venue_name} &nbsp;·&nbsp; {formattedDate}
-        </p>
-      </div>
-
-      <HotelWorkspace
-        show={show}
-        tourId={id}
-        people={peopleList}
-        defaultArriveAt={segment?.arrive_at ?? null}
-        defaultDepartAt={segment?.depart_at ?? null}
-      />
-    </PageLayout>
-  )
+  const { id } = await params
+  redirect(`/tours/${id}/schedule`)
 }

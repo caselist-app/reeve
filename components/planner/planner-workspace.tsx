@@ -232,20 +232,11 @@ export function PlannerWorkspace({
       {/* Night-before results, shown when all same-day options are infeasible */}
       {nightBeforeResults !== null && (
         <div className="space-y-3">
-          {/* Section header with hotel nudge */}
-          <div className="flex items-center justify-between pt-2">
-            <div>
-              <h3 className="text-sm font-semibold">Travel the night before</h3>
-              <p className="text-xs text-muted-foreground">
-                No same-day options make load-in. These get them there the evening before.
-              </p>
-            </div>
-            <a
-              href={`/tours/${tourId}/shows/${show.id}/hotels`}
-              className="flex items-center gap-1.5 rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800 hover:bg-amber-200 dark:bg-amber-900/30 dark:text-amber-300"
-            >
-              Hotel needed
-            </a>
+          <div className="pt-2">
+            <h3 className="text-sm font-semibold">Travel the night before</h3>
+            <p className="text-xs text-muted-foreground">
+              No same-day options make load-in. These get them there the evening before.
+            </p>
           </div>
 
           {nightBeforeResults.length === 0 ? (
