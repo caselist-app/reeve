@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { MoreHorizontal, Pencil, Trash2, Send } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Tables } from '@/lib/types/database'
-import { passportStatus, formatExpiry } from '@/lib/roster/passport'
+import { expiryStatus, formatExpiry } from '@/lib/roster/expiry'
 import { getContact, deleteContact } from '@/lib/actions/contacts'
 import type { TourMembership } from '@/lib/actions/contacts'
 import type { ContactTourContext } from '@/stores/side-panel-store'
@@ -87,7 +87,7 @@ export function ContactPanel({ contactId, tourContext, onSuccess }: Props) {
     return null
   }
 
-  const status = contact?.passport_expiry ? passportStatus(contact.passport_expiry) : null
+  const status = contact?.passport_expiry ? expiryStatus(contact.passport_expiry) : null
 
   const headerAction = contact ? (
     <>

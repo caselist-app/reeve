@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import type { Tables } from '@/lib/types/database'
 import type { PersonWithContact } from '@/components/people/people-view'
+import { expiryStatus, formatExpiry } from '@/lib/roster/expiry'
 import { Button } from '@/components/ui/button'
 import { ListRow } from '@/components/ui/list-row'
 import { StatusBadge, PASSPORT_VARIANT } from '@/components/ui/status-badge'
@@ -15,30 +16,13 @@ interface Props {
   onRemove: (personId: string) => Promise<string | null>
 }
 
-function passportStatus(expiry: string | null): 'ok' | 'soon' | 'expired' {
-  if (!expiry) return 'ok'
-  const exp = new Date(expiry + 'T00:00:00')
-  const now = new Date()
-  if (exp < now) return 'expired'
-  const days = (exp.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)
-  return days < 90 ? 'soon' : 'ok'
-}
-
-function formatExpiry(expiry: string | null): string {
-  if (!expiry) return ''
-  return new Date(expiry + 'T00:00:00').toLocaleDateString('en-GB', {
-    month: 'short',
-    year: 'numeric',
-  })
-}
-
 export function PeopleTable({ people, onEdit, onRemove }: Props) {
   if (people.length === 0) return null
 
   return (
     <div className="space-y-2">
       {people.map((person) => {
-        const status = passportStatus(person.contacts.passport_expiry)
+        const status = expiryStatus(person.contacts.passport_expiry)
         const subtitle = [
           person.role,
           person.contacts.whatsapp_number,
