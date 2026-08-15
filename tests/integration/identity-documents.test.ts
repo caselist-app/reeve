@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { testDb } from './test-db'
 import { createFixture, destroyFixture, type Fixture } from './fixture'
+import { sortIdentityDocuments } from '@/lib/identity/kinds'
+import { expiryStatus } from '@/lib/roster/expiry'
 
 // REE-196 / Brief 45. identity_documents carries its guarantees as a check
 // constraint and two partial unique indexes, and neither exists in the
@@ -96,5 +98,76 @@ describe('the identity_documents schema enforces its constraints', () => {
         .insert(document({ kind: 'visa', valid_for_country: 'USA', visa_type: 'P-2' }))
       expect(error).toBeNull()
     })
+  })
+})
+
+// REE-198 / Brief 45 step 3. sortIdentityDocuments is the ordering function
+// the Identity section renders from. Rows are seeded out of order (visa
+// first, primary passport last) so the assertion only passes if the function
+// actually reorders them: sorting the fetched rows by created_at, the naive
+// first attempt, fails this on the insertion order alone.
+describe('sortIdentityDocuments orders primary first, then expiry ascending, passports before visas', () => {
+  let fixture: Fixture
+
+  beforeEach(async () => {
+    fixture = await createFixture()
+  })
+
+  afterEach(async () => {
+    await destroyFixture(fixture)
+  })
+
+  function document(overrides: Record<string, unknown> = {}) {
+    return {
+      account_id: fixture.userId,
+      contact_id: fixture.contactId,
+      kind: 'passport',
+      storage_path: `${fixture.userId}/${fixture.contactId}/test.pdf`,
+      file_name: 'test.pdf',
+      mime_type: 'application/pdf',
+      byte_size: 1024,
+      ...overrides,
+    }
+  }
+
+  it('returns primary passport, other passport, then visa', async () => {
+    const { data: visa } = await testDb
+      .from('identity_documents')
+      .insert(document({ kind: 'visa', expiry_date: '2027-01-01' }))
+      .select()
+      .single()
+
+    const { data: otherPassport } = await testDb
+      .from('identity_documents')
+      .insert(document({ kind: 'passport', expiry_date: '2030-01-01' }))
+      .select()
+      .single()
+
+    const { data: primaryPassport } = await testDb
+      .from('identity_documents')
+      .insert(document({ kind: 'passport', is_primary: true, expiry_date: '2029-01-01' }))
+      .select()
+      .single()
+
+    const { data: rows } = await testDb
+      .from('identity_documents')
+      .select('*')
+      .eq('contact_id', fixture.contactId)
+      .order('created_at')
+
+    const ordered = sortIdentityDocuments(rows ?? [])
+
+    expect(ordered.map((d) => d.id)).toEqual([primaryPassport!.id, otherPassport!.id, visa!.id])
+  })
+
+  it('treats a null expiry_date as status none, not a thrown error', async () => {
+    const { data: row } = await testDb
+      .from('identity_documents')
+      .insert(document({ expiry_date: null }))
+      .select()
+      .single()
+
+    expect(() => expiryStatus(row!.expiry_date)).not.toThrow()
+    expect(expiryStatus(row!.expiry_date)).toBe('none')
   })
 })

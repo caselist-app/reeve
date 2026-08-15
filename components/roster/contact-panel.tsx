@@ -12,6 +12,7 @@ import { useSidePanel } from '@/stores/side-panel-store'
 import { PanelShell } from '@/components/layout/panel-shell'
 import { Button } from '@/components/ui/button'
 import { ListRow } from '@/components/ui/list-row'
+import { IdentityDocuments } from '@/components/roster/identity-documents'
 import { Separator } from '@/components/ui/separator'
 import { DataField } from '@/components/ui/data-field'
 import { SectionHeader } from '@/components/ui/section-header'
@@ -36,6 +37,7 @@ export function ContactPanel({ contactId, tourContext, onSuccess }: Props) {
   const { close, open } = useSidePanel()
   const [contact, setContact] = useState<Tables<'contacts'> | null>(null)
   const [tours, setTours] = useState<TourMembership[]>([])
+  const [identityDocuments, setIdentityDocuments] = useState<Tables<'identity_documents'>[]>([])
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -46,6 +48,7 @@ export function ContactPanel({ contactId, tourContext, onSuccess }: Props) {
         if (data) {
           setContact(data.contact)
           setTours(data.tours)
+          setIdentityDocuments(data.identityDocuments)
         } else {
           setFetchError(error ?? 'Could not load contact.')
         }
@@ -213,6 +216,11 @@ export function ContactPanel({ contactId, tourContext, onSuccess }: Props) {
               <p className="text-sm text-muted-foreground">No details added yet.</p>
             )
           })()}
+
+          <Separator className="my-5" />
+
+          <SectionHeader>Identity documents</SectionHeader>
+          <IdentityDocuments documents={identityDocuments} />
 
           {contact.notes && (
             <>
