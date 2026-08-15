@@ -254,7 +254,9 @@ export function VenuePanel({ tourId, showId, venueName }: VenuePanelProps) {
           />
 
           {/* Moved off the show panel by Brief 42. Advance opens a panel; travel
-              and hotels are workspaces, wide enough that they stay full routes. */}
+              is a workspace, wide enough that it stays a full route. Find hotels
+              removed for launch (REE-228): the search workspace it pointed at is
+              gated, so the link would only dead-end. */}
           <div className="mt-5 space-y-1 border-t border-border pt-4">
             <button
               type="button"
@@ -271,15 +273,6 @@ export function VenuePanel({ tourId, showId, venueName }: VenuePanelProps) {
               className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-xs font-medium transition-colors hover:bg-muted/50"
             >
               Plan travel
-              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-            </Link>
-
-            <Link
-              href={`/tours/${tourId}/shows/${showId}/hotels`}
-              onClick={close}
-              className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-xs font-medium transition-colors hover:bg-muted/50"
-            >
-              Find hotels
               <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
             </Link>
           </div>

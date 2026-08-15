@@ -39,16 +39,16 @@ export default async function HotelStayPage({
       .single(),
   ])
 
-  if (!show || !stay) redirect(`/tours/${id}/shows/${showId}/hotels`)
+  if (!show || !stay) redirect(`/tours/${id}/hotels`)
 
   return (
     <PageLayout maxWidth="max-w-2xl">
       <Link
-        href={`/tours/${id}/shows/${showId}/hotels`}
+        href={`/tours/${id}/hotels`}
         className="mb-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
         <ChevronLeft className="h-4 w-4" />
-        Hotel search
+        Hotels
       </Link>
 
       <div className="mb-8">
