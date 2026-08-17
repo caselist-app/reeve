@@ -214,4 +214,46 @@ describe('updateShow resolves the hub inline when it can', () => {
     expect(show?.transport_hub_iata).toBeNull()
     expect(show?.hub_resolved_at).toBeNull()
   })
+
+  // REE-245: timezone is cached off the old address the same way the hub
+  // fields are, and going stale has no symptom on the show row itself, unlike
+  // the hub fields (the planner UI would show "Resolving..."). Times just
+  // render in the wrong zone with nothing on screen saying so, which is why
+  // this needs its own assertion alongside the fields already covered above.
+  it('clears the resolved timezone alongside the hub fields on address change', async () => {
+    const { error: seedError } = await testDb
+      .from('shows')
+      .update({
+        venue_lat: 51.4775,
+        venue_lng: -0.4614,
+        transport_hub_iata: 'LHR',
+        transport_hub_rail: 'Reading',
+        hub_ground_minutes: 45,
+        hub_resolved_at: new Date().toISOString(),
+        timezone: 'Europe/London',
+      })
+      .eq('id', fixture.showId)
+    expect(seedError).toBeNull()
+
+    const result = await updateShow(fixture.showId, {
+      date: fixture.date,
+      venue_name: 'Test Venue',
+      address: 'Somewhere hand-typed with no Places pick',
+    })
+
+    expect(result.error).toBeNull()
+
+    const { data: show } = await testDb
+      .from('shows')
+      .select('venue_lat, venue_lng, transport_hub_iata, transport_hub_rail, hub_ground_minutes, timezone')
+      .eq('id', fixture.showId)
+      .single()
+
+    expect(show?.venue_lat).toBeNull()
+    expect(show?.venue_lng).toBeNull()
+    expect(show?.transport_hub_iata).toBeNull()
+    expect(show?.transport_hub_rail).toBeNull()
+    expect(show?.hub_ground_minutes).toBeNull()
+    expect(show?.timezone).toBeNull()
+  })
 })
