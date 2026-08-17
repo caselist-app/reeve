@@ -265,6 +265,39 @@ export type Database = {
           },
         ]
       }
+      contact_artists: {
+        Row: {
+          artist_id: string
+          contact_id: string
+          created_at: string
+        }
+        Insert: {
+          artist_id: string
+          contact_id: string
+          created_at?: string
+        }
+        Update: {
+          artist_id?: string
+          contact_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_artists_artist_id_fkey"
+            columns: ["artist_id"]
+            isOneToOne: false
+            referencedRelation: "artists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_artists_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contacts: {
         Row: {
           account_id: string

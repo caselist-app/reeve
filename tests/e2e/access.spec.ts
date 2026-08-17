@@ -151,3 +151,72 @@ test.describe('identity document isolation', () => {
     expect(body.url).not.toBeNull()
   })
 })
+
+// REE-233 / Brief 29 step 1. contact_artists has no reading page or writing
+// action yet (the roster filter and the contact-sheet artist picker are later
+// steps of the same brief), so tests/integration/contact-artists.test.ts
+// cannot cover isolation either: the same setup.ts service-role client from
+// the comment at the top of this file applies there too. This spec is the
+// only place a second account and a real session both exist, the same reason
+// identity document isolation above lives here rather than in
+// tests/integration. app/api/dev/e2e-contact-artists exists purely to give
+// this spec an RLS-scoped request to make, the same reason
+// e2e-sign-identity-document exists for the isolation test above it.
+test.describe('contact_artists isolation', () => {
+  test('account B cannot read or write a contact_artists row it does not own', async () => {
+    const seed = readSeed()
+    const secret = process.env.E2E_LOGIN_SECRET
+    if (!secret) {
+      throw new Error('E2E_LOGIN_SECRET is not set, so account B cannot sign in.')
+    }
+
+    const accountB = await playwrightRequest.newContext({ baseURL: BASE_URL })
+    try {
+      const loginResponse = await accountB.post('/api/dev/e2e-login', {
+        headers: { 'x-e2e-secret': secret },
+        data: { email: seed.b.email },
+      })
+      expect(loginResponse.status()).toBe(200)
+
+      const selectResponse = await accountB.post('/api/dev/e2e-contact-artists', {
+        headers: { 'x-e2e-secret': secret },
+        data: { op: 'select', contactId: seed.a.contactId, artistId: seed.a.artistId },
+      })
+      expect(selectResponse.status()).toBe(200)
+      const selectBody = await selectResponse.json()
+      // RLS filters silently on a select: no error, just no rows.
+      expect(selectBody.rows).toHaveLength(0)
+
+      const insertResponse = await accountB.post('/api/dev/e2e-contact-artists', {
+        headers: { 'x-e2e-secret': secret },
+        data: { op: 'insert', contactId: seed.a.contactId, artistId: seed.a.artistId },
+      })
+      expect(insertResponse.status()).toBe(200)
+      const insertBody = await insertResponse.json()
+      // Blocked by the policy's `using` clause: account B owns neither the
+      // contact nor the artist, so the write is rejected rather than ignored.
+      expect(insertBody.error).not.toBeNull()
+    } finally {
+      await accountB.dispose()
+    }
+  })
+
+  // Not passing on a broken route: the same ids, read by the account that
+  // actually owns them, must resolve to the seeded row.
+  test('account A can read its own contact_artists row', async ({ request }) => {
+    const seed = readSeed()
+    const secret = process.env.E2E_LOGIN_SECRET
+    if (!secret) {
+      throw new Error('E2E_LOGIN_SECRET is not set.')
+    }
+
+    const selectResponse = await request.post('/api/dev/e2e-contact-artists', {
+      headers: { 'x-e2e-secret': secret },
+      data: { op: 'select', contactId: seed.a.contactId, artistId: seed.a.artistId },
+    })
+
+    expect(selectResponse.status()).toBe(200)
+    const body = await selectResponse.json()
+    expect(body.rows).toHaveLength(1)
+  })
+})
