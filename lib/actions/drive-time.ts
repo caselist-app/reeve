@@ -24,41 +24,51 @@ export async function getDriveTime(
   await requireUser()
 
   const apiKey = process.env.GOOGLE_MAPS_API_KEY
-  if (!apiKey) return driveTimeFailure(LOOKUP_FAILED_ERROR)
-
-  try {
-    // Convert departure local time to Unix timestamp for Google.
-    const departUtc = new Date(`${departAtLocal}:00Z`)
-    const localStr = departUtc.toLocaleString('sv-SE', { timeZone: timezone }).slice(0, 19)
-    const localAsUtc = new Date(`${localStr.replace(' ', 'T')}.000Z`)
-    const offsetMs = departUtc.getTime() - localAsUtc.getTime()
-    const departUnix = Math.floor(new Date(departUtc.getTime() + offsetMs).getTime() / 1000)
-
-    const url = new URL('https://maps.googleapis.com/maps/api/directions/json')
-    url.searchParams.set('origin', origin)
-    url.searchParams.set('destination', destination)
-    url.searchParams.set('departure_time', String(departUnix))
-    url.searchParams.set('key', apiKey)
-
-    const res = await fetch(url.toString())
-    const data = await res.json() as {
-      status: string
-      routes: Array<{ legs: Array<{ duration_in_traffic?: { value: number }; duration: { value: number } }> }>
-    }
-
-    if (data.status !== 'OK' || !data.routes[0]) return driveTimeFailure(NO_ROUTE_ERROR)
-
-    const leg = data.routes[0].legs[0]
-    if (!leg) return driveTimeFailure(NO_ROUTE_ERROR)
-
-    const durationSec = leg.duration_in_traffic?.value ?? leg.duration.value
-    const durationMin = Math.round(durationSec / 60)
-
-    const departIso = new Date(departUnix * 1000).toISOString()
-    const arriveAt = new Date(new Date(departIso).getTime() + durationSec * 1000).toISOString()
-
-    return { arrive_at: arriveAt, duration_min: durationMin }
-  } catch {
+  if (!apiKey) {
+    console.error('[drive-time] GOOGLE_MAPS_API_KEY not set')
     return driveTimeFailure(LOOKUP_FAILED_ERROR)
   }
+
+  // Convert departure local time to Unix timestamp for Google.
+  const departUtc = new Date(`${departAtLocal}:00Z`)
+  const localStr = departUtc.toLocaleString('sv-SE', { timeZone: timezone }).slice(0, 19)
+  const localAsUtc = new Date(`${localStr.replace(' ', 'T')}.000Z`)
+  const offsetMs = departUtc.getTime() - localAsUtc.getTime()
+  const departUnix = Math.floor(new Date(departUtc.getTime() + offsetMs).getTime() / 1000)
+
+  const url = new URL('https://maps.googleapis.com/maps/api/directions/json')
+  url.searchParams.set('origin', origin)
+  url.searchParams.set('destination', destination)
+  url.searchParams.set('departure_time', String(departUnix))
+  url.searchParams.set('key', apiKey)
+
+  let data: {
+    status: string
+    error_message?: string
+    routes: Array<{ legs: Array<{ duration_in_traffic?: { value: number }; duration: { value: number } }> }>
+  }
+  try {
+    const res = await fetch(url.toString())
+    data = await res.json()
+  } catch (err) {
+    console.error('[drive-time] fetch error:', err)
+    return driveTimeFailure(LOOKUP_FAILED_ERROR)
+  }
+
+  const leg = data.routes[0]?.legs[0]
+  if (data.status !== 'OK' || !leg) {
+    console.error(
+      '[drive-time] status:', data.status, data.error_message ?? '',
+      '| origin_sent:', origin,
+      '| dest_sent:', destination,
+      '| departure_time:', departUnix,
+    )
+    return driveTimeFailure(NO_ROUTE_ERROR)
+  }
+
+  const durationSec = leg.duration_in_traffic?.value ?? leg.duration.value
+  const durationMin = Math.round(durationSec / 60)
+  const arriveAt = new Date((departUnix + durationSec) * 1000).toISOString()
+
+  return { arrive_at: arriveAt, duration_min: durationMin }
 }
