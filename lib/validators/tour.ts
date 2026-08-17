@@ -41,11 +41,15 @@ export const TOUR_TIMEZONES: { value: string; label: string }[] = [
 export const tourSchema = z.object({
   name: z.string().min(1, 'Tour name is required'),
   artist_id: z.string().uuid('Please select an artist'),
-  start_date: z.string().optional(),
-  end_date: z.string().optional(),
-  territory: z.string().optional(),
+  // Nullable as well as optional: undefined means the form never sent this
+  // field, null means the TM submitted it blank to clear it. See readForm in
+  // lib/forms/read-form.ts, and parseTourSettingsFormData below, which is the
+  // caller that actually produces null.
+  start_date: z.string().nullable().optional(),
+  end_date: z.string().nullable().optional(),
+  territory: z.string().nullable().optional(),
   base_currency: z.string().length(3),
-  timezone: z.string().optional(),
+  timezone: z.string().nullable().optional(),
   // Required rather than optional-with-a-default. Both parse functions in
   // lib/actions/tours.ts always supply a concrete boolean, so the defaults were
   // dead, and a dead .default() is the worst kind: it is doing nothing until the
