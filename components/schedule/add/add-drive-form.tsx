@@ -59,7 +59,13 @@ export function AddDriveForm({ tourId, tourDateId, date, timezone, initialClock,
     setComputing(true)
     try {
       const result = await getDriveTime(origin, destination, departAt, timezone)
-      if (result.arrive_at) setComputedArrival(result.arrive_at)
+      if (result.arrive_at === null) {
+        setComputedArrival('')
+        setError(result.error)
+      } else {
+        setComputedArrival(result.arrive_at)
+        setError(null)
+      }
     } finally {
       setComputing(false)
     }
@@ -74,14 +80,26 @@ export function AddDriveForm({ tourId, tourDateId, date, timezone, initialClock,
     const departUtc = fromDatetimeLocal(data.depart_at, timezone)
 
     // If no computed arrival yet, compute now before saving.
-    let arriveUtc: string | null = null
-    if (computedArrival) {
-      arriveUtc = computedArrival
-    } else if (data.origin && data.destination && data.depart_at) {
-      const dr = await getDriveTime(data.origin, data.destination, data.depart_at, timezone)
-      arriveUtc = dr.arrive_at ?? null
+    let arriveUtc: string | null = computedArrival || null
+    if (!arriveUtc && data.origin && data.destination && data.depart_at) {
+      const result = await getDriveTime(data.origin, data.destination, data.depart_at, timezone)
+      if (result.arrive_at === null) {
+        setError(result.error)
+        return
+      }
+      arriveUtc = result.arrive_at
+      setComputedArrival(result.arrive_at)
     }
 
+    // No route resolved (unresolvable addresses, or the fields were never
+    // filled in): refuse to save a segment with no real arrival rather than
+    // letting it through silently (REE-159).
+    if (!arriveUtc) {
+      setError('Enter a from and to address to calculate the drive.')
+      return
+    }
+
+    setError(null)
     setPending({ origin: data.origin, destination: data.destination, depart_at: departUtc, arrive_at: arriveUtc })
   }
 
