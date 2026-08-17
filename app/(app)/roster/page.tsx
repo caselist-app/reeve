@@ -7,19 +7,25 @@ export default async function RosterPage() {
   const user = await requireUser()
   const supabase = await createClient()
 
-  const [{ data: contacts }, { data: memberships }] = await Promise.all([
-    // Select display + list-action columns only. Emergency contact details,
-    // wage defaults, and phone numbers are not shown in the roster list view.
-    // Full record loads when the contact sheet opens.
-    supabase
-      .from('contacts')
-      .select('id, account_id, name, photo_url, contact_email, whatsapp_number, sms_number, contact_phone, operational_channel, email_enabled, telegram_chat_id, telegram_username, home_city, tshirt_size, dietary, allergies, date_of_birth, passport_expiry, passport_country, passport_first_names, passport_surname, default_role, default_person_type, notes, created_at, updated_at')
-      .eq('account_id', user.id)
-      .order('name'),
-    // people RLS scopes to the caller's tours, so this is every membership the
-    // caller owns. Used to count how many tours each contact is on.
-    supabase.from('people').select('contact_id, tour_id'),
-  ])
+  const [{ data: contacts }, { data: memberships }, { data: artists }, { data: contactArtists }] =
+    await Promise.all([
+      // Select display + list-action columns only. Emergency contact details,
+      // wage defaults, and phone numbers are not shown in the roster list view.
+      // Full record loads when the contact sheet opens.
+      supabase
+        .from('contacts')
+        .select('id, account_id, name, photo_url, contact_email, whatsapp_number, sms_number, contact_phone, operational_channel, email_enabled, telegram_chat_id, telegram_username, home_city, tshirt_size, dietary, allergies, date_of_birth, passport_expiry, passport_country, passport_first_names, passport_surname, default_role, default_person_type, notes, created_at, updated_at')
+        .eq('account_id', user.id)
+        .order('name'),
+      // people RLS scopes to the caller's tours, so this is every membership the
+      // caller owns. Used to count how many tours each contact is on.
+      supabase.from('people').select('contact_id, tour_id'),
+      // Powers the roster filter pills. Ordered by name to match the pill order.
+      supabase.from('artists').select('id, name').eq('account_id', user.id).order('name'),
+      // Which artist(s) each contact is linked to, to drive the filter and the
+      // "Unassigned" bucket (a contact with zero rows here).
+      supabase.from('contact_artists').select('contact_id, artist_id'),
+    ])
 
   const tourSets: Record<string, Set<string>> = {}
   for (const m of memberships ?? []) {
@@ -27,14 +33,20 @@ export default async function RosterPage() {
     ;(tourSets[m.contact_id] ??= new Set()).add(m.tour_id)
   }
 
+  const artistSets: Record<string, string[]> = {}
+  for (const link of contactArtists ?? []) {
+    ;(artistSets[link.contact_id] ??= []).push(link.artist_id)
+  }
+
   const rows = (contacts ?? []).map((c) => ({
     ...c,
     tourCount: tourSets[c.id]?.size ?? 0,
+    artistIds: artistSets[c.id] ?? [],
   }))
 
   return (
     <PageLayout>
-      <RosterView contacts={rows} />
+      <RosterView contacts={rows} artists={artists ?? []} />
     </PageLayout>
   )
 }
