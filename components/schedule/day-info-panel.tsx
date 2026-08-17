@@ -1,6 +1,7 @@
 import { NotesTextarea } from '@/components/schedule/notes-textarea'
 import { VenueBlock } from '@/components/schedule/venue-block'
 import { GuestListBlock } from '@/components/schedule/guest-list-block'
+import { AdvanceBlock } from '@/components/schedule/advance-block'
 import { AddVenueButton } from '@/components/schedule/add-venue-button'
 import { HotelBlock } from '@/components/schedule/hotel-block'
 import { RehearsalBlock } from '@/components/schedule/rehearsal-block'
@@ -8,6 +9,7 @@ import type { DayShow } from '@/lib/schedule/day-records'
 import type { DayType } from '@/lib/schedule/day-link'
 import { venueSectionState } from '@/lib/schedule/day-info-venue'
 import type { GuestListSummary } from '@/lib/schedule/guest-list-summary'
+import type { AdvanceSummary } from '@/lib/schedule/advance-summary'
 import type { DayHotel } from '@/lib/schedule/day-hotel'
 import type { DayRehearsal } from '@/lib/schedule/day-rehearsal'
 
@@ -23,6 +25,9 @@ interface DayInfoPanelProps {
   dayNotes: string | null
   // The guest list count for the Guest list section's block, resolved in DayContent.
   guestListSummary: GuestListSummary
+  // The five department statuses for the Advance section's block, resolved in
+  // DayContent (fetchAdvanceSummary).
+  advanceSummary: AdvanceSummary
   // The night's hotel, resolved once in DayContent (resolveHotelForDay). Null
   // when no hotel resolves for this day: the whole section is then absent,
   // deliberately, with no empty state and no add-hotel affordance (a separate,
@@ -36,7 +41,7 @@ interface DayInfoPanelProps {
   rehearsal: DayRehearsal | null
 }
 
-export function DayInfoPanel({ tourId, tourDateId, dayType, date, timezone, show, dayNotes, guestListSummary, hotel, rehearsal }: DayInfoPanelProps) {
+export function DayInfoPanel({ tourId, tourDateId, dayType, date, timezone, show, dayNotes, guestListSummary, advanceSummary, hotel, rehearsal }: DayInfoPanelProps) {
   // The venue section is conditional on the day type. It is absent on a travel
   // day, a press day, a rehearsal day and a day off as a matter of fact: those
   // days have no venue to have, so there is nothing to say. Do not restore a
@@ -78,6 +83,24 @@ export function DayInfoPanel({ tourId, tourDateId, dayType, date, timezone, show
             showId={show.id}
             venueName={show.venue_name}
             summary={guestListSummary}
+          />
+        </section>
+      )}
+
+      {/* Advance: five read-only status chips, matching the mini-panel shape
+          REE-48 defines. Editing still only happens in the advance panel,
+          reached by clicking through. Only rendered on a show day with a
+          show, since it hangs off the show, same as Guest list. */}
+      {venue.kind === 'venue' && show && (
+        <section>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+            Advance
+          </p>
+          <AdvanceBlock
+            tourId={tourId}
+            showId={show.id}
+            venueName={show.venue_name}
+            summary={advanceSummary}
           />
         </section>
       )}
