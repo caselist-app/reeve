@@ -99,7 +99,14 @@ export function NewTourForm({ artists }: Props) {
       <div className="space-y-2">
         <Label>Artist</Label>
         <Select value={artistId} onValueChange={setArtistId} required>
-          <SelectTrigger>
+          {/* Explicit aria-label rather than relying on the placeholder text
+              inside SelectValue: an e2e test filtering getByRole('combobox',
+              { name: 'Select artist' }) never resolved the trigger even
+              though the placeholder rendered correctly on screen (REE-261),
+              which points at the content-derived accessible name not
+              matching the visible text. An explicit label removes the
+              ambiguity outright instead of guessing at content computation. */}
+          <SelectTrigger aria-label="Select artist">
             <SelectValue placeholder="Select artist" />
           </SelectTrigger>
           <SelectContent>
