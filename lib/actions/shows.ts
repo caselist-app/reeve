@@ -19,6 +19,7 @@ import { resolveHubSync } from '@/lib/logistics/hub-resolver'
 import { revertDayTypeIfOrphaned } from '@/lib/schedule/day-type-revert'
 import { resolveTourDateId } from '@/lib/schedule/day-link'
 import { shiftDayItemsToDate } from '@/lib/schedule/day-items'
+import { resolveTimezone } from '@/lib/schedule/datetime'
 import type { DateMove } from '@/lib/schedule/date-move'
 import type { z } from 'zod'
 import type { Tables } from '@/lib/types/database'
@@ -126,9 +127,12 @@ export async function updateShow(
   const supabase = await createClient()
 
   // RLS on shows enforces owns_tour(tour_id). Returns null if caller does not own.
+  // timezone rides along: shiftDayItemsToDate below needs the zone the OLD
+  // stored times were written against, which is this show's own resolved zone
+  // as it stood before this write, not whatever the tour's is right now.
   const { data: existing } = await supabase
     .from('shows')
-    .select('address, date, tour_id, tour_date_id')
+    .select('address, date, tour_id, tour_date_id, timezone')
     .eq('id', showId)
     .single()
 
@@ -238,13 +242,19 @@ export async function updateShow(
     // curfew lands on the morning after the NEW date. Selected by the old day
     // (existing.tour_date_id), not the show: most items carry no show_id, and
     // filtering by show_id stranded the hand-added running order. REE-118.
+    //
+    // resolveTimezone(existing, ...) rather than the tour's directly: existing
+    // was read before any address-change write in this same call, so it still
+    // holds the zone that was in effect when the OLD times were stored, which is
+    // the zone re-deriving them correctly needs, whether or not the address is
+    // changing in the same request (Brief 56).
     carriedTimes = await shiftDayItemsToDate(
       supabase,
       existing.tour_date_id,
       existing.date,
       parsed.data.date,
       nextTourDateId,
-      tourRow?.timezone ?? null,
+      resolveTimezone(existing, tourRow?.timezone ?? null),
     )
 
     // The day sheet still exists until REE-23 drops it, and nothing writes it any

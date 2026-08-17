@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { getAffectedPeople } from '@/lib/comms/affected'
+import { resolveTimezone } from '@/lib/schedule/datetime'
 import {
   buildShowTimeChangeMessage,
   buildShowAddressChangeMessage,
@@ -200,13 +201,14 @@ async function buildPreviewMessage(
       // !inner: a show whose day sheet row is missing should still produce a
       // message with the time TBC rather than no message at all.
       //
-      // The tour timezone is read too, because a UTC render told crew a load-in
-      // an hour off the one the TM typed on any tour not on UTC. Same bug as
-      // /itinerary had, same fix.
+      // The timezone is read too, because a UTC render told crew a load-in an
+      // hour off the one the TM typed on any tour not on UTC. Same bug as
+      // /itinerary had, same fix. timezone rides along on the show so its own
+      // resolved venue zone wins over the tour's fallback (Brief 56).
       const [{ data: show }, { data: tour }] = await Promise.all([
         supabase
           .from('shows')
-          .select('venue_name, date, address')
+          .select('venue_name, date, address, timezone')
           .eq('id', change.showId)
           .eq('tour_id', tourId)
           .single(),
@@ -237,7 +239,7 @@ async function buildPreviewMessage(
         ? new Date(fieldValue).toLocaleTimeString('en-GB', {
             hour: '2-digit',
             minute: '2-digit',
-            timeZone: tour?.timezone ?? 'UTC',
+            timeZone: resolveTimezone(show ?? { timezone: null }, tour?.timezone ?? null),
           })
         : 'TBC'
 

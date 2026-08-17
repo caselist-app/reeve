@@ -11,7 +11,7 @@ function item(over: Partial<InboxItem> = {}): InboxItem {
     id: 'item-1',
     tour_id: 'tour-1',
     tour_name: 'Test Tour',
-    tour_timezone: 'Europe/London',
+    timezone: 'Europe/London',
     artist_id: 'artist-1',
     artist_name: 'Test Artist',
     kind: 'email_extraction',

@@ -1,4 +1,4 @@
-import { localDateInZone, addDays } from '@/lib/schedule/datetime'
+import { localDateInZone, addDays, resolveTimezone } from '@/lib/schedule/datetime'
 import { PASS_TYPES, type PassType } from '@/lib/guest-list/vocabulary'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/types/database'
@@ -390,7 +390,10 @@ export async function handleGuestRequest(
     .select('timezone')
     .eq('id', tourId)
     .maybeSingle()
-  const tz = tour?.timezone ?? 'UTC'
+  // No show is resolved yet at this point (this tz decides which show is next),
+  // so there is no per-record zone to prefer. Still routed through
+  // resolveTimezone, the one shared authority for "which zone".
+  const tz = resolveTimezone({ timezone: null }, tour?.timezone ?? null)
 
   // Resolve the show. A draft in progress fixes it; otherwise the next show, and
   // the crew member is only asked to choose when more than one show falls in the

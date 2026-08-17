@@ -8,7 +8,11 @@ export interface InboxItem {
   id: string
   tour_id: string
   tour_name: string
-  tour_timezone: string | null
+  // The zone this item's relative label renders in: the related show's own
+  // resolved venue zone when the item is joined to one (e.g. a guest request),
+  // otherwise the tour's fallback. See resolveTimezone in
+  // lib/schedule/datetime.ts.
+  timezone: string | null
   artist_id: string
   artist_name: string
   kind: string

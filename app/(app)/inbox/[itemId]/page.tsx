@@ -50,7 +50,7 @@ export default async function InboxItemPage({
           <PageHeader
             eyebrow={item.artist_name}
             title={item.title}
-            description={`${item.tour_name} · ${relativeLabel(item.created_at, item.tour_timezone)}`}
+            description={`${item.tour_name} · ${relativeLabel(item.created_at, item.timezone)}`}
           />
 
           {danglingPointer ? (

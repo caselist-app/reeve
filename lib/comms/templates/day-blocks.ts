@@ -1,7 +1,9 @@
 // Render functions for the four show-day WhatsApp block templates.
 // Each function returns bodyParams[] matching the approved template's variable
-// positions. All time values are pre-formatted HH:MM strings in the tour's
-// local timezone by the caller.
+// positions. All time values are pre-formatted HH:MM strings in the show's
+// resolved local timezone by the caller: the show's own venue zone when it has
+// resolved one, otherwise the tour's fallback. See resolveTimezone in
+// lib/schedule/datetime.ts.
 //
 // Template bodies (for submission to WhatsApp Manager):
 //   opener:                  "Good morning, {{1}}.\n\n{{2}} @ {{3}}, {{4}}."

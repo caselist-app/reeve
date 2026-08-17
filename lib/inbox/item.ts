@@ -1,5 +1,6 @@
 import type { createClient } from '@/lib/supabase/server'
 import type { ExtractionProposal } from '@/lib/ai/extract'
+import { resolveTimezone } from '@/lib/schedule/datetime'
 
 // The single-item read behind the Inbox item detail route (brief 53, REE-152).
 // Scoped by account the same way fetchInbox scopes the list (lib/inbox/query.ts):
@@ -18,7 +19,11 @@ export interface InboxItemDetail {
   id: string
   tour_id: string
   tour_name: string
-  tour_timezone: string | null
+  // The zone this item's relative label renders in: the related show's own
+  // resolved venue zone when this item is joined to one (a guest request),
+  // otherwise the tour's fallback. See resolveTimezone in
+  // lib/schedule/datetime.ts.
+  timezone: string | null
   artist_id: string
   artist_name: string
   kind: string
@@ -49,6 +54,10 @@ export interface GuestRequestSubject {
   requesterRole: string | null
   venueName: string
   showDate: string
+  // The show's own resolved venue zone when it has one, otherwise the tour's
+  // fallback. fetchInboxItem carries this back onto the item's own timezone
+  // field, so the relative label on the detail page agrees with it.
+  timezone: string
   cutoffAt: string | null
   locked: boolean
   // Approved tickets against the show's allotment for this pass type. Null
@@ -131,7 +140,7 @@ export async function fetchInboxItem(
     id: data.id,
     tour_id: data.tour_id,
     tour_name: tour.name,
-    tour_timezone: tour.timezone,
+    timezone: tour.timezone,
     artist_id: tour.artists.id,
     artist_name: tour.artists.name,
     kind: data.kind,
@@ -146,10 +155,16 @@ export async function fetchInboxItem(
   }
 
   if (item.kind === 'guest_request' && item.related_table === 'guest_list_entries' && item.related_id) {
-    const { subject, error: subjectError } = await fetchGuestRequestSubject(supabase, item.related_id)
+    const { subject, error: subjectError } = await fetchGuestRequestSubject(
+      supabase,
+      item.related_id,
+      tour.timezone,
+    )
     if (subjectError) return { item, subject: null, danglingPointer: false, error: subjectError }
     if (!subject) return { item, subject: null, danglingPointer: true, error: null }
-    return { item, subject, danglingPointer: false, error: null }
+    // The subject already resolved the show's own venue zone; the item's own
+    // label should agree with it rather than the tour's fallback.
+    return { item: { ...item, timezone: subject.timezone }, subject, danglingPointer: false, error: null }
   }
 
   if (item.kind === 'email_extraction' && item.related_table === 'forwarded_emails' && item.related_id) {
@@ -201,6 +216,7 @@ async function fetchExtractionSubject(
 async function fetchGuestRequestSubject(
   supabase: Client,
   entryId: string,
+  tourTimezone: string | null,
 ): Promise<{ subject: GuestRequestSubject | null; error: string | null }> {
   const { data, error } = await supabase
     .from('guest_list_entries')
@@ -218,7 +234,7 @@ async function fetchGuestRequestSubject(
       pickup,
       pickup_detail,
       notes,
-      shows ( id, venue_name, date, guest_list_cutoff_at, guest_list_locked ),
+      shows ( id, venue_name, date, guest_list_cutoff_at, guest_list_locked, timezone ),
       people ( role, contacts ( name ) )
     `
     )
@@ -234,6 +250,7 @@ async function fetchGuestRequestSubject(
     date: string
     guest_list_cutoff_at: string | null
     guest_list_locked: boolean
+    timezone: string | null
   } | null
 
   // shows.tour_id cascades on tour delete; a gone show is the same
@@ -265,6 +282,7 @@ async function fetchGuestRequestSubject(
       requesterRole: person?.role ?? null,
       venueName: show.venue_name,
       showDate: show.date,
+      timezone: resolveTimezone(show, tourTimezone),
       cutoffAt: show.guest_list_cutoff_at,
       locked: show.guest_list_locked,
       allotment,

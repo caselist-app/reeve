@@ -1,5 +1,6 @@
 import type { createClient } from '@/lib/supabase/server'
 import type { InboxItem } from '@/lib/inbox/group'
+import { resolveTimezone } from '@/lib/schedule/datetime'
 
 // The account-wide open-items read behind the Inbox (brief 53). Every
 // attention_items row across every tour the account owns, unresolved, newest
@@ -55,18 +56,36 @@ export async function fetchInbox(supabase: Client, accountId: string): Promise<I
   // clear".
   if (error) return { items: [], error: error.message }
 
-  const items: InboxItem[] = (data ?? []).map((row) => {
+  const rows = data ?? []
+
+  // Batched second read: a guest_request row is joined to a show through its
+  // guest_list_entries row, and that show's own resolved venue zone should win
+  // over the tour's fallback for this item's relative label, the same rule
+  // every other reader of tours.timezone now follows (Brief 56). Guarded
+  // against an empty id list before the .in(), which would otherwise be a
+  // round trip that can only return nothing.
+  const guestRequestEntryIds = rows
+    .filter((row) => row.kind === 'guest_request' && row.related_table === 'guest_list_entries' && row.related_id)
+    .map((row) => row.related_id as string)
+  const showTimezoneByEntryId = await fetchShowTimezonesForEntries(supabase, guestRequestEntryIds)
+
+  const items: InboxItem[] = rows.map((row) => {
     const tour = row.tours as unknown as {
       name: string
       timezone: string | null
       artists: { id: string; name: string }
     }
 
+    const show =
+      row.kind === 'guest_request' && row.related_id
+        ? (showTimezoneByEntryId.get(row.related_id) ?? null)
+        : null
+
     return {
       id: row.id,
       tour_id: row.tour_id,
       tour_name: tour.name,
-      tour_timezone: tour.timezone,
+      timezone: resolveTimezone(show ?? { timezone: null }, tour.timezone),
       artist_id: tour.artists.id,
       artist_name: tour.artists.name,
       kind: row.kind,
@@ -81,6 +100,28 @@ export async function fetchInbox(supabase: Client, accountId: string): Promise<I
   })
 
   return { items, error: null }
+}
+
+// A show's resolved timezone per guest_list_entries id, for every guest_request
+// item in one batch read rather than one query per row.
+async function fetchShowTimezonesForEntries(
+  supabase: Client,
+  entryIds: string[],
+): Promise<Map<string, { timezone: string | null }>> {
+  const map = new Map<string, { timezone: string | null }>()
+  if (entryIds.length === 0) return map
+
+  const { data } = await supabase
+    .from('guest_list_entries')
+    .select('id, shows ( timezone )')
+    .in('id', entryIds)
+
+  for (const row of data ?? []) {
+    const show = row.shows as unknown as { timezone: string | null } | null
+    map.set(row.id, { timezone: show?.timezone ?? null })
+  }
+
+  return map
 }
 
 export interface InboxCountResult {
