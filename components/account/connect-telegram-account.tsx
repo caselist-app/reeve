@@ -42,7 +42,7 @@ export function ConnectTelegramAccount({ connected }: Props) {
   }
 
   return (
-    <div className="rounded-3xl border border-border bg-background p-5">
+    <div className="p-5">
       <div className="flex flex-col gap-1">
         <h2 className="text-sm font-medium">Telegram</h2>
         <p className="text-sm text-muted-foreground">
