@@ -20,6 +20,39 @@ import type {
   WrapData,
 } from '@/lib/comms/templates/day-blocks'
 import type { NotificationDataMap } from '@/lib/comms/notify/types'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@/lib/types/database'
+
+// Everyone on the tour with at least one usable address. Telegram counts: a
+// Telegram-only contact has no whatsapp_number and no contact_email, so
+// filtering on those two alone would drop them before notify() ever resolved
+// their channels. This is the one definition of "contactable" for a day send,
+// shared with lib/actions/day-message.ts's resend preview/confirm so the count
+// a TM sees before pressing the button never drifts from who the send below
+// actually reaches. Works on either the RLS or the admin client: the caller
+// decides which is appropriate for its own tour-ownership check.
+export async function fetchContactablePeople(
+  supabase: SupabaseClient<Database>,
+  tourId: string
+): Promise<{ people: { id: string }[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from('people')
+    .select('id, contacts(whatsapp_number, telegram_chat_id, contact_email)')
+    .eq('tour_id', tourId)
+
+  if (error) return { people: [], error: error.message }
+
+  const people = (data ?? []).filter((r) => {
+    const c = r.contacts as {
+      whatsapp_number: string | null
+      telegram_chat_id: number | null
+      contact_email: string | null
+    } | null
+    return !!(c?.whatsapp_number || c?.telegram_chat_id || c?.contact_email)
+  })
+
+  return { people, error: null }
+}
 
 // The send half of the show-day message: given a tour and a date, sends the
 // opener/show-information/catering/wrap block sequence and the email digest
@@ -125,24 +158,11 @@ export async function sendDayMessage(input: SendDayMessageInput): Promise<SendDa
 
   const daySheet = showBlockTimesFromItems(items, show.catering_type)
 
-  // Everyone on the tour with at least one usable address. Telegram counts:
-  // a Telegram-only contact has no whatsapp_number and no contact_email, so
-  // filtering on those two alone dropped them before notify() ever resolved
-  // their channels. This pre-filter only skips people with no address at all;
-  // resolveChannels still makes the real per-notification decision.
-  const { data: peopleRows } = await admin
-    .from('people')
-    .select('id, contacts(whatsapp_number, telegram_chat_id, contact_email)')
-    .eq('tour_id', tourId)
-
-  const people = (peopleRows ?? []).filter((r) => {
-    const c = r.contacts as {
-      whatsapp_number: string | null
-      telegram_chat_id: number | null
-      contact_email: string | null
-    } | null
-    return !!(c?.whatsapp_number || c?.telegram_chat_id || c?.contact_email)
-  })
+  // This pre-filter only skips people with no address at all; resolveChannels
+  // still makes the real per-notification decision. The error is intentionally
+  // not checked here, unchanged from before this was extracted: a failed read
+  // reads as "no contactable people" and skips, same as it always has.
+  const { people } = await fetchContactablePeople(admin, tourId)
 
   if (people.length === 0) {
     return { skipped: true, reason: 'no_contactable_people', date, people_count: 0, results: [], failures: [] }
