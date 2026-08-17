@@ -1,13 +1,14 @@
 'use client'
 
 import { useMemo, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import type { Tables } from '@/lib/types/database'
 import { Plus } from 'lucide-react'
 import { PageHeader } from '@/components/layout/page-header'
 import { Input } from '@/components/ui/input'
 import { useSidePanel } from '@/stores/side-panel-store'
+import { cn } from '@/lib/utils'
 
 // Subset of contacts fetched by the roster page. Emergency contact details,
 // passport numbers, and wage defaults are excluded from the list payload
@@ -18,16 +19,27 @@ type ContactRow = Omit<
   | 'passport_number'
   | 'default_per_diem_rate' | 'default_per_diem_currency'
   | 'default_daily_wage_rate' | 'default_wage_currency'
-> & { tourCount: number }
+> & { tourCount: number; artistIds: string[] }
+
+type RosterArtist = Pick<Tables<'artists'>, 'id' | 'name'>
 
 interface Props {
   contacts: ContactRow[]
+  artists: RosterArtist[]
 }
 
-export function RosterView({ contacts }: Props) {
+const UNASSIGNED = 'unassigned'
+
+export function RosterView({ contacts, artists }: Props) {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { open } = useSidePanel()
   const [query, setQuery] = useState('')
+
+  // null/absent means "All artists". Driven through the ?artist= URL param
+  // (the same pattern the schedule day view uses for ?date=, see
+  // components/schedule/date-sidebar.tsx) so the filtered view is a real URL.
+  const selectedArtist = searchParams.get('artist')
 
   const SECTIONS = ['artist', 'crew', 'management', 'support'] as const
   const SECTION_LABELS: Record<string, string> = {
@@ -37,15 +49,21 @@ export function RosterView({ contacts }: Props) {
     support: 'Support',
   }
 
+  const artistFiltered = useMemo(() => {
+    if (!selectedArtist) return contacts
+    if (selectedArtist === UNASSIGNED) return contacts.filter((c) => c.artistIds.length === 0)
+    return contacts.filter((c) => c.artistIds.includes(selectedArtist))
+  }, [contacts, selectedArtist])
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return contacts
-    return contacts.filter((c) =>
+    if (!q) return artistFiltered
+    return artistFiltered.filter((c) =>
       [c.name, c.default_role, c.home_city]
         .filter(Boolean)
         .some((v) => (v as string).toLowerCase().includes(q))
     )
-  }, [contacts, query])
+  }, [artistFiltered, query])
 
   const grouped = useMemo(() => {
     const map: Record<string, ContactRow[]> = {}
@@ -87,6 +105,25 @@ export function RosterView({ contacts }: Props) {
           </button>
         }
       />
+
+      {artists.length > 0 && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          <FilterPill href="/roster" label="All artists" active={!selectedArtist} />
+          {artists.map((a) => (
+            <FilterPill
+              key={a.id}
+              href={`/roster?artist=${a.id}`}
+              label={a.name}
+              active={selectedArtist === a.id}
+            />
+          ))}
+          <FilterPill
+            href={`/roster?artist=${UNASSIGNED}`}
+            label="Unassigned"
+            active={selectedArtist === UNASSIGNED}
+          />
+        </div>
+      )}
 
       <div className="mb-8">
         <Input
@@ -161,5 +198,21 @@ export function RosterView({ contacts }: Props) {
         </div>
       )}
     </>
+  )
+}
+
+function FilterPill({ href, label, active }: { href: string; label: string; active: boolean }) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        'rounded-full border px-3 py-1 text-[13px] font-medium transition-colors',
+        active
+          ? 'border-foreground bg-foreground text-background'
+          : 'border-border bg-background text-muted-foreground hover:bg-muted/50'
+      )}
+    >
+      {label}
+    </Link>
   )
 }
