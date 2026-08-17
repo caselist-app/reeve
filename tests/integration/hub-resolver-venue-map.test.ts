@@ -16,7 +16,10 @@ import { resolveHub } from '@/lib/logistics/hub-resolver'
 // swallow resolveHub's own read of the show too and fail every test with a
 // misleading "Show not found". mockGeocodeFetch only intercepts requests to
 // the Maps geocode endpoint and passes everything else, including
-// supabase-js's own calls, through to the real fetch.
+// supabase-js's own calls, through to the real fetch. It also stubs the Time
+// Zone endpoint that resolveViaGoogleMaps now calls alongside the geocode
+// (REE-242): without a stub, a geocoded resolution here would fall through to
+// a real network call.
 function mockGeocodeFetch(
   response: { status: string; results: { geometry: { location: { lat: number; lng: number } } }[] }
 ) {
@@ -27,6 +30,9 @@ function mockGeocodeFetch(
     if (url.startsWith('https://maps.googleapis.com/maps/api/geocode/json')) {
       geocodeCalls.push(url)
       return { json: async () => response } as Response
+    }
+    if (url.startsWith('https://maps.googleapis.com/maps/api/timezone/json')) {
+      return { json: async () => ({ status: 'OK', timeZoneId: 'Europe/London' }) } as Response
     }
     return real(input, init)
   }) as unknown as typeof fetch
