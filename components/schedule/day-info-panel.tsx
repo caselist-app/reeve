@@ -3,11 +3,13 @@ import { VenueBlock } from '@/components/schedule/venue-block'
 import { GuestListBlock } from '@/components/schedule/guest-list-block'
 import { AddVenueButton } from '@/components/schedule/add-venue-button'
 import { HotelBlock } from '@/components/schedule/hotel-block'
+import { RehearsalBlock } from '@/components/schedule/rehearsal-block'
 import type { DayShow } from '@/lib/schedule/day-records'
 import type { DayType } from '@/lib/schedule/day-link'
 import { venueSectionState } from '@/lib/schedule/day-info-venue'
 import type { GuestListSummary } from '@/lib/schedule/guest-list-summary'
 import type { DayHotel } from '@/lib/schedule/day-hotel'
+import type { DayRehearsal } from '@/lib/schedule/day-rehearsal'
 
 interface DayInfoPanelProps {
   tourId: string
@@ -16,6 +18,7 @@ interface DayInfoPanelProps {
   tourDateId: string | null
   dayType: DayType | null
   date: string
+  timezone: string
   show: DayShow | null
   dayNotes: string | null
   // The guest list count for the Guest list section's block, resolved in DayContent.
@@ -25,9 +28,15 @@ interface DayInfoPanelProps {
   // deliberately, with no empty state and no add-hotel affordance (a separate,
   // not-yet-built brief's door).
   hotel: DayHotel | null
+  // The day's rehearsal, resolved once in DayContent (resolveRehearsalForDay).
+  // Null on a non-rehearsal day, and also on a rehearsal day switched to that
+  // type via Edit Day rather than created through Add Day (REE-36): the
+  // section is then absent, the same no-empty-state treatment as hotel above,
+  // since there is no door yet to add rehearsal details to an existing day.
+  rehearsal: DayRehearsal | null
 }
 
-export function DayInfoPanel({ tourId, tourDateId, dayType, date, show, dayNotes, guestListSummary, hotel }: DayInfoPanelProps) {
+export function DayInfoPanel({ tourId, tourDateId, dayType, date, timezone, show, dayNotes, guestListSummary, hotel, rehearsal }: DayInfoPanelProps) {
   // The venue section is conditional on the day type. It is absent on a travel
   // day, a press day, a rehearsal day and a day off as a matter of fact: those
   // days have no venue to have, so there is nothing to say. Do not restore a
@@ -70,6 +79,19 @@ export function DayInfoPanel({ tourId, tourDateId, dayType, date, show, dayNotes
             venueName={show.venue_name}
             summary={guestListSummary}
           />
+        </section>
+      )}
+
+      {/* Rehearsal. Clickable, same shape as Venue: this is the way into a
+          rehearsal's detail now that its standalone route is gone (REE-36).
+          Absent, with no empty state, on a rehearsal day with no rehearsal
+          row (see the prop comment above). */}
+      {rehearsal && (
+        <section>
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+            Rehearsal
+          </p>
+          <RehearsalBlock rehearsal={rehearsal} timezone={timezone} />
         </section>
       )}
 

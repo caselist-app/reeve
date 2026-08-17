@@ -3,6 +3,7 @@ import { fetchDayRecords } from '@/lib/schedule/day-records'
 import { fetchDayRoster } from '@/lib/schedule/day-roster'
 import { fetchGuestListSummary } from '@/lib/schedule/guest-list-summary'
 import { resolveHotelForDay } from '@/lib/schedule/day-hotel'
+import { resolveRehearsalForDay } from '@/lib/schedule/day-rehearsal'
 import { DayViewClient } from '@/components/schedule/day-view-client'
 import { DayCalendar } from '@/components/schedule/day-calendar'
 import { DayHeader } from '@/components/schedule/day-header'
@@ -53,7 +54,7 @@ export async function DayContent({ tourId, tourName, timezone, selectedDate, tou
   // and the summary short-circuits to zeros; a date with no tour_date row has
   // no day to resolve a hotel for, so that call is skipped rather than run
   // with a null link and a maybe-unrelated date match.
-  const [roster, guestListSummary, hotel] = await Promise.all([
+  const [roster, guestListSummary, hotel, rehearsal] = await Promise.all([
     fetchDayRoster(supabase, {
       tourId,
       segmentIds: records.segmentIds,
@@ -63,6 +64,7 @@ export async function DayContent({ tourId, tourName, timezone, selectedDate, tou
     tourDate
       ? resolveHotelForDay(supabase, { tourId, tourDateId: tourDate.id, date: selectedDate })
       : Promise.resolve(null),
+    resolveRehearsalForDay(supabase, { tourId, tourDateId: tourDate?.id ?? null }),
   ])
 
   return (
@@ -119,10 +121,12 @@ export async function DayContent({ tourId, tourName, timezone, selectedDate, tou
           tourDateId={tourDate?.id ?? null}
           dayType={(tourDate?.day_type as DayType | undefined) ?? null}
           date={selectedDate}
+          timezone={timezone}
           show={records.shows[0] ?? null}
           dayNotes={tourDate?.notes ?? null}
           guestListSummary={guestListSummary}
           hotel={hotel}
+          rehearsal={rehearsal}
         />
       }
       dayInfoDock={
