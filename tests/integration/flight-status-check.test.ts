@@ -17,12 +17,27 @@ vi.mock('@/lib/comms/notify/adapters/telegram', () => ({
   sendTelegramRendered: vi.fn(),
 }))
 
+// The real implementation runs (a no-op against the mocked Redis, per
+// setup.ts), wrapped in a vi.fn so REE-239's "did the job bust the AI context
+// cache" assertion has something to spy on. Same reasoning as
+// notify-account.test.ts: the mocked Redis stores nothing, so proving the
+// bust happened has to go through the call itself, not through Redis state.
+vi.mock('@/lib/ai/context', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/ai/context')>()
+  return {
+    ...actual,
+    bustTourContextCache: vi.fn(actual.bustTourContextCache),
+  }
+})
+
 import { lookupFlightByNumber, type NormalizedFlightLookup } from '@/lib/logistics/adapters/airlabs'
 import { sendTelegramRendered } from '@/lib/comms/notify/adapters/telegram'
+import { assembleTourContext, bustTourContextCache } from '@/lib/ai/context'
 import { runFlightStatusCheck } from '@/trigger/jobs/flight-status-check'
 
 const mockLookup = vi.mocked(lookupFlightByNumber)
 const mockSend = vi.mocked(sendTelegramRendered)
+const mockBust = vi.mocked(bustTourContextCache)
 
 const PERSON_CHAT_ID = 111222333
 const ACCOUNT_CHAT_ID = 987654321
@@ -121,6 +136,7 @@ describe('flight-status-check delivers before persisting, and reaches the TM too
     mockLookup.mockReset()
     mockSend.mockReset()
     mockSend.mockResolvedValue({ providerMessageId: 'tg-msg-1' })
+    mockBust.mockClear()
   })
 
   afterEach(async () => {
@@ -138,6 +154,11 @@ describe('flight-status-check delivers before persisting, and reaches the TM too
     const segmentId = await seedFlightSegment(fixture.tourId, departAt)
     mockLookup.mockResolvedValue(lookupResponse(departAt))
 
+    // Populate the AI context cache with the pre-change snapshot, the same way
+    // a crew Q&A call would shortly before this poll runs.
+    const before = await assembleTourContext(fixture.tourId)
+    expect(before.transport.find((t) => t.id === segmentId)?.flight_status).toBe('scheduled')
+
     await runFlightStatusCheck(testDb)
 
     const segment = await segmentRow(segmentId)
@@ -154,6 +175,13 @@ describe('flight-status-check delivers before persisting, and reaches the TM too
     expect(accountRow?.channel).toBe('telegram')
     expect(accountRow?.status).toBe('sent')
     expect(accountRow?.person_id).toBeNull()
+
+    // REE-239: the delivered write busts the AI context cache, so the very
+    // next read reflects the new flight_status rather than the 'scheduled'
+    // snapshot taken above.
+    expect(mockBust).toHaveBeenCalledWith(fixture.tourId)
+    const after = await assembleTourContext(fixture.tourId)
+    expect(after.transport.find((t) => t.id === segmentId)?.flight_status).toBe('cancelled')
   })
 
   it('b. a failed send withholds the write, and is retried on the next poll', async () => {

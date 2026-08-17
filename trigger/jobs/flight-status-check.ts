@@ -6,6 +6,7 @@ import { formatFlightNumber } from '@/lib/utils/format-flight-number'
 import { notify, type NotifyResult } from '@/lib/comms/notify'
 import { notifyAccount } from '@/lib/comms/notify/account'
 import { registry } from '@/lib/comms/notify/registry'
+import { bustTourContextCache } from '@/lib/ai/context'
 import type { Database } from '@/lib/types/database'
 
 type Client = SupabaseClient<Database>
@@ -260,6 +261,15 @@ export async function runFlightStatusCheck(admin: Client) {
       .from('transport_segments')
       .update(delivered ? { ...next, last_tracked_at: new Date().toISOString() } : { last_tracked_at: new Date().toISOString() })
       .eq('id', segment.id)
+
+    // Only once the write above has actually landed the new flight_status/
+    // gate/terminal (REE-239): crew Q&A reads through assembleTourContext's
+    // 10-minute cache, so without this a delay that just alerted everyone
+    // over Telegram would still answer "on time" to a direct question for up
+    // to another 10 minutes.
+    if (delivered) {
+      void bustTourContextCache(segment.tour_id)
+    }
   }
 
   return { polled: segments.length, changed: changedCount, rateLimited }
