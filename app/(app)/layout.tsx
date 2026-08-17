@@ -2,7 +2,7 @@ import { cookies } from 'next/headers'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { ResizableSidebar } from '@/components/layout/resizable-sidebar'
-import { MobileNavDrawer } from '@/components/layout/mobile-nav-drawer'
+import { LazyMobileNavDrawer } from '@/components/layout/lazy-mobile-nav-drawer'
 import { AppContent } from '@/components/layout/app-content'
 import { LazyCommandPalette } from '@/components/nav/lazy-command-palette'
 import { Toaster } from '@/components/ui/sonner'
@@ -79,8 +79,9 @@ export default async function AppLayout({
         />
       </div>
 
-      {/* Mobile: sidebar rendered inside a drawer opened by the hamburger. */}
-      <MobileNavDrawer
+      {/* Mobile: sidebar rendered inside a drawer opened by the hamburger.
+          Lazy-loaded: see lazy-mobile-nav-drawer.tsx (REE-267). */}
+      <LazyMobileNavDrawer
         tours={tours ?? []}
         lastTourId={lastTourId}
         openItemCount={openItemCount ?? 0}
