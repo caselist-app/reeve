@@ -1,7 +1,8 @@
 'use client'
 
-import { useState, useId } from 'react'
-import { createContact, updateContact } from '@/lib/actions/contacts'
+import { useState, useId, useEffect } from 'react'
+import { createContact, updateContact, getContactArtistOptions, setContactArtists } from '@/lib/actions/contacts'
+import type { ContactArtist } from '@/lib/actions/contacts'
 import { addPerson, updatePersonTerms } from '@/lib/actions/people'
 import { contactSchema } from '@/lib/validators/contact'
 import { normalizeWhatsappNumber } from '@/lib/phone'
@@ -86,6 +87,29 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
   const [personType, setPersonType] = useState<PersonType>(initialPersonType)
   const [perDiemCurrency, setPerDiemCurrency] = useState(initialPerDiemCurrency)
   const [wageCurrency, setWageCurrency] = useState(initialWageCurrency)
+
+  // Roster-only: which artists this contact belongs to. A tour-context contact
+  // gets linked automatically by add_contact_to_tour instead, so this never
+  // renders or fetches when hasTourContext.
+  const [artistOptions, setArtistOptions] = useState<ContactArtist[]>([])
+  const [artistIds, setArtistIds] = useState<string[]>([])
+
+  useEffect(() => {
+    if (hasTourContext) return
+    getContactArtistOptions(contact?.id ?? null).then(({ data }) => {
+      if (data) {
+        setArtistOptions(data.options)
+        setArtistIds(data.selectedIds)
+      }
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function toggleArtist(artistId: string) {
+    setArtistIds((prev) =>
+      prev.includes(artistId) ? prev.filter((id) => id !== artistId) : [...prev, artistId]
+    )
+  }
 
   const isCrewInTourContext = hasTourContext && personType === 'crew'
 
@@ -229,11 +253,25 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
         return { error: parsed.error.issues[0].message }
       }
 
-      const result = isEditing
-        ? await updateContact(contact.id, parsed.data)
-        : await createContact(parsed.data)
+      // Editing: contactId already exists, so identity and artists save in
+      // parallel, the same shape as the tour-context edit path above.
+      // Creating: setContactArtists needs the new row's id, which only exists
+      // once createContact has returned, so that leg runs after.
+      if (isEditing) {
+        const [identityResult, artistsResult] = await Promise.all([
+          updateContact(contact.id, parsed.data),
+          setContactArtists(contact.id, artistIds),
+        ])
+        return { error: identityResult.error ?? artistsResult.error, id: contact.id }
+      }
 
-      return { error: result.error, id: result.contactId }
+      const result = await createContact(parsed.data)
+      if (result.error || !result.contactId) {
+        return { error: result.error, id: result.contactId }
+      }
+
+      const artistsResult = await setContactArtists(result.contactId, artistIds)
+      return { error: artistsResult.error, id: result.contactId }
     },
   })
 
@@ -329,6 +367,30 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
                 defaultValue={contact?.default_role ?? ''}
                 placeholder="FOH Engineer"
               />
+            </div>
+          </div>
+        )}
+
+        {/* Artists, only shown in roster context: a tour-context contact gets
+            linked automatically when added to a tour instead. */}
+        {!hasTourContext && artistOptions.length > 0 && (
+          <div className="space-y-2">
+            <Label>Artists</Label>
+            <div className="rounded-md border border-input divide-y divide-border">
+              {artistOptions.map((artist) => (
+                <label
+                  key={artist.id}
+                  className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm hover:bg-muted/50"
+                >
+                  <input
+                    type="checkbox"
+                    checked={artistIds.includes(artist.id)}
+                    onChange={() => toggleArtist(artist.id)}
+                    className="h-4 w-4 shrink-0 rounded border-input accent-foreground"
+                  />
+                  <span className="truncate">{artist.name}</span>
+                </label>
+              ))}
             </div>
           </div>
         )}
