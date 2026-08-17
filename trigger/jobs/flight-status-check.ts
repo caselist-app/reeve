@@ -6,6 +6,7 @@ import { formatFlightNumber } from '@/lib/utils/format-flight-number'
 import { notify, type NotifyResult } from '@/lib/comms/notify'
 import { notifyAccount } from '@/lib/comms/notify/account'
 import { registry } from '@/lib/comms/notify/registry'
+import type { NotifyContact } from '@/lib/comms/notify/types'
 import { bustTourContextCache } from '@/lib/ai/context'
 import type { Database } from '@/lib/types/database'
 
@@ -112,16 +113,29 @@ export async function runFlightStatusCheck(admin: Client) {
     return { polled: 0, changed: 0 }
   }
 
-  // Cache the tour roster per tour_id so a run touching several segments
-  // on the same tour doesn't re-query it each time.
+  // Cache the tour roster per tour_id so a run touching several segments on
+  // the same tour doesn't re-query it each time. Selects each person's
+  // contact row alongside the id, in the same query, so notify() below can
+  // be passed the contact directly instead of re-running the people ->
+  // contacts join once per person per changed segment (REE-265, same
+  // reasoning as send-day-message.ts's REE-108 fix).
   const rosterCache = new Map<string, string[]>()
+  const contactCache = new Map<string, Map<string, NotifyContact | null>>()
   async function rosterFor(tourId: string): Promise<string[]> {
     const cached = rosterCache.get(tourId)
     if (cached) return cached
-    const { data } = await admin.from('people').select('id').eq('tour_id', tourId)
-    const ids = (data ?? []).map((p) => p.id)
+    const { data } = await admin
+      .from('people')
+      .select('id, contacts(name, whatsapp_number, telegram_chat_id, contact_email, operational_channel, email_enabled)')
+      .eq('tour_id', tourId)
+    const rows = data ?? []
+    const ids = rows.map((p) => p.id)
     rosterCache.set(tourId, ids)
+    contactCache.set(tourId, new Map(rows.map((p) => [p.id, p.contacts as NotifyContact | null])))
     return ids
+  }
+  function contactFor(tourId: string, personId: string): NotifyContact | null {
+    return contactCache.get(tourId)?.get(personId) ?? null
   }
 
   // Cached the same way: the account holder is a second recipient of the
@@ -218,6 +232,7 @@ export async function runFlightStatusCheck(admin: Client) {
           type: 'flight_status_alert',
           data: { message },
           dedupDimension,
+          contact: contactFor(segment.tour_id, personId),
         })
       )
     }
