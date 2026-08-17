@@ -91,6 +91,15 @@ export type TourContext = {
     vehicle_or_flight_no: string | null
     booking_reference: string | null
     status: string
+    // AirLabs live tracking (Brief 31). flight_status is what the airline is
+    // reporting right now, separate from `status` (the TM's booking
+    // lifecycle) - never conflate the two. Null until the flight enters the
+    // flight-status-check poll window, so crew Q&A can say "not tracked yet"
+    // rather than treating a genuinely unknown state as on-time.
+    flight_status: string | null
+    gate: string | null
+    terminal: string | null
+    last_tracked_at: string | null
     assignments: Array<{
       person_id: string
       seat: string | null
@@ -153,6 +162,7 @@ export async function assembleTourContext(tour_id: string): Promise<TourContext>
         .select(`
           id, mode, origin, destination, depart_at, arrive_at,
           carrier_operator, vehicle_or_flight_no, booking_reference, status,
+          flight_status, gate, terminal, last_tracked_at,
           transport_assignments ( person_id, seat, ticket_reference )
         `)
         .eq('tour_id', tour_id)
@@ -241,6 +251,10 @@ export async function assembleTourContext(tour_id: string): Promise<TourContext>
       vehicle_or_flight_no: t.vehicle_or_flight_no,
       booking_reference: t.booking_reference,
       status: t.status,
+      flight_status: t.flight_status,
+      gate: t.gate,
+      terminal: t.terminal,
+      last_tracked_at: t.last_tracked_at,
       assignments: Array.isArray(t.transport_assignments) ? t.transport_assignments : [],
     })),
     hotels: (hotelsRes.data ?? []).map((h) => ({
