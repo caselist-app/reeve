@@ -1,6 +1,7 @@
 'use server'
 
 import { redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { artistSchema } from '@/lib/validators/artist'
@@ -45,6 +46,12 @@ export async function createArtistAction(
       console.error('[createArtist] Failed to provision email domain:', err)
     }
   }
+
+  // Both routes read the artist list server-side and are reachable via
+  // client-side navigation after this action, so they need revalidating or
+  // the Router Cache serves the pre-create snapshot (REE-261).
+  revalidatePath('/tours/new')
+  revalidatePath('/roster')
 
   return { error: null, artistId: data?.id }
 }

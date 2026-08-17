@@ -1,7 +1,6 @@
 'use client'
 
-import { useActionState, useState, useId } from 'react'
-import { useRouter } from 'next/navigation'
+import { useActionState, useEffect, useState, useId } from 'react'
 import { createArtistAction } from '@/lib/actions/artists'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,13 +15,22 @@ function toSlug(value: string): string {
 
 export function NewArtistForm() {
   const formId = useId()
-  const router = useRouter()
   const [state, formAction, pending] = useActionState(createArtistAction, { error: null })
   const [slug, setSlug] = useState('')
 
-  if (state.artistId) {
-    router.push('/tours/new')
-  }
+  // A full browser navigation, not router.push or a server-side redirect()
+  // inside the action: both were tried for REE-261 and both left /tours/new
+  // stuck on the app/(app) loading.tsx fallback in e2e. Trace inspection of
+  // the failing runs showed the RSC payload for /tours/new arriving over the
+  // network in milliseconds either way, but the client never committing it,
+  // which points at a same-layout Suspense boundary/action-redirect
+  // interaction between two sibling pages under app/(app), not a caching or
+  // timing issue. A hard navigation sidesteps that entirely.
+  useEffect(() => {
+    if (state.artistId) {
+      window.location.href = '/tours/new'
+    }
+  }, [state.artistId])
 
   return (
     <form action={formAction} className="space-y-5">

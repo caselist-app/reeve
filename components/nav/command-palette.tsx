@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { getPaletteData } from '@/lib/actions/palette'
 import type { PaletteData } from '@/lib/actions/palette'
 import { useCommandPalette } from '@/stores/command-palette-store'
+import { tourIdFromPathname } from '@/lib/layout/tour-id-from-pathname'
 import { useState } from 'react'
 
 type ResultItem = {
@@ -71,8 +72,7 @@ export function CommandPalette() {
   const [isPending, startTransition] = useTransition()
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const tourIdMatch = pathname.match(/\/tours\/([^/]+)/)
-  const tourId = tourIdMatch?.[1] ?? null
+  const tourId = tourIdFromPathname(pathname)
 
   // Fetch palette data the first time this tour's palette is opened.
   const loadedTourRef = useRef<string | null>(null)
