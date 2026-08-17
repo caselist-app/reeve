@@ -106,7 +106,7 @@ Brief 43 replaced the chronological `day-timeline.tsx` (a Server Component) with
 ## Naming, not to be confused
 
 - `day-form.tsx` (the typed add-to-day panel: Book flight/drive/rail/hotel, plus Times rows that commit a `day_items` row) vs `day-type-picker.tsx` (tour_date type: Show/Rehearsal/Travel/Press/Day off). They stay distinct, don't merge. `add-picker.tsx` used to be the first half of this pair, a six-tile category popover including Show and Event; REE-89 deleted it for the single typed door and REE-90 took Show and Event out of the add surface entirely. **Show belongs to `day-type-picker.tsx`, not the add flow, because creating a show writes `day_type`.** An event is now just a custom `day_items` row typed into `day-form.tsx`.
-- `components/schedule/date-sidebar.tsx` (day-view Dates panel) is the only place with day-type colors; its colors are the documented ones (CLAUDE.md).
+- Day-type colors (purple show, teal travel, amber press, blue rehearsal, stone off, CLAUDE.md's documented map) live in one place, `lib/schedule/day-type-colors.ts`. `date-sidebar.tsx` (desktop) and `date-strip.tsx` (mobile) both read it for their date chips rather than keeping their own copy: two copies is how the desktop and tour-level views drifted apart before (REE-72). Add a new day-type consumer by importing `dayTypeChipClass`, never by re-deriving the map.
 
 ## Form submission: every form goes through `useEntityForm`
 
