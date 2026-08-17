@@ -291,6 +291,111 @@ describe('sendDayMessage', () => {
     }
   })
 
+  // REE-103: notification_log's unique index on (tour_id, person_id,
+  // notification_type, channel, dedup_dimension) is what makes a retry safe,
+  // but nothing had ever called sendDayMessage twice to prove it. This is the
+  // retry-safety half: same dedupDimension, second call must skip every
+  // channel and write nothing new, even though it still reports success.
+  it('skips every channel and writes no new rows when a second send reuses the dedup dimension', async () => {
+    await seedShowDayItems(fixture)
+
+    await addPerson(fixture, {
+      name: 'WhatsApp Crew',
+      whatsappNumber: '+447700900010',
+      operationalChannel: 'whatsapp',
+    })
+
+    const first = await sendDayMessage({
+      tourId: fixture.tourId,
+      date: DATE,
+      timezone: TIMEZONE,
+      artistName: 'Test Artist',
+      dedupDimension: DATE,
+      stagger: noStagger,
+    })
+    expect(first.skipped).toBeUndefined()
+
+    const rowsAfterFirst = await notificationLog(fixture.tourId, DATE)
+    expect(rowsAfterFirst.length).toBeGreaterThan(0)
+
+    mockWhatsApp.mockClear()
+
+    const second = await sendDayMessage({
+      tourId: fixture.tourId,
+      date: DATE,
+      timezone: TIMEZONE,
+      artistName: 'Test Artist',
+      dedupDimension: DATE,
+      stagger: noStagger,
+    })
+
+    // The exact silent success this brief exists to prevent: the function
+    // still reports a healthy run against the same people, but every channel
+    // it touched came back skipped_already_sent rather than sent.
+    expect(second.skipped).toBeUndefined()
+    expect(second.people_count).toBe(first.people_count)
+    expect(second.results.length).toBeGreaterThan(0)
+    expect(
+      second.results.every((r) => r.channels.every((c) => c.outcome === 'skipped_already_sent'))
+    ).toBe(true)
+    expect(mockWhatsApp).not.toHaveBeenCalled()
+
+    const rowsAfterSecond = await notificationLog(fixture.tourId, DATE)
+    expect(rowsAfterSecond).toHaveLength(rowsAfterFirst.length)
+  })
+
+  // The re-send half: a resend has to mint its own dedup value, the way
+  // sendBroadcast mints a fresh change_id per send (lib/actions/broadcast.ts,
+  // rather than reusing the day's date). Two distinct dedup dimensions must
+  // each get their own full set of notification_log rows, with no skips on
+  // the second send and the first send's rows left untouched.
+  it('sends a full new set with no skips when a resend mints a fresh dedup dimension', async () => {
+    await seedShowDayItems(fixture)
+
+    await addPerson(fixture, {
+      name: 'WhatsApp Crew',
+      whatsappNumber: '+447700900011',
+      operationalChannel: 'whatsapp',
+    })
+
+    const firstDedup = `${DATE}:aaa`
+    const secondDedup = `${DATE}:bbb`
+
+    const first = await sendDayMessage({
+      tourId: fixture.tourId,
+      date: DATE,
+      timezone: TIMEZONE,
+      artistName: 'Test Artist',
+      dedupDimension: firstDedup,
+      stagger: noStagger,
+    })
+    expect(first.skipped).toBeUndefined()
+
+    const rowsA = await notificationLog(fixture.tourId, firstDedup)
+    expect(rowsA.length).toBeGreaterThan(0)
+
+    const second = await sendDayMessage({
+      tourId: fixture.tourId,
+      date: DATE,
+      timezone: TIMEZONE,
+      artistName: 'Test Artist',
+      dedupDimension: secondDedup,
+      stagger: noStagger,
+    })
+
+    expect(second.skipped).toBeUndefined()
+    expect(second.results.length).toBeGreaterThan(0)
+    expect(second.results.every((r) => r.channels.every((c) => c.outcome === 'sent'))).toBe(true)
+
+    const rowsB = await notificationLog(fixture.tourId, secondDedup)
+    expect(rowsB).toHaveLength(rowsA.length)
+    expect(rowsB.every((r) => r.status === 'sent')).toBe(true)
+
+    // The resend did not touch or replace the original send's rows.
+    const rowsAAfter = await notificationLog(fixture.tourId, firstDedup)
+    expect(rowsAAfter).toHaveLength(rowsA.length)
+  })
+
   // Bug C: per-person failures used to vanish into Promise.allSettled with
   // nothing reading the settled results, so a broken send for one person
   // looked identical to a healthy run.
