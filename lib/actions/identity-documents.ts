@@ -1,12 +1,16 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { readForm } from '@/lib/forms/read-form'
 import { definedOnly } from '@/lib/forms/write-row'
 import { identityDocumentSchema } from '@/lib/validators/identity-document'
 
+type Client = Awaited<ReturnType<typeof createClient>>
+
 export type CreateIdentityDocumentResult = { error: string | null; documentId: string | null }
+export type IdentityDocumentActionResult = { error: string | null }
 
 // Matches the identity-documents bucket's allowed_mime_types
 // (supabase/migrations/20260815125511_identity_documents_bucket.sql).
@@ -128,5 +132,201 @@ export async function createIdentityDocument(
 
   if (insertError) return rollback(insertError.message)
 
+  await syncPassportCache(supabase, contactId)
+  await revalidateContact(supabase, contactId)
+
   return { error: null, documentId: id }
+}
+
+// Edits an existing identity_documents row's typed fields. There is no
+// UPDATE path for the file itself: replacing a scan means deleting the
+// record and adding it again, so this never touches Storage.
+export async function updateIdentityDocument(
+  documentId: string,
+  formData: FormData
+): Promise<IdentityDocumentActionResult> {
+  const user = await requireUser()
+  const supabase = await createClient()
+
+  const { data: existing } = await supabase
+    .from('identity_documents')
+    .select('id, contact_id')
+    .eq('id', documentId)
+    .eq('account_id', user.id)
+    .single()
+
+  if (!existing) return { error: 'Document not found.' }
+
+  const strFields = readForm(formData, {
+    kind: 'requiredString',
+    document_number: 'string',
+    surname: 'string',
+    given_names: 'string',
+    issuing_country: 'string',
+    valid_for_country: 'string',
+    visa_type: 'string',
+    issue_date: 'string',
+    expiry_date: 'string',
+    notes: 'string',
+  })
+
+  const parsed = identityDocumentSchema.safeParse(strFields)
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Invalid input.' }
+  }
+  const fields = parsed.data
+
+  const { error } = await supabase
+    .from('identity_documents')
+    .update(
+      definedOnly({
+        kind: fields.kind,
+        document_number: fields.document_number,
+        surname: fields.surname,
+        given_names: fields.given_names,
+        issuing_country: fields.issuing_country,
+        valid_for_country: fields.valid_for_country,
+        visa_type: fields.visa_type,
+        issue_date: fields.issue_date,
+        expiry_date: fields.expiry_date,
+        notes: fields.notes,
+      })
+    )
+    .eq('id', documentId)
+
+  if (error) return { error: error.message }
+
+  await syncPassportCache(supabase, existing.contact_id)
+  await revalidateContact(supabase, existing.contact_id)
+
+  return { error: null }
+}
+
+// Unset then set, as two statements, in that order (Brief 45 step 6). The
+// identity_documents_one_primary_per_kind_idx partial unique index allows
+// only one primary per contact and kind, so setting before unsetting the
+// current primary fails with 23505. There is a moment with no primary of
+// that kind, which is harmless: no read path depends on a primary existing,
+// because the roster reads contacts.passport_* rather than this table.
+export async function setPrimaryIdentityDocument(
+  documentId: string
+): Promise<IdentityDocumentActionResult> {
+  const user = await requireUser()
+  const supabase = await createClient()
+
+  const { data: existing } = await supabase
+    .from('identity_documents')
+    .select('id, contact_id, kind')
+    .eq('id', documentId)
+    .eq('account_id', user.id)
+    .single()
+
+  if (!existing) return { error: 'Document not found.' }
+
+  const { error: unsetError } = await supabase
+    .from('identity_documents')
+    .update({ is_primary: false })
+    .eq('contact_id', existing.contact_id)
+    .eq('kind', existing.kind)
+    .eq('is_primary', true)
+
+  if (unsetError) return { error: unsetError.message }
+
+  const { error: setError } = await supabase
+    .from('identity_documents')
+    .update({ is_primary: true })
+    .eq('id', documentId)
+
+  if (setError) return { error: setError.message }
+
+  await syncPassportCache(supabase, existing.contact_id)
+  await revalidateContact(supabase, existing.contact_id)
+
+  return { error: null }
+}
+
+// Deletes the storage object first, then the row (Brief 45 step 6). If the
+// object delete fails, the row is left in place: a row pointing at a missing
+// file renders a broken "View scan", and a row is recoverable while an
+// orphaned object in a private bucket is not.
+//
+// Never syncs the passport cache. contacts.passport_* is written forward
+// from a primary passport and this feature does not own it: a TM may have
+// typed those fields years before any scan existed, and clearing the cache
+// here would destroy hand-typed data on every delete.
+export async function deleteIdentityDocument(
+  documentId: string
+): Promise<IdentityDocumentActionResult> {
+  const user = await requireUser()
+  const supabase = await createClient()
+
+  const { data: existing } = await supabase
+    .from('identity_documents')
+    .select('id, storage_path')
+    .eq('id', documentId)
+    .eq('account_id', user.id)
+    .single()
+
+  if (!existing) return { error: 'Document not found.' }
+
+  const { error: removeError } = await supabase.storage
+    .from('identity-documents')
+    .remove([existing.storage_path])
+
+  if (removeError) return { error: removeError.message }
+
+  const { error: deleteError } = await supabase
+    .from('identity_documents')
+    .delete()
+    .eq('id', documentId)
+
+  if (deleteError) return { error: deleteError.message }
+
+  return { error: null }
+}
+
+// Writes the five contacts.passport_* cache columns from the contact's
+// primary passport. Never clears them: a TM may have typed a passport with
+// no scan on file, and this feature does not own that data. Called by
+// create, update and set-primary, and nothing else.
+async function syncPassportCache(supabase: Client, contactId: string): Promise<void> {
+  const { data: primary } = await supabase
+    .from('identity_documents')
+    .select('document_number, surname, given_names, issuing_country, expiry_date')
+    .eq('contact_id', contactId)
+    .eq('kind', 'passport')
+    .eq('is_primary', true)
+    .maybeSingle()
+
+  if (!primary) return
+
+  await supabase
+    .from('contacts')
+    .update(
+      definedOnly({
+        passport_number: primary.document_number,
+        passport_surname: primary.surname,
+        passport_first_names: primary.given_names,
+        passport_country: primary.issuing_country,
+        passport_expiry: primary.expiry_date,
+      })
+    )
+    .eq('id', contactId)
+}
+
+// A contact is account-level and renders on the day roster of every tour
+// they are on, plus the roster list and the roster page. Mirrors
+// updateContact's fan-out in lib/actions/contacts.ts.
+async function revalidateContact(supabase: Client, contactId: string): Promise<void> {
+  const { data: memberships } = await supabase
+    .from('people')
+    .select('tour_id')
+    .eq('contact_id', contactId)
+
+  for (const tourId of new Set((memberships ?? []).map((m) => m.tour_id))) {
+    revalidatePath(`/tours/${tourId}/schedule`)
+  }
+
+  revalidatePath('/roster')
+  revalidatePath(`/roster/${contactId}`)
 }
