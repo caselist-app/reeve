@@ -3,6 +3,7 @@ import { testDb } from './test-db'
 import { createFixture, destroyFixture, type Fixture } from './fixture'
 import { sortIdentityDocuments } from '@/lib/identity/kinds'
 import { expiryStatus } from '@/lib/roster/expiry'
+import { createIdentityDocument } from '@/lib/actions/identity-documents'
 
 // REE-196 / Brief 45. identity_documents carries its guarantees as a check
 // constraint and two partial unique indexes, and neither exists in the
@@ -169,5 +170,134 @@ describe('sortIdentityDocuments orders primary first, then expiry ascending, pas
 
     expect(() => expiryStatus(row!.expiry_date)).not.toThrow()
     expect(expiryStatus(row!.expiry_date)).toBe('none')
+  })
+})
+
+// REE-199 / Brief 45 step 4. createIdentityDocument, exercised through the real
+// action rather than a raw testDb insert like the blocks above: the upload, the
+// storage path, and the first-of-kind primary rule all live in the action, not
+// in the schema.
+
+function pdfFile(name: string): File {
+  return new File(['%PDF-1.4 test'], name, { type: 'application/pdf' })
+}
+
+// destroyFixture only deletes the auth user; the cascade never reaches
+// storage, so every test below that uploads deletes its own object.
+async function cleanupUploadedObject(documentId: string) {
+  const { data: row } = await testDb
+    .from('identity_documents')
+    .select('storage_path')
+    .eq('id', documentId)
+    .maybeSingle()
+  if (row) await testDb.storage.from('identity-documents').remove([row.storage_path])
+}
+
+describe('createIdentityDocument uploads a scan and creates its row', () => {
+  let fixture: Fixture
+
+  beforeEach(async () => {
+    fixture = await createFixture()
+  })
+
+  afterEach(async () => {
+    await destroyFixture(fixture)
+  })
+
+  it('stores the object under the account id and links it from the row', async () => {
+    const fd = new FormData()
+    fd.set('kind', 'passport')
+    fd.set('file', pdfFile('passport.pdf'))
+
+    const result = await createIdentityDocument(fixture.contactId, fd)
+    expect(result.error).toBeNull()
+    expect(result.documentId).not.toBeNull()
+
+    try {
+      const { data: row, error } = await testDb
+        .from('identity_documents')
+        .select('storage_path, account_id, contact_id')
+        .eq('id', result.documentId!)
+        .single()
+
+      expect(error).toBeNull()
+      // All four bucket policies check (storage.foldername(name))[1] against
+      // auth.uid(), so the account id has to be the first path segment.
+      expect(row?.storage_path.startsWith(`${fixture.userId}/`)).toBe(true)
+      expect(row?.account_id).toBe(fixture.userId)
+      expect(row?.contact_id).toBe(fixture.contactId)
+    } finally {
+      await cleanupUploadedObject(result.documentId!)
+    }
+  })
+
+  it('marks the first passport for a contact primary and the second not', async () => {
+    const first = new FormData()
+    first.set('kind', 'passport')
+    first.set('file', pdfFile('first.pdf'))
+    const firstResult = await createIdentityDocument(fixture.contactId, first)
+    expect(firstResult.error).toBeNull()
+
+    const second = new FormData()
+    second.set('kind', 'passport')
+    second.set('file', pdfFile('second.pdf'))
+    const secondResult = await createIdentityDocument(fixture.contactId, second)
+    expect(secondResult.error).toBeNull()
+
+    try {
+      const { data: rows } = await testDb
+        .from('identity_documents')
+        .select('id, is_primary')
+        .in('id', [firstResult.documentId!, secondResult.documentId!])
+
+      const byId = new Map((rows ?? []).map((r) => [r.id, r.is_primary]))
+      expect(byId.get(firstResult.documentId!)).toBe(true)
+      expect(byId.get(secondResult.documentId!)).toBe(false)
+    } finally {
+      await cleanupUploadedObject(firstResult.documentId!)
+      await cleanupUploadedObject(secondResult.documentId!)
+    }
+  })
+})
+
+// The contact ownership check runs AFTER the upload, not before it, so that a
+// contact_id which does not resolve to one this account owns fails the same
+// way a row-insert failure does: through the same rollback, deleting the
+// object it just wrote. Red first: remove the storage.remove() call in
+// createIdentityDocument's rollback() and this test's final assertion fails,
+// because the upload above it still succeeds even though the row is never
+// created.
+describe('createIdentityDocument cleans up the uploaded object when the row is never created', () => {
+  let fixture: Fixture
+
+  beforeEach(async () => {
+    fixture = await createFixture()
+  })
+
+  afterEach(async () => {
+    await destroyFixture(fixture)
+  })
+
+  it('does not leave the object in the bucket when contact_id does not resolve', async () => {
+    const missingContactId = '00000000-0000-0000-0000-000000000000'
+
+    const fd = new FormData()
+    fd.set('kind', 'passport')
+    fd.set('file', pdfFile('orphan.pdf'))
+
+    const result = await createIdentityDocument(missingContactId, fd)
+
+    expect(result.error).toBe('Contact not found.')
+    expect(result.documentId).toBeNull()
+
+    // No identity_documents row was ever created to look the storage path up
+    // from, so list the folder the upload would have used instead: it has to
+    // come back empty.
+    const { data: objects, error } = await testDb.storage
+      .from('identity-documents')
+      .list(`${fixture.userId}/${missingContactId}`)
+
+    expect(error).toBeNull()
+    expect(objects ?? []).toHaveLength(0)
   })
 })

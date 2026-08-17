@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { MoreHorizontal, Pencil, Trash2, Send } from 'lucide-react'
+import { MoreHorizontal, Pencil, Trash2, Send, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Tables } from '@/lib/types/database'
 import { expiryStatus, formatExpiry } from '@/lib/roster/expiry'
@@ -13,6 +13,7 @@ import { PanelShell } from '@/components/layout/panel-shell'
 import { Button } from '@/components/ui/button'
 import { ListRow } from '@/components/ui/list-row'
 import { IdentityDocuments } from '@/components/roster/identity-documents'
+import { IdentityDocumentForm } from '@/components/roster/identity-document-form'
 import { Separator } from '@/components/ui/separator'
 import { DataField } from '@/components/ui/data-field'
 import { SectionHeader } from '@/components/ui/section-header'
@@ -41,20 +42,26 @@ export function ContactPanel({ contactId, tourContext, onSuccess }: Props) {
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [addingDocument, setAddingDocument] = useState(false)
+
+  async function loadContact() {
+    try {
+      const { data, error } = await getContact(contactId)
+      if (data) {
+        setContact(data.contact)
+        setTours(data.tours)
+        setIdentityDocuments(data.identityDocuments)
+      } else {
+        setFetchError(error ?? 'Could not load contact.')
+      }
+    } catch {
+      setFetchError('Could not load contact.')
+    }
+  }
 
   useEffect(() => {
-    getContact(contactId)
-      .then(({ data, error }) => {
-        if (data) {
-          setContact(data.contact)
-          setTours(data.tours)
-          setIdentityDocuments(data.identityDocuments)
-        } else {
-          setFetchError(error ?? 'Could not load contact.')
-        }
-      })
-      .catch(() => setFetchError('Could not load contact.'))
-      .finally(() => setLoading(false))
+    loadContact().finally(() => setLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [contactId])
 
   function handleEdit() {
@@ -219,8 +226,28 @@ export function ContactPanel({ contactId, tourContext, onSuccess }: Props) {
 
           <Separator className="my-5" />
 
-          <SectionHeader>Identity documents</SectionHeader>
-          <IdentityDocuments documents={identityDocuments} />
+          <div className="mb-3 flex items-center justify-between">
+            <SectionHeader className="mb-0">Identity documents</SectionHeader>
+            {!addingDocument && (
+              <Button size="sm" variant="ghost" onClick={() => setAddingDocument(true)}>
+                <Plus className="mr-1 h-4 w-4" />
+                Add document
+              </Button>
+            )}
+          </div>
+
+          {addingDocument ? (
+            <IdentityDocumentForm
+              contactId={contactId}
+              onCancel={() => setAddingDocument(false)}
+              onSuccess={() => {
+                setAddingDocument(false)
+                loadContact()
+              }}
+            />
+          ) : (
+            <IdentityDocuments documents={identityDocuments} />
+          )}
 
           {contact.notes && (
             <>
