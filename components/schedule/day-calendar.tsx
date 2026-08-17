@@ -90,8 +90,11 @@ interface DayCalendarProps {
   // The day being viewed. Present because the calendar only renders for a real
   // tour date, and click-empty-to-add opens the day form against it.
   tourDateId: string
-  // IANA name from tours.timezone, never the browser. Drives the localizer and
-  // the min/max/date bounds, all rebuilt together when it changes.
+  // IANA name, never the browser. The day's own resolved zone (record then
+  // tour then UTC, resolveTimezone in lib/schedule/datetime.ts) as computed by
+  // the schedule page (REE-246), not blindly tours.timezone: a Perth show on a
+  // Sydney tour renders in Perth time. Drives the localizer and the min/max/
+  // date bounds, all rebuilt together when it changes.
   timezone: string
   // The selected day, YYYY-MM-DD. Bounds the grid to this tour-local day.
   date: string

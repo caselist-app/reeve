@@ -1,6 +1,7 @@
 import { Suspense } from 'react'
 import { redirect } from 'next/navigation'
 import { getScheduleShell, defaultScheduleDate } from '@/lib/schedule/schedule-shell'
+import { resolveTimezone } from '@/lib/schedule/datetime'
 import { DayContent } from '@/components/schedule/day-content'
 import { DayContentSkeleton } from '@/components/schedule/schedule-skeleton'
 
@@ -21,7 +22,11 @@ export default async function SchedulePage({
 
   const selectedDate = dateParam ?? defaultScheduleDate(dates)
   const tourDate = dates.find((d) => d.date === selectedDate) ?? null
-  const tz = tour.timezone ?? 'UTC'
+  // The grid and its gutter labels render in the day's own venue timezone once
+  // resolveHub has resolved one (REE-246, Brief 56: a Perth show on a Sydney
+  // tour renders in Perth time). Falls back to the tour's for a day with no
+  // show, or one still waiting on hub resolution.
+  const tz = resolveTimezone(tourDate?.shows?.[0] ?? { timezone: null }, tour.timezone)
 
   // No key on the boundary: a date change is a transition, so React holds the
   // current day on screen (no skeleton flash) and swaps it when the new day

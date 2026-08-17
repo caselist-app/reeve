@@ -20,7 +20,7 @@ export const getScheduleShell = cache(async (tourId: string) => {
       .from('tour_dates')
       .select(`
         id, date, day_type, notes, custom_title,
-        shows ( venue_name, address ),
+        shows ( venue_name, address, timezone ),
         rehearsals ( location_name ),
         transport_segments ( mode, origin, destination, depart_at )
       `)

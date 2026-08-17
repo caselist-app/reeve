@@ -25,7 +25,7 @@ type Client = Awaited<ReturnType<typeof createClient>>
 export type DayShow = Pick<
   Tables<'shows'>,
   | 'id' | 'venue_name' | 'address' | 'capacity' | 'venue_type' | 'catering_type'
-  | 'venue_lat' | 'venue_lng'
+  | 'venue_lat' | 'venue_lng' | 'timezone'
 >
 
 export type DaySegment = Pick<
@@ -100,7 +100,7 @@ const EMPTY: DayRecords = {
 // untyped sources of truth for a day-sheet field: nothing but a running query
 // would tell you it was wrong. There is nothing left in it to get wrong.
 const SHOW_SELECT =
-  'id, venue_name, address, capacity, venue_type, catering_type, venue_lat, venue_lng'
+  'id, venue_name, address, capacity, venue_type, catering_type, venue_lat, venue_lng, timezone'
 
 const SEGMENT_SELECT =
   'id, mode, origin, destination, depart_at, arrive_at, carrier_operator, vehicle_or_flight_no, booking_reference, status, origin_iata, destination_iata, flight_status, actual_depart_at, actual_arrive_at, gate, terminal, last_tracked_at'

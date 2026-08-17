@@ -102,7 +102,8 @@ function toGridEvent(event: CalendarEvent, timezone: string): CalendarEvent {
  * of scope: a stay stays discrete check-in/check-out point events.
  *
  * @param date the viewed day, YYYY-MM-DD. The on-grid window is derived for this
- *   day in the tour timezone; the shift itself is intrinsic to each instant.
+ *   day in `timezone` (the caller's resolved zone: the day's own show, then the
+ *   tour, then UTC, REE-246); the shift itself is intrinsic to each instant.
  */
 export function buildDayCalendarView(
   records: DayRecords,
