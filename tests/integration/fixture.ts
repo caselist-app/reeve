@@ -193,6 +193,19 @@ export async function createE2eSeed(): Promise<E2eSeed> {
   const a = await createFixture({ tourName: E2E_TOUR_A_NAME, artistName: 'Seeded Artist' })
   const b = await createFixture({ tourName: E2E_TOUR_B_NAME, artistName: 'Other Artist' })
 
+  // A contact_artists row on account A, for tests/e2e/access.spec.ts (REE-233):
+  // the only way to prove account B cannot read or write it is a real row to
+  // try it against. contact_artists has no reading page or writing action yet
+  // (later steps of Brief 29), so this seeds the row directly rather than
+  // through add_contact_to_tour, which fixture.ts already cannot call for the
+  // same owns_tour()/auth.uid() reason it bypasses create_show_with_dependents.
+  const { error: contactArtistError } = await testDb
+    .from('contact_artists')
+    .insert({ contact_id: a.contactId, artist_id: a.artistId })
+  if (contactArtistError) {
+    throw new Error(`seed: could not link seeded contact to artist: ${contactArtistError.message}`)
+  }
+
   // A Pacific/Auckland tour on account A, for the timezone regression. June, so
   // Auckland holds UTC+12 with no DST in play: 09:00 local is a clean morning
   // hour whose UTC instant (21:00Z the day before) reads as a very different hour
