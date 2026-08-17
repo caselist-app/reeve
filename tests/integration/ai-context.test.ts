@@ -45,7 +45,10 @@ describe('assembleTourContext carries live flight tracking data', () => {
     expect(tracked?.flight_status).toBe('delayed')
     expect(tracked?.gate).toBe('5')
     expect(tracked?.terminal).toBe('3')
-    expect(tracked?.last_tracked_at).toBe(lastTrackedAt)
+    // Postgres serializes timestamptz with a +00:00 offset, not a Z suffix,
+    // so the round-tripped value is compared through Date rather than as a
+    // raw string. See partial-writes.test.ts and day-link.test.ts.
+    expect(new Date(tracked?.last_tracked_at ?? '').toISOString()).toBe(lastTrackedAt)
   })
 
   it('leaves flight_status, gate, terminal and last_tracked_at null on an untracked segment', async () => {
