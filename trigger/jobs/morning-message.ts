@@ -1,5 +1,6 @@
 import { schedules, wait } from '@trigger.dev/sdk/v3'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { resolveTimezone } from '@/lib/schedule/datetime'
 import { buildMorningMessageData } from '@/lib/comms/templates/morning-message'
 import { notify, type ChannelOutcome } from '@/lib/comms/notify'
 import {
@@ -77,15 +78,19 @@ export const morningMessageSchedule = schedules.task({
     const today = localDate(timezone)
     const artistName = (tour.artists as { name: string } | null)?.name ?? ''
 
-    // catering_type comes off the show since REE-19 moved it there.
+    // catering_type comes off the show since REE-19 moved it there. timezone
+    // rides along so the show's own resolved venue zone, once known, wins over
+    // the tour's for every block below (Brief 56).
     const { data: show } = await admin
       .from('shows')
-      .select('id, venue_name, date, catering_type')
+      .select('id, venue_name, date, catering_type, timezone')
       .eq('tour_id', tourId)
       .eq('date', today)
       .maybeSingle()
 
     if (!show) return { skipped: true, reason: 'no_show_today', date: today }
+
+    const showTimezone = resolveTimezone(show, timezone)
 
     // The show's running order, collapsed to one value per kind for the Meta
     // templates, which have fixed placeholders. See lib/comms/blocks/show-times.ts
@@ -193,7 +198,7 @@ export const morningMessageSchedule = schedules.task({
             today,
             daySheet,
             onwardLeg,
-            timezone,
+            timezone: showTimezone,
             blockInput,
           })
 
@@ -211,7 +216,7 @@ export const morningMessageSchedule = schedules.task({
         // Email digest: no WhatsApp renderer so resolveChannels skips
         // WhatsApp contacts automatically. Email-preferring contacts get
         // this consolidated view instead of the block sequence.
-        const morningData = await buildMorningMessageData(person.id, show.id, timezone)
+        const morningData = await buildMorningMessageData(person.id, show.id, showTimezone)
         if (morningData) {
           const result = await notify({
             tourId,

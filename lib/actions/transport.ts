@@ -9,11 +9,31 @@ import type { TravelOption } from '@/lib/logistics/types'
 import type { TablesUpdate } from '@/lib/types/database'
 import { bustTourContextCache } from '@/lib/ai/context'
 import { resolveTourDateId } from '@/lib/schedule/day-link'
-import { localDateInZone } from '@/lib/schedule/datetime'
+import { localDateInZone, resolveTimezone } from '@/lib/schedule/datetime'
 import { localBroadcastDateInZone } from '@/lib/schedule/day-window'
 import { boardingPassSendAt } from '@/lib/comms/boarding-pass-timing'
 import type { DateMove } from '@/lib/schedule/date-move'
 import type { CreatedAs } from '@/lib/party/presets'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@/lib/types/database'
+
+// transport_segments has no venue and no show_id of its own (Brief 56), so it
+// resolves its zone through the day it is linked to: that day's show, if one
+// exists, else the tour fallback. A day with no show reads the tour fallback,
+// exactly as before.
+async function dayTimezone(
+  supabase: SupabaseClient<Database>,
+  tourDateId: string | null,
+  tourTimezone: string | null,
+): Promise<string> {
+  if (!tourDateId) return tourTimezone ?? 'UTC'
+  const { data: show } = await supabase
+    .from('shows')
+    .select('timezone')
+    .eq('tour_date_id', tourDateId)
+    .maybeSingle()
+  return resolveTimezone(show ?? { timezone: null }, tourTimezone)
+}
 
 // `moved` is set only when the segment actually landed on a day other than the
 // one the TM was looking at. See lib/schedule/date-move.ts.
@@ -55,7 +75,7 @@ export async function recordTransportOption(
 
   const { data: show } = await supabase
     .from('shows')
-    .select('id')
+    .select('id, timezone')
     .eq('id', showId)
     .eq('tour_id', tourId)
     .single()
@@ -94,7 +114,12 @@ export async function recordTransportOption(
   // local midnight is still tonight's flight (REE-161). Using the plain
   // calendar date here re-homed a segment onto a fresh day the moment its
   // departure crossed midnight, even though the TM added it against tonight.
-  const localDate = localBroadcastDateInZone(option.depart_at, tour.timezone ?? 'UTC')
+  // The show this option is recorded against is already known, so its own
+  // resolved venue zone wins over the tour's directly, no day lookup needed
+  // (Brief 56): a Perth show on a Sydney tour resolves its date in Perth time.
+  const timezone = resolveTimezone(show, tour.timezone ?? null)
+
+  const localDate = localBroadcastDateInZone(option.depart_at, timezone)
   const resolved = await resolveTourDateId(supabase, tourId, localDate, {
     dayType: 'travel',
   })
@@ -107,7 +132,7 @@ export async function recordTransportOption(
   // render onto (REE-161). The arrival is compared by its plain calendar date,
   // not its own broadcast day: it is the date a TM would look for it under,
   // and it is what needs a row to be reachable at all.
-  const arrivalDate = localDateInZone(option.arrive_at, tour.timezone ?? 'UTC')
+  const arrivalDate = localDateInZone(option.arrive_at, timezone)
   if (arrivalDate !== localDate) {
     const arrivalResolved = await resolveTourDateId(supabase, tourId, arrivalDate, {
       dayType: 'travel',
@@ -259,7 +284,11 @@ export async function createTransportSegment(
       .eq('id', tourId)
       .single()
 
-    const timezone = tourRow?.timezone ?? 'UTC'
+    // The day the TM opened this add form from, if any: that day's own show,
+    // once resolved, is the zone the calendar was rendered in and the zone this
+    // create should agree with (Brief 56). No day passed in falls back to the
+    // tour, same as before.
+    const timezone = await dayTimezone(supabase, segmentData.tour_date_id ?? null, tourRow?.timezone ?? null)
 
     if (segmentData.depart_at) {
       // The broadcast day, not the plain calendar day: a departure just after
@@ -410,7 +439,11 @@ export async function updateTransportSegment(
       .eq('id', existing.tour_id)
       .single()
 
-    const timezone = tourRow?.timezone ?? 'UTC'
+    // The segment's CURRENT day, before this edit: that is the day whose
+    // resolved show zone the calendar was rendered in, so re-deriving the drop
+    // in the same zone is what keeps a drag consistent with what the TM saw
+    // (Brief 56).
+    const timezone = await dayTimezone(supabase, existing.tour_date_id, tourRow?.timezone ?? null)
     const effectiveDepartAt = data.depart_at !== undefined ? data.depart_at : existing.depart_at
 
     if (effectiveDepartAt) {
@@ -600,7 +633,8 @@ export async function scheduleBoardingPassSend(assignmentId: string, tourId: str
   const supabase = await createClient()
 
   // Verify caller owns this tour before using the admin client. Also pull the
-  // timezone: the night cap is a wall-clock rule, so it needs the tour's zone.
+  // timezone: the night cap is a wall-clock rule, so it needs a zone, the
+  // fallback for whatever the segment's own day resolves below.
   const { data: tour } = await supabase
     .from('tours')
     .select('id, timezone')
@@ -618,7 +652,7 @@ export async function scheduleBoardingPassSend(assignmentId: string, tourId: str
   // Scope the fetch to the verified tour to prevent cross-tenant reads.
   const { data: assignment } = await admin
     .from('transport_assignments')
-    .select('id, tour_id, person_id, segment_id, transport_segments(depart_at)')
+    .select('id, tour_id, person_id, segment_id, transport_segments(depart_at, tour_date_id)')
     .eq('id', assignmentId)
     .eq('tour_id', tourId)
     .single()
@@ -628,7 +662,7 @@ export async function scheduleBoardingPassSend(assignmentId: string, tourId: str
     return
   }
 
-  const seg = assignment.transport_segments as { depart_at: string | null } | null
+  const seg = assignment.transport_segments as { depart_at: string | null; tour_date_id: string | null } | null
   const departAt = seg?.depart_at ?? null
 
   const payload = {
@@ -644,7 +678,11 @@ export async function scheduleBoardingPassSend(assignmentId: string, tourId: str
     return
   }
 
-  const sendAt = boardingPassSendAt(departAt, tour.timezone ?? 'UTC')
+  // The small-hours cap is a wall-clock rule, so it reads the segment's own
+  // day's resolved show zone when there is one, else the tour fallback
+  // (Brief 56), the same rule every other transport read now follows.
+  const timezone = await dayTimezone(admin, seg?.tour_date_id ?? null, tour.timezone ?? null)
+  const sendAt = boardingPassSendAt(departAt, timezone)
   const now = new Date()
 
   if (sendAt <= now) {

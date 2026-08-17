@@ -14,6 +14,7 @@ import {
 import { decideGuestEntry, type OverAllotment } from '@/lib/guest-list/decide'
 import { resolveGuestRequestAttention } from '@/lib/guest-list/attention'
 import { definedOnly } from '@/lib/forms/write-row'
+import { resolveTimezone } from '@/lib/schedule/datetime'
 import type { Tables, TablesInsert, TablesUpdate } from '@/lib/types/database'
 import type { z } from 'zod'
 
@@ -71,10 +72,13 @@ type Client = Awaited<ReturnType<typeof createClient>>
 async function resolveShowTour(
   supabase: Client,
   showId: string,
-): Promise<Pick<Tables<'shows'>, 'tour_id' | 'guest_list_cutoff_at' | 'guest_list_locked'> | null> {
+): Promise<Pick<
+  Tables<'shows'>,
+  'tour_id' | 'guest_list_cutoff_at' | 'guest_list_locked' | 'timezone'
+> | null> {
   const { data } = await supabase
     .from('shows')
-    .select('tour_id, guest_list_cutoff_at, guest_list_locked')
+    .select('tour_id, guest_list_cutoff_at, guest_list_locked, timezone')
     .eq('id', showId)
     .maybeSingle()
 
@@ -169,7 +173,9 @@ export async function getGuestList(showId: string): Promise<GuestListView> {
     allotments: allotments ?? [],
     cutoffAt: show.guest_list_cutoff_at,
     locked: show.guest_list_locked,
-    timezone: tour?.timezone ?? 'UTC',
+    // The cutoff field is this show's own wall clock, so its own resolved
+    // venue zone wins over the tour's fallback (Brief 56).
+    timezone: resolveTimezone(show, tour?.timezone ?? null),
   }
 }
 

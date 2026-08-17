@@ -746,4 +746,41 @@ describe('the day link survives an edit', () => {
       expect(localTimeInZone(loadIn.realStart.toISOString(), timezone)).toBe('10:00')
     })
   })
+
+  // REE-247, Brief 56 step 7. /itinerary is a Trigger.dev-only crew read
+  // (lib/comms/router.ts is reached from trigger/jobs/*-router.ts and nothing
+  // on Vercel) with its own show lookup, not the day view's, so the fix above
+  // does not cover it: it needs its own proof that it reads the show's own
+  // resolved zone rather than the tour's.
+  describe("/itinerary reads the show's own timezone", () => {
+    it("tells the crew the show's own Perth load-in, not the Sydney tour's shifted one", async () => {
+      fixture = await createFixture({ date: DATE, timezone: 'Australia/Sydney' })
+
+      const { error: tzError } = await testDb
+        .from('shows')
+        .update({ timezone: 'Australia/Perth' })
+        .eq('id', fixture.showId)
+      if (tzError) throw new Error(`could not set show timezone: ${tzError.message}`)
+
+      // Perth is two hours behind Sydney in June: 10:00 Perth is 12:00 Sydney.
+      // Written directly as the instant 10:00 Perth names, same as the day-view
+      // case above.
+      const startsAt = wallClockToUtc(`${DATE}T10:00`, 'Australia/Perth')
+      const { error: itemError } = await testDb.from('day_items').insert({
+        tour_id: fixture.tourId,
+        tour_date_id: fixture.tourDateId,
+        show_id: fixture.showId,
+        kind: 'load_in',
+        starts_at: startsAt,
+      })
+      if (itemError) throw new Error(`could not create load-in: ${itemError.message}`)
+
+      const itinerary = await renderItinerary(UNUSED_PERSON_ID, fixture.tourId)
+
+      // Reading the tour's Sydney zone instead of the show's own resolved Perth
+      // one (the bug this ticket fixes) would render 12:00 here.
+      expect(itinerary).toContain('Load-in: 10:00')
+      expect(itinerary).not.toContain('Load-in: 12:00')
+    })
+  })
 })

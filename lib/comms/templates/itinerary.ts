@@ -1,19 +1,24 @@
 import { createAdminClient } from '@/lib/supabase/admin'
-import { localDateInZone } from '@/lib/schedule/datetime'
+import { localDateInZone, resolveTimezone } from '@/lib/schedule/datetime'
 import { fetchShowItems } from '@/lib/schedule/day-items'
 import { dayItemLines } from '@/lib/comms/day-item-lines'
 
 // /itinerary slash command. Zero-AI template render.
 // Returns the full day sheet for the next (or current) show.
 
-// Times render in the tour's timezone, not UTC.
+// Times render in the show's own resolved venue timezone when it has one,
+// otherwise the tour's, never UTC. See resolveTimezone (lib/schedule/datetime.ts).
 //
-// They used to render in UTC, which is correct only for a tour on UTC and an hour
-// out for a UK tour in summer. A TM typing load-in as 10:00 had the crew told
-// 09:00, which is the same failure Brief 36 exists to remove (a crew member sent
-// a time the TM cannot see anywhere on their schedule) arriving by a different
-// route than a duplicated column. Found while collapsing load_in_at into the day
-// sheet, 2026-08-04.
+// They used to render in the tour's timezone unconditionally, which is correct
+// only for a tour that never leaves one zone: a US run alone can cross four,
+// and nothing snapshotted the zone a show's time was entered against, so a later
+// leg's rezone silently redisplayed an already-correct earlier show in the wrong
+// zone (Brief 56). Before that, they rendered in UTC, which is correct only for
+// a tour on UTC and an hour out for a UK tour in summer. A TM typing load-in as
+// 10:00 had the crew told 09:00, which is the same failure Brief 36 exists to
+// remove (a crew member sent a time the TM cannot see anywhere on their
+// schedule) arriving by a different route than a duplicated column. Found while
+// collapsing load_in_at into the day sheet, 2026-08-04.
 function formatTime(iso: string | null, tz: string): string {
   if (!iso) return 'TBC'
   return new Date(iso).toLocaleTimeString('en-GB', {
@@ -61,16 +66,17 @@ export async function renderItinerary(
 ): Promise<string> {
   const admin = createAdminClient()
 
-  // The tour's timezone decides both which day it is for this crew member and how
-  // every time below reads. A tour with none set falls back to UTC, which is what
-  // every other schedule read does.
+  // The tour's timezone decides which day it is for this crew member, before any
+  // show is known: there is nothing yet to resolve a per-show zone against. A
+  // tour with none set falls back to UTC, which is what every other schedule
+  // read does.
   const { data: tour } = await admin
     .from('tours')
     .select('timezone')
     .eq('id', tour_id)
     .single()
 
-  const timezone = tour?.timezone ?? 'UTC'
+  const tourTimezone = tour?.timezone ?? 'UTC'
 
   // Find the active or next upcoming show.
   //
@@ -88,14 +94,15 @@ export async function renderItinerary(
   // impossible here.
   const now = new Date()
   const graceStart = new Date(now.getTime() - SHOW_STAYS_ACTIVE_UNTIL_HOUR * 60 * 60 * 1000)
-  const earliestActiveDate = localDateInZone(graceStart.toISOString(), timezone)
+  const earliestActiveDate = localDateInZone(graceStart.toISOString(), tourTimezone)
 
   const { data: shows, error: showsError } = await admin
     .from('shows')
     // No embed at all since Brief 42. The times are day_items rows fetched
     // separately below, which also removes the to-one embed that had to be
-    // unwrapped from an array on the way out.
-    .select('id, venue_name, date, address')
+    // unwrapped from an array on the way out. timezone rides along so the show's
+    // own resolved venue zone, once known, wins over the tour's (Brief 56).
+    .select('id, venue_name, date, address, timezone')
     .eq('tour_id', tour_id)
     .gte('date', earliestActiveDate)
     .order('date', { ascending: true })
@@ -126,6 +133,8 @@ export async function renderItinerary(
   const show = shows?.[0]
 
   if (!show) return 'No upcoming shows on this tour.'
+
+  const timezone = resolveTimezone(show, tourTimezone)
 
   // The show's running order. A separate read rather than an embed, because the
   // times are their own rows now and there is no one-to-one relationship left to

@@ -5,7 +5,7 @@ import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { bustTourContextCache } from '@/lib/ai/context'
 import { resolveTourDateId } from '@/lib/schedule/day-link'
-import { localDateInZone, localTimeInZone } from '@/lib/schedule/datetime'
+import { localDateInZone, localTimeInZone, resolveTimezone } from '@/lib/schedule/datetime'
 import { localBroadcastDateInZone } from '@/lib/schedule/day-window'
 import { definedOnly } from '@/lib/forms/write-row'
 import { moveScheduleItemSchema, type MoveScheduleItemInput } from '@/lib/validators/move-schedule-item'
@@ -94,10 +94,10 @@ async function ownedRowTourId(
   table: 'day_items' | 'transport_segments' | 'hotel_stays',
   id: string,
   tourId: string,
-): Promise<{ ok: true } | { ok: false }> {
-  const { data } = await supabase.from(table).select('tour_id').eq('id', id).maybeSingle()
+): Promise<{ ok: true; tourDateId: string | null } | { ok: false }> {
+  const { data } = await supabase.from(table).select('tour_id, tour_date_id').eq('id', id).maybeSingle()
   if (!data || data.tour_id !== tourId) return { ok: false }
-  return { ok: true }
+  return { ok: true, tourDateId: data.tour_date_id }
 }
 
 async function tourTimezone(supabase: Client, tourId: string): Promise<string> {
@@ -105,6 +105,27 @@ async function tourTimezone(supabase: Client, tourId: string): Promise<string> {
   // Falls back to UTC the way every other date-deriving path in the app does. A
   // tour with no timezone is one whose times were written as UTC.
   return data?.timezone ?? 'UTC'
+}
+
+// transport_segments and hotel_stays have no venue and no show_id of their own
+// (Brief 56), so they resolve their zone through the day they are linked to:
+// that day's own show, if one exists, else the tour fallback. Read against the
+// row's CURRENT day, before the move: that is the day the calendar was
+// rendered in, so re-deriving the drop in the same zone is what keeps a drag
+// consistent with what the TM saw.
+async function dayTimezone(
+  supabase: Client,
+  tourId: string,
+  tourDateId: string | null,
+): Promise<string> {
+  const tourTz = await tourTimezone(supabase, tourId)
+  if (!tourDateId) return tourTz
+  const { data: show } = await supabase
+    .from('shows')
+    .select('timezone')
+    .eq('tour_date_id', tourDateId)
+    .maybeSingle()
+  return resolveTimezone(show ?? { timezone: null }, tourTz)
 }
 
 async function moveDayItem(
@@ -147,7 +168,7 @@ async function moveSegment(
   const owned = await ownedRowTourId(supabase, 'transport_segments', move.id, tourId)
   if (!owned.ok) return { error: 'Segment not found.' }
 
-  const timezone = await tourTimezone(supabase, tourId)
+  const timezone = await dayTimezone(supabase, tourId, owned.tourDateId)
 
   // THE VANISH-CASE FIX, now on the broadcast day rather than the calendar day.
   // The grid the TM drags on is one broadcast night [04:00, +1 04:00), so a
@@ -190,7 +211,7 @@ async function moveHotel(
   const owned = await ownedRowTourId(supabase, 'hotel_stays', move.id, tourId)
   if (!owned.ok) return { error: 'Hotel stay not found.' }
 
-  const timezone = await tourTimezone(supabase, tourId)
+  const timezone = await dayTimezone(supabase, tourId, owned.tourDateId)
 
   // check_in_date and check_in_time are naive local columns, not instants, so
   // the dragged instant is split back into the tour-local date and time it

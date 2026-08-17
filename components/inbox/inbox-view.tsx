@@ -102,7 +102,7 @@ export function InboxView({ groups, error }: Props) {
                         </p>
                       </div>
                       <span className="shrink-0 text-xs text-muted-foreground">
-                        {relativeLabel(item.created_at, item.tour_timezone)}
+                        {relativeLabel(item.created_at, item.timezone)}
                       </span>
                     </ListRow>
                   )

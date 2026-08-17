@@ -6,6 +6,7 @@ import { requiredSiteArrivalFor } from '@/lib/shows/load-in'
 import { fetchDayRecords } from '@/lib/schedule/day-records'
 import { renderItinerary } from '@/lib/comms/templates/itinerary'
 import { assembleTourContext } from '@/lib/ai/context'
+import { wallClockToUtc } from '@/lib/schedule/datetime'
 
 // Brief 36 step 3. A load-in once lived in two columns that both meant "when is
 // load-in", written by two different tabs of the same page, with nothing syncing
@@ -243,5 +244,52 @@ describe('load-in and curfew have one home', () => {
       expect(Object.keys(show)).not.toContain('curfew_at')
       expect(Object.keys(show)).not.toContain('day_sheet')
     })
+  })
+})
+
+// REE-247, Brief 56 step 7. The suite above fixtures a single Europe/London
+// zone throughout, which passes whether /itinerary reads the show's own
+// resolved timezone or falls straight through to the tour's: they agree. This
+// is the case where they do not, a show whose venue has resolved a different
+// zone from its tour, and only reading the show's own wins the assertion.
+describe("/itinerary reads the show's own resolved timezone, not just the tour's", () => {
+  const PERTH_DATE = '2030-07-20'
+  let fixture: Fixture
+
+  beforeEach(async () => {
+    fixture = await createFixture({ date: PERTH_DATE, timezone: 'Australia/Sydney' })
+
+    const { error } = await testDb
+      .from('shows')
+      .update({ timezone: 'Australia/Perth' })
+      .eq('id', fixture.showId)
+    if (error) throw new Error(`could not set show timezone: ${error.message}`)
+  })
+
+  afterEach(async () => {
+    await destroyFixture(fixture)
+  })
+
+  it("renders the crew's load-in in Perth wall-clock, not shifted by the Sydney gap", async () => {
+    // Written directly as the instant 10:00 Perth names, bypassing
+    // createDayItem, which still resolves HH:MM against the tour's timezone
+    // (writes are a separate ticket) and would produce the wrong instant here.
+    const startsAt = wallClockToUtc(`${PERTH_DATE}T10:00`, 'Australia/Perth')
+    const { error } = await testDb.from('day_items').insert({
+      tour_id: fixture.tourId,
+      tour_date_id: fixture.tourDateId,
+      show_id: fixture.showId,
+      kind: 'load_in',
+      starts_at: startsAt,
+    })
+    if (error) throw new Error(`could not create load-in: ${error.message}`)
+
+    const itinerary = await renderItinerary(fixture.personId, fixture.tourId)
+
+    // 10:00 Perth is 12:00 Sydney. Reading the tour's Sydney zone instead of the
+    // show's own resolved Perth one (the bug this ticket fixes) would render
+    // 12:00 here.
+    expect(itinerary).toContain('Load-in: 10:00')
+    expect(itinerary).not.toContain('Load-in: 12:00')
   })
 })

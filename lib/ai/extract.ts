@@ -14,11 +14,12 @@ export type ExtractionProposal = {
     date: string | null
     venue_name: string | null
     address: string | null
-    // Brief 36 step 3: these are day-sheet times now, so they are extracted as
-    // wall-clock HH:MM the way the day sheet stores them rather than as ISO
-    // instants for two show columns that no longer exist. updateDaySheet turns
-    // them into timestamptz against the show's date and the tour's timezone,
-    // which keeps one writer for the conversion instead of two.
+    // Brief 36 step 3: these are day_items times now (Brief 42 moved them off
+    // the show row entirely), so they are extracted as wall-clock HH:MM the way
+    // a TM types them rather than as ISO instants for two show columns that no
+    // longer exist. createDayItem/updateDayItem turn them into timestamptz
+    // against the show's date and the day's timezone, which keeps one writer
+    // for the conversion instead of two.
     load_in: string | null
     curfew: string | null
   }>

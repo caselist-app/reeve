@@ -1,5 +1,6 @@
 import { task } from '@trigger.dev/sdk/v3'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { resolveTimezone } from '@/lib/schedule/datetime'
 import { fetchShowItems, firstItemOfKind } from '@/lib/schedule/day-items'
 import {
   buildLegLabel,
@@ -60,7 +61,8 @@ export const boardingPassJob = task({
       tour_id: string
     } | null
 
-    // Fetch the tour timezone for local time formatting.
+    // Fetch the tour timezone: the fallback for local time formatting until a
+    // specific show's own resolved venue zone is known (below).
     const { data: tour } = await admin
       .from('tours')
       .select('timezone')
@@ -110,13 +112,18 @@ export const boardingPassJob = task({
         .format(new Date(seg.arrive_at))
       const { data: destShow } = await admin
         .from('shows')
-        .select('id, venue_name')
+        .select('id, venue_name, timezone')
         .eq('tour_id', payload.tour_id)
         .eq('date', arriveDate)
         .maybeSingle()
 
       if (destShow) {
         destinationVenue = destShow.venue_name
+
+        // The load-in is that show's own event, so it renders in that show's
+        // resolved venue zone when it has one, not the tour's: a crew member
+        // landing in Perth on a Sydney tour needs Perth's load-in time.
+        const destTimezone = resolveTimezone(destShow, timezone)
 
         // Brief 42: the load-in is a day_items row. Read through the same helper
         // the planner and the day header use, so the time on a crew member's
@@ -127,7 +134,7 @@ export const boardingPassJob = task({
         const { items } = await fetchShowItems(admin, destShow.id)
         const showLoadIn = firstItemOfKind(items, 'load_in')?.starts_at ?? null
         if (showLoadIn) {
-          loadIn = formatTime(showLoadIn, timezone)
+          loadIn = formatTime(showLoadIn, destTimezone)
         }
       }
     }

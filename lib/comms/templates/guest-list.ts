@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { resolveTimezone } from '@/lib/schedule/datetime'
 import { resolveNextShow, formatShowDate } from '@/lib/comms/guest-request'
 
 // /guestlist slash command. Zero-AI template render, the same shape as /crew.
@@ -16,7 +17,11 @@ export async function renderGuestList(person_id: string, tour_id: string): Promi
     .select('timezone')
     .eq('id', tour_id)
     .maybeSingle()
-  const tz = tour?.timezone ?? 'UTC'
+  // No show is known yet at this point (the next show is what this call is about
+  // to resolve), so there is no per-record zone to prefer here. Still routed
+  // through resolveTimezone, the one shared authority for "which zone", rather
+  // than a second ad hoc `?? 'UTC'` growing beside it.
+  const tz = resolveTimezone({ timezone: null }, tour?.timezone ?? null)
 
   const show = await resolveNextShow(admin, tour_id, tz)
   if (!show) return 'No upcoming show on this tour yet.'
