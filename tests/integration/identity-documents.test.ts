@@ -3,7 +3,11 @@ import { testDb } from './test-db'
 import { createFixture, destroyFixture, type Fixture } from './fixture'
 import { sortIdentityDocuments } from '@/lib/identity/kinds'
 import { expiryStatus } from '@/lib/roster/expiry'
-import { createIdentityDocument } from '@/lib/actions/identity-documents'
+import {
+  createIdentityDocument,
+  setPrimaryIdentityDocument,
+  deleteIdentityDocument,
+} from '@/lib/actions/identity-documents'
 
 // REE-196 / Brief 45. identity_documents carries its guarantees as a check
 // constraint and two partial unique indexes, and neither exists in the
@@ -299,5 +303,108 @@ describe('createIdentityDocument cleans up the uploaded object when the row is n
 
     expect(error).toBeNull()
     expect(objects ?? []).toHaveLength(0)
+  })
+})
+
+// REE-200 / Brief 45 step 5. syncPassportCache is a private helper, exercised
+// only through the actions that call it: create and setPrimaryIdentityDocument
+// write the five contacts.passport_* columns forward from the primary
+// passport, and deleteIdentityDocument never touches them. That last part is
+// the assertion that protects hand-typed data: a TM may have typed a passport
+// number long before any scan existed, and deleting the record that happened
+// to have last written the cache must not erase it.
+//
+// Red first: call syncPassportCache from deleteIdentityDocument and the third
+// assertion below fails, because deleting the (now primary) second passport
+// clears the cache instead of leaving it exactly as setPrimary left it.
+
+function passportFields(fd: FormData, overrides: Record<string, string>) {
+  fd.set('kind', 'passport')
+  fd.set('document_number', overrides.document_number)
+  fd.set('surname', overrides.surname)
+  fd.set('given_names', overrides.given_names)
+  fd.set('issuing_country', overrides.issuing_country)
+  fd.set('expiry_date', overrides.expiry_date)
+}
+
+async function passportCache(contactId: string) {
+  const { data } = await testDb
+    .from('contacts')
+    .select('passport_number, passport_surname, passport_first_names, passport_country, passport_expiry')
+    .eq('id', contactId)
+    .single()
+  return data
+}
+
+describe('syncPassportCache mirrors the primary passport onto contacts.passport_*', () => {
+  let fixture: Fixture
+
+  beforeEach(async () => {
+    fixture = await createFixture()
+  })
+
+  afterEach(async () => {
+    await destroyFixture(fixture)
+  })
+
+  it('writes on create, writes again on set-primary, and is unchanged by delete', async () => {
+    const first = new FormData()
+    passportFields(first, {
+      document_number: '111111111',
+      surname: 'OKAFOR',
+      given_names: 'MICHAEL JAMES',
+      issuing_country: 'GBR',
+      expiry_date: '2030-01-01',
+    })
+    first.set('file', pdfFile('first.pdf'))
+    const firstResult = await createIdentityDocument(fixture.contactId, first)
+    expect(firstResult.error).toBeNull()
+
+    try {
+      const afterFirstCreate = await passportCache(fixture.contactId)
+      expect(afterFirstCreate).toEqual({
+        passport_number: '111111111',
+        passport_surname: 'OKAFOR',
+        passport_first_names: 'MICHAEL JAMES',
+        passport_country: 'GBR',
+        passport_expiry: '2030-01-01',
+      })
+
+      const second = new FormData()
+      passportFields(second, {
+        document_number: '222222222',
+        surname: 'REYES',
+        given_names: 'ANA SOFIA',
+        issuing_country: 'ESP',
+        expiry_date: '2031-06-15',
+      })
+      second.set('file', pdfFile('second.pdf'))
+      const secondResult = await createIdentityDocument(fixture.contactId, second)
+      expect(secondResult.error).toBeNull()
+
+      try {
+        const setPrimaryResult = await setPrimaryIdentityDocument(secondResult.documentId!)
+        expect(setPrimaryResult.error).toBeNull()
+
+        const afterSetPrimary = await passportCache(fixture.contactId)
+        expect(afterSetPrimary).toEqual({
+          passport_number: '222222222',
+          passport_surname: 'REYES',
+          passport_first_names: 'ANA SOFIA',
+          passport_country: 'ESP',
+          passport_expiry: '2031-06-15',
+        })
+
+        const deleteResult = await deleteIdentityDocument(secondResult.documentId!)
+        expect(deleteResult.error).toBeNull()
+
+        const afterDelete = await passportCache(fixture.contactId)
+        expect(afterDelete).toEqual(afterSetPrimary)
+      } finally {
+        await cleanupUploadedObject(secondResult.documentId!)
+      }
+    } finally {
+      await cleanupUploadedObject(firstResult.documentId!)
+    }
   })
 })
