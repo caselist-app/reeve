@@ -136,7 +136,10 @@ export function TourSettingsForm({ tour }: Props) {
         <div className="space-y-2">
           <Label>
             Tour timezone
-            <span className="ml-1 text-xs text-muted-foreground">used for day sheet times</span>
+            <span className="ml-1 text-xs text-muted-foreground">
+              Used before a show or rehearsal&apos;s venue timezone is known, and for anything not
+              tied to a specific one.
+            </span>
           </Label>
           <Select name="timezone" value={timezone} onValueChange={setTimezone}>
             <SelectTrigger>

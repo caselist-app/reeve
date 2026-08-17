@@ -18,6 +18,7 @@ import {
   type ShowRemovalPreview,
 } from '@/lib/actions/shows'
 import { useSidePanel } from '@/stores/side-panel-store'
+import { TOUR_TIMEZONES } from '@/lib/validators/tour'
 import type { Show } from '@/lib/validators/show'
 
 interface VenuePanelProps {
@@ -244,6 +245,19 @@ export function VenuePanel({ tourId, showId, venueName }: VenuePanelProps) {
                 </Button>
               </div>
             </div>
+          )}
+
+          {/* Symmetrical with the unresolved-state banner above: once the venue's
+              timezone is known, say so, so a TM stops assuming every time on this
+              show is in the tour's own zone. Nothing renders before then, since a
+              placeholder here would read as a value rather than a pending state. */}
+          {detail.show.timezone && (
+            <p className="mb-4 text-xs text-muted-foreground">
+              Times shown in{' '}
+              {TOUR_TIMEZONES.find((tz) => tz.value === detail.show.timezone)?.label ??
+                detail.show.timezone}
+              .
+            </p>
           )}
 
           <ShowForm
