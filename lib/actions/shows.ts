@@ -209,6 +209,11 @@ export async function updateShow(
             hub_resolved_at: inlineHub && (inlineHub.iata || inlineHub.rail)
               ? new Date().toISOString()
               : null,
+            // The resolved timezone is cached off the old address the same way
+            // the hub fields are, and has no symptom on the show row itself if
+            // it goes stale: times still render, just in the wrong zone, with
+            // nothing on screen saying so. REE-245.
+            timezone: null,
           }
         : {}),
     })
