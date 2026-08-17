@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
+import { resolveTimezone } from '@/lib/schedule/datetime'
 import { RehearsalForm } from '@/components/schedule/rehearsal-form'
 import { PageLayout } from '@/components/layout/page-layout'
 import { PageHeader } from '@/components/layout/page-header'
@@ -27,7 +28,7 @@ export default async function RehearsalDetailPage({
 
   const { data: tour } = await supabase
     .from('tours')
-    .select('id, name, artists(name)')
+    .select('id, name, timezone, artists(name)')
     .eq('id', id)
     .eq('account_id', user.id)
     .single()
@@ -42,6 +43,8 @@ export default async function RehearsalDetailPage({
     .single()
 
   if (!rehearsal) redirect(`/tours/${id}/schedule`)
+
+  const timezone = resolveTimezone(rehearsal, tour.timezone)
 
   const tourDate = Array.isArray(rehearsal.tour_dates)
     ? rehearsal.tour_dates[0]
@@ -74,6 +77,7 @@ export default async function RehearsalDetailPage({
           end_at: rehearsal.end_at,
           notes: rehearsal.notes,
         }}
+        timezone={timezone}
       />
     </PageLayout>
   )
