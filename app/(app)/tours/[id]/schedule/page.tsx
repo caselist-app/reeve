@@ -20,7 +20,7 @@ export default async function SchedulePage({
 
   if (!tour) redirect('/')
 
-  const selectedDate = dateParam ?? defaultScheduleDate(dates)
+  const selectedDate = dateParam ?? defaultScheduleDate(dates, tour.timezone ?? 'UTC')
   const tourDate = dates.find((d) => d.date === selectedDate) ?? null
   // The grid and its gutter labels render in the day's own venue timezone once
   // resolveHub has resolved one (REE-246, Brief 56: a Perth show on a Sydney
