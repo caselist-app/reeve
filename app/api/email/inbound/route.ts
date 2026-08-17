@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from 'crypto'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { tasks } from '@trigger.dev/sdk/v3'
 import { redis } from '@/lib/redis'
+import { enqueueWithClaim } from '@/lib/comms/inbound-claim'
 
 // Same root domain as lib/comms/email.ts. Read independently here rather than
 // imported, since this is a route module and the two call sites never drift
@@ -102,17 +103,6 @@ export async function POST(request: NextRequest) {
   // Deduplicate on the Svix delivery id. Svix retries on non-200 responses;
   // a second delivery would otherwise produce a duplicate extraction job and row.
   const svixId = request.headers.get('svix-id')
-  if (svixId) {
-    try {
-      const claimed = await redis.set(`email:dedup:${svixId}`, '1', { nx: true, ex: 60 * 60 * 24 })
-      if (claimed === null) {
-        return NextResponse.json({ status: 'duplicate' })
-      }
-    } catch {
-      // Redis unavailable: proceed. Worst case is a duplicate extraction job,
-      // which the TM can discard from the UI. Dropping a real email is worse.
-    }
-  }
 
   // The recipient address tells us which tour this is for.
   // advancing@{artist_slug}.tourwithreeve.com -> look up artist by slug, then route to most recent active tour.
@@ -151,33 +141,63 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Tour not found' }, { status: 200 })
   }
 
-  // Store the raw email metadata. The extraction job fetches the body from
-  // Resend's API and writes proposed_rows back. Keeping this handler fast
-  // avoids Svix redelivery retries that would produce duplicate rows.
-  const { data: forwarded, error: insertError } = await admin
-    .from('forwarded_emails')
-    .insert({
-      tour_id: tour.id,
-      from_address: fromAddress,
-      subject,
-      body_text: '',
-      attachments_json: [],
-      extraction_status: 'pending',
-    })
-    .select('id')
-    .single()
+  // Claim the Svix delivery id, store the raw email metadata, and enqueue the
+  // extraction job, releasing the claim if either the insert or the enqueue
+  // throws. Without the release, a transient storage or Trigger.dev failure
+  // would strand the claim: Svix's retry of the same delivery would hit the
+  // dedup guard, get a 200, and the email would be lost for the full claim
+  // TTL. Same helper and rule the WhatsApp and Telegram routes use. Gating
+  // the insert behind the claim (rather than dedup-checking before it, as
+  // this route used to) also means a genuine duplicate delivery never
+  // produces a duplicate forwarded_emails row in the first place.
+  let enqueued: boolean
+  try {
+    enqueued = await enqueueWithClaim({
+      claimKey: svixId ? `email:dedup:${svixId}` : null,
+      claim: (key) => redis.set(key, '1', { nx: true, ex: 60 * 60 * 24 }),
+      release: (key) => redis.del(key),
+      enqueue: async () => {
+        // Store the raw email metadata. The extraction job fetches the body
+        // from Resend's API and writes proposed_rows back. Keeping this
+        // handler fast avoids Svix redelivery retries that would produce
+        // duplicate rows.
+        const { data: forwarded, error: insertError } = await admin
+          .from('forwarded_emails')
+          .insert({
+            tour_id: tour.id,
+            from_address: fromAddress,
+            subject,
+            body_text: '',
+            attachments_json: [],
+            extraction_status: 'pending',
+          })
+          .select('id')
+          .single()
 
-  if (insertError || !forwarded) {
-    console.error('[email/inbound] failed to store forwarded email:', insertError)
-    return NextResponse.json({ error: 'Storage failed' }, { status: 500 })
+        if (insertError || !forwarded) {
+          console.error('[email/inbound] failed to store forwarded email:', insertError)
+          throw new Error('Storage failed')
+        }
+
+        // Enqueue the Sonnet extraction job with the Resend email_id so it
+        // can fetch the body.
+        await tasks.trigger('extract-forward', {
+          forwarded_email_id: forwarded.id,
+          email_id: emailId,
+        })
+      },
+    })
+  } catch (err) {
+    // Deliberate non-200. Svix retries, and the claim is now free for the
+    // retry to get through, so a transient storage or Trigger.dev outage
+    // recovers by itself. Dropping a forwarded email is worse than a retry.
+    console.error('email inbound: enqueue failed', err)
+    return NextResponse.json({ error: 'Enqueue failed' }, { status: 500 })
   }
 
-  // Enqueue the Sonnet extraction job with the Resend email_id so it can
-  // fetch the body. Return 200 immediately.
-  await tasks.trigger('extract-forward', {
-    forwarded_email_id: forwarded.id,
-    email_id: emailId,
-  })
+  if (!enqueued) {
+    return NextResponse.json({ status: 'duplicate' })
+  }
 
   return NextResponse.json({ status: 'ok' })
 }
