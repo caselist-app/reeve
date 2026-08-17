@@ -2,7 +2,16 @@
 
 import { requireUser } from '@/lib/auth/helpers'
 
-export type DriveTimeResult = { arrive_at: string | null; duration_min: number | null }
+export type DriveTimeResult =
+  | { arrive_at: string; duration_min: number; error?: undefined }
+  | { arrive_at: null; duration_min: null; error: string }
+
+const NO_ROUTE_ERROR = 'Could not find a route between these addresses. Check them and try again.'
+const LOOKUP_FAILED_ERROR = 'Could not calculate the drive time. Try again.'
+
+function driveTimeFailure(error: string): DriveTimeResult {
+  return { arrive_at: null, duration_min: null, error }
+}
 
 // Calls Google Maps Directions API to get drive duration between two addresses.
 // Returns arrive_at as a UTC ISO string computed from departure + duration.
@@ -15,7 +24,7 @@ export async function getDriveTime(
   await requireUser()
 
   const apiKey = process.env.GOOGLE_MAPS_API_KEY
-  if (!apiKey) return { arrive_at: null, duration_min: null }
+  if (!apiKey) return driveTimeFailure(LOOKUP_FAILED_ERROR)
 
   try {
     // Convert departure local time to Unix timestamp for Google.
@@ -37,10 +46,10 @@ export async function getDriveTime(
       routes: Array<{ legs: Array<{ duration_in_traffic?: { value: number }; duration: { value: number } }> }>
     }
 
-    if (data.status !== 'OK' || !data.routes[0]) return { arrive_at: null, duration_min: null }
+    if (data.status !== 'OK' || !data.routes[0]) return driveTimeFailure(NO_ROUTE_ERROR)
 
     const leg = data.routes[0].legs[0]
-    if (!leg) return { arrive_at: null, duration_min: null }
+    if (!leg) return driveTimeFailure(NO_ROUTE_ERROR)
 
     const durationSec = leg.duration_in_traffic?.value ?? leg.duration.value
     const durationMin = Math.round(durationSec / 60)
@@ -50,6 +59,6 @@ export async function getDriveTime(
 
     return { arrive_at: arriveAt, duration_min: durationMin }
   } catch {
-    return { arrive_at: null, duration_min: null }
+    return driveTimeFailure(LOOKUP_FAILED_ERROR)
   }
 }
