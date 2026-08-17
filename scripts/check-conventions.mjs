@@ -68,13 +68,13 @@ const sourceFiles = SOURCE_DIRS
   .filter((f) => ['.ts', '.tsx', '.mjs'].includes(extname(f)))
   .filter((f) => !GENERATED.has(rel(f)))
 
-// Extracts exported async functions as { name, body, index }. Brace counting,
-// which is good enough here: these files are formatted and none of them put a
-// stray unmatched brace inside a string literal. If that ever changes this
-// check gets noisier, not wrong.
-function exportedAsyncFunctions(src) {
+// Extracts async functions matching `pattern` as { name, body, index,
+// returnType }. Brace counting, which is good enough here: these files are
+// formatted and none of them put a stray unmatched brace inside a string
+// literal. If that ever changes this check gets noisier, not wrong.
+function asyncFunctionsMatching(src, pattern) {
   const found = []
-  const re = /export\s+async\s+function\s+(\w+)\s*\(/g
+  const re = pattern
   let m
   while ((m = re.exec(src)) !== null) {
     // Find the body's opening brace, not the first brace after the name. Half
@@ -124,6 +124,18 @@ function exportedAsyncFunctions(src) {
   return found
 }
 
+function exportedAsyncFunctions(src) {
+  return asyncFunctionsMatching(src, /export\s+async\s+function\s+(\w+)\s*\(/g)
+}
+
+// Every async function in the file, exported or not. Rule 2 needs this: an
+// exported action can dispatch to unexported same-file helpers that do the
+// actual write and the actual revalidate, and looking only at exported
+// functions makes those helpers invisible to the check (REE-71).
+function allAsyncFunctions(src) {
+  return asyncFunctionsMatching(src, /(?:export\s+)?async\s+function\s+(\w+)\s*\(/g)
+}
+
 // ---- Rule 1: requireUser() is the first statement of every server action ----
 // Server actions are publicly POSTable endpoints. Validating input, or doing
 // anything else, before the auth gate means unauthenticated callers reach that
@@ -157,26 +169,129 @@ for (const file of sourceFiles) {
 // ---- Rule 2: actions writing schedule-rendered tables must revalidate ----
 // Forgetting this is silent: the panel says "Saved." and the timeline keeps the
 // old value. It shipped three separate times before this check existed.
+//
+// An exported action's own body is not the whole story: it can dispatch to
+// unexported same-file helpers and do nothing else itself, in which case its
+// body has no write and no revalidate for this rule to find, and the file
+// passes because there is nothing to look at, not because anything was
+// checked. move-schedule-item.ts is exactly this shape: moveScheduleItem only
+// switches over move.source, and moveDayItem, moveSegment and moveHotel, none
+// of them exported, hold every write and every revalidatePath (REE-71).
+//
+// The fix is not a flat merge of everything reachable from the export. A
+// switch's cases are mutually exclusive per call, so merging their text
+// together lets one case's revalidatePath silently cover for a sibling case
+// that has none: an early version of this fix did exactly that, and stayed
+// green after deleting moveSegment's revalidatePath, because moveDayItem's
+// was still sitting in the same merged blob. So a top-level switch in an
+// exported function's own body is split into independent branches (the code
+// outside the switch, which runs on every call, plus exactly one case each),
+// and each branch is checked on its own.
+//
+// Outside a switch, a flat merge is the right model: identity-documents.ts
+// calls syncPassportCache() and revalidateContact() as two sequential,
+// unconditional statements in the same function body, and both always run on
+// every call, so their bodies are merged rather than kept apart. Only a
+// switch's cases are exclusive; sequential calls are not.
 for (const file of sourceFiles) {
   const src = readFileSync(file, 'utf8')
   if (!src.includes("'use server'")) continue
 
-  for (const fn of exportedAsyncFunctions(src)) {
-    const written = SCHEDULE_TABLES.filter((t) => {
-      const re = new RegExp(`from\\(['"\`]${t}['"\`]\\)[\\s\\S]{0,200}?\\.(insert|update|upsert|delete)\\(`)
-      return re.test(fn.body)
-    })
-    if (written.length === 0) continue
+  const byName = new Map(allAsyncFunctions(src).map((fn) => [fn.name, fn.body]))
+  const reportedKeys = new Set()
 
-    const revalidatesSchedule = /revalidatePath\([^)]*schedule/.test(fn.body)
-    if (!revalidatesSchedule) {
-      report(
-        'revalidate-schedule',
-        rel(file),
-        lineOf(src, fn.index),
-        `${fn.name}() writes ${written.join(', ')} but never revalidates the schedule route.`,
-        `revalidate-schedule|${rel(file)}|${fn.name}`
-      )
+  function writesSchedule(body) {
+    return SCHEDULE_TABLES.filter((t) => {
+      const re = new RegExp(`from\\(['"\`]${t}['"\`]\\)[\\s\\S]{0,200}?\\.(insert|update|upsert|delete)\\(`)
+      return re.test(body)
+    })
+  }
+
+  // This function's body plus every same-file async function reachable from
+  // it, transitively, by name match. A name match inside another function's
+  // body is treated as a call, which is right for the plain top-level
+  // dispatch these files use and would over-match on something cleverer (a
+  // callback, a higher-order function). Good enough for the shapes here.
+  function reachableMergedText(rootBody) {
+    const seen = new Set()
+    const queue = [rootBody]
+    const bodies = []
+    while (queue.length > 0) {
+      const body = queue.pop()
+      bodies.push(body)
+      for (const [calleeName, calleeBody] of byName) {
+        if (!seen.has(calleeName) && new RegExp(`\\b${calleeName}\\s*\\(`).test(body)) {
+          seen.add(calleeName)
+          queue.push(calleeBody)
+        }
+      }
+    }
+    return bodies.join('\n')
+  }
+
+  // Splits a function body around its first top-level switch statement into
+  // the shared code (runs on every call) and one text segment per case (runs
+  // on only that call). Returns null when there is no switch, so the caller
+  // falls back to treating the whole body as one branch.
+  function splitSwitchBranches(body) {
+    const switchMatch = /switch\s*\(/.exec(body)
+    if (!switchMatch) return null
+    const openBrace = body.indexOf('{', switchMatch.index)
+    if (openBrace === -1) return null
+    let depth = 0
+    let end = openBrace
+    for (; end < body.length; end++) {
+      if (body[end] === '{') depth++
+      else if (body[end] === '}') {
+        depth--
+        if (depth === 0) break
+      }
+    }
+    const switchBody = body.slice(openBrace + 1, end)
+    const prefix = body.slice(0, switchMatch.index)
+    const suffix = body.slice(end + 1)
+
+    const markers = [...switchBody.matchAll(/(?:case\s+[^:]+|default)\s*:/g)]
+    if (markers.length === 0) return null
+    const cases = markers.map((m, i) => {
+      const start = m.index + m[0].length
+      const stop = i + 1 < markers.length ? markers[i + 1].index : switchBody.length
+      return { label: m[0].replace(/:$/, '').trim(), text: switchBody.slice(start, stop) }
+    })
+    return { prefix, suffix, cases }
+  }
+
+  function checkRoot(exportedFn, label, rootBody) {
+    const merged = reachableMergedText(rootBody)
+    const written = writesSchedule(merged)
+    if (written.length === 0) return
+
+    const revalidatesSchedule = /revalidatePath\([^)]*schedule/.test(merged)
+    if (revalidatesSchedule) return
+
+    const key = `revalidate-schedule|${rel(file)}|${exportedFn.name}${label ? `|${label}` : ''}`
+    if (reportedKeys.has(key)) return
+    reportedKeys.add(key)
+    report(
+      'revalidate-schedule',
+      rel(file),
+      lineOf(src, exportedFn.index),
+      label
+        ? `${exportedFn.name}() writes ${written.join(', ')} in its ${label} branch but never revalidates the schedule route there.`
+        : `${exportedFn.name}() writes ${written.join(', ')} but never revalidates the schedule route.`,
+      key
+    )
+  }
+
+  for (const fn of exportedAsyncFunctions(src)) {
+    const split = splitSwitchBranches(fn.body)
+    if (!split) {
+      checkRoot(fn, null, fn.body)
+      continue
+    }
+    for (const { label, text } of split.cases) {
+      if (!text.trim()) continue
+      checkRoot(fn, label, split.prefix + text + split.suffix)
     }
   }
 }
