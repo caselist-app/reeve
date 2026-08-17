@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useState, useId } from 'react'
+import { useState, useId, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { createArtistAction } from '@/lib/actions/artists'
 import { Button } from '@/components/ui/button'
@@ -17,15 +17,35 @@ function toSlug(value: string): string {
 export function NewArtistForm() {
   const formId = useId()
   const router = useRouter()
-  const [state, formAction, pending] = useActionState(createArtistAction, { error: null })
+  const [pending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
   const [slug, setSlug] = useState('')
 
-  if (state.artistId) {
-    router.push('/tours/new')
+  // Navigating from a render-body side effect (the previous useActionState
+  // version called router.push directly whenever state.artistId was truthy)
+  // races the revalidatePath the server action just issued: the push can
+  // fire before Next.js has committed the invalidation, serving /tours/new
+  // a stale Router Cache snapshot missing the new artist (REE-261). Routing
+  // from inside the transition, after the action's promise has resolved,
+  // is the pattern every other form in this app uses (useEntityForm,
+  // new-tour-form.tsx) and keeps the push strictly after the revalidation.
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    setError(null)
+    const formData = new FormData(e.currentTarget)
+
+    startTransition(async () => {
+      const result = await createArtistAction({ error: null }, formData)
+      if (result.error || !result.artistId) {
+        setError(result.error ?? 'Failed to create artist')
+        return
+      }
+      router.push('/tours/new')
+    })
   }
 
   return (
-    <form action={formAction} className="space-y-5">
+    <form onSubmit={handleSubmit} className="space-y-5">
       <div className="space-y-2">
         <Label htmlFor={`${formId}-name`}>Artist name</Label>
         <Input
@@ -52,8 +72,8 @@ export function NewArtistForm() {
         />
       </div>
 
-      {state.error && (
-        <p className="text-sm text-destructive">{state.error}</p>
+      {error && (
+        <p className="text-sm text-destructive">{error}</p>
       )}
 
       <Button type="submit" className="w-full" disabled={pending}>
