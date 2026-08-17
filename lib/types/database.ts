@@ -1153,9 +1153,12 @@ export type Database = {
           location_name: string
           notes: string | null
           start_at: string | null
+          timezone: string | null
           tour_date_id: string
           tour_id: string
           updated_at: string
+          venue_lat: number | null
+          venue_lng: number | null
         }
         Insert: {
           address?: string | null
@@ -1166,9 +1169,12 @@ export type Database = {
           location_name: string
           notes?: string | null
           start_at?: string | null
+          timezone?: string | null
           tour_date_id: string
           tour_id: string
           updated_at?: string
+          venue_lat?: number | null
+          venue_lng?: number | null
         }
         Update: {
           address?: string | null
@@ -1179,9 +1185,12 @@ export type Database = {
           location_name?: string
           notes?: string | null
           start_at?: string | null
+          timezone?: string | null
           tour_date_id?: string
           tour_id?: string
           updated_at?: string
+          venue_lat?: number | null
+          venue_lng?: number | null
         }
         Relationships: [
           {
@@ -1338,6 +1347,7 @@ export type Database = {
           stage_dimensions: string | null
           stagehands: number | null
           tech_pack_document_id: string | null
+          timezone: string | null
           tour_date_id: string
           tour_id: string
           transport_hub_iata: string | null
@@ -1373,6 +1383,7 @@ export type Database = {
           stage_dimensions?: string | null
           stagehands?: number | null
           tech_pack_document_id?: string | null
+          timezone?: string | null
           tour_date_id: string
           tour_id: string
           transport_hub_iata?: string | null
@@ -1408,6 +1419,7 @@ export type Database = {
           stage_dimensions?: string | null
           stagehands?: number | null
           tech_pack_document_id?: string | null
+          timezone?: string | null
           tour_date_id?: string
           tour_id?: string
           transport_hub_iata?: string | null
