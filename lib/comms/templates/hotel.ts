@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { localDateInZone } from '@/lib/schedule/datetime'
 
 // /hotel slash command. Zero-AI template render.
 // Returns the person's next hotel stay.
@@ -9,7 +10,17 @@ export async function renderHotel(
 ): Promise<string> {
   const admin = createAdminClient()
 
-  const today = new Date().toISOString().split('T')[0]
+  // "Today" is the tour-local day, not the server's UTC day: see the note in
+  // itinerary.ts. A stay that has already started tour-locally but not yet in
+  // UTC (or the reverse) must not be dropped from, or wrongly kept in, "next
+  // upcoming".
+  const { data: tour } = await admin
+    .from('tours')
+    .select('timezone')
+    .eq('id', tour_id)
+    .single()
+
+  const today = localDateInZone(new Date().toISOString(), tour?.timezone ?? 'UTC')
 
   // Query the stays, not the assignments. A PostgREST filter on an embedded
   // resource does not filter the parent rows, and the top level cannot be

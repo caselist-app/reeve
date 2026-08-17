@@ -76,7 +76,7 @@ export async function DayContent({ tourId, tourName, timezone, selectedDate, tou
         <DateStrip
           tourId={tourId}
           dates={dates}
-          defaultDate={defaultScheduleDate(dates)}
+          defaultDate={defaultScheduleDate(dates, timezone)}
         />
       }
       addContext={{

@@ -24,7 +24,7 @@ export default async function ScheduleSecondaryPanelLayout({
 
   return (
     <>
-      <DateSidebar tourId={id} dates={dates} defaultDate={defaultScheduleDate(dates)} />
+      <DateSidebar tourId={id} dates={dates} defaultDate={defaultScheduleDate(dates, tour.timezone ?? 'UTC')} />
       {children}
     </>
   )

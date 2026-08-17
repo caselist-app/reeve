@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
+import { localDateInZone } from '@/lib/schedule/datetime'
 
 // Tour home redirects to the next upcoming schedule date, or the most recent
 // past date if the tour has finished, or the schedule list if no dates exist.
@@ -15,14 +16,14 @@ export default async function TourHomePage({
 
   const { data: tour } = await supabase
     .from('tours')
-    .select('id')
+    .select('id, timezone')
     .eq('id', id)
     .eq('account_id', user.id)
     .single()
 
   if (!tour) redirect('/')
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = localDateInZone(new Date().toISOString(), tour.timezone ?? 'UTC')
 
   // Try the next upcoming date first.
   const { data: next } = await supabase
