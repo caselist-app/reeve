@@ -32,8 +32,10 @@ const SHORTCUT_MAP: Record<string, DayTypeOption> = Object.fromEntries(
 export function DayTypePicker({ onSelect }: DayTypePickerProps) {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
-      const tag = (e.target as HTMLElement).tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return
+      if (e.metaKey || e.ctrlKey || e.altKey) return
+      const target = e.target as HTMLElement | null
+      const tag = target?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || target?.isContentEditable) return
       const key = e.key.toUpperCase()
       const dayType = SHORTCUT_MAP[key]
       if (dayType) {
