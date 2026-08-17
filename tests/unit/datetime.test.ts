@@ -6,6 +6,7 @@ import {
   localDateInZone,
   localTimeInZone,
   localDayWindowUtc,
+  resolveTimezone,
   addDays,
   daysBetween,
 } from '@/lib/schedule/datetime'
@@ -112,6 +113,22 @@ describe('toDatetimeLocal and fromDatetimeLocal round trip', () => {
   it('treats an empty input as a cleared value rather than an instant', () => {
     expect(fromDatetimeLocal('', 'Europe/London')).toBeNull()
     expect(fromDatetimeLocal(null, 'Europe/London')).toBeNull()
+  })
+})
+
+describe('resolveTimezone', () => {
+  it('returns the record timezone regardless of the tour timezone', () => {
+    expect(resolveTimezone({ timezone: 'Pacific/Auckland' }, 'Europe/London')).toBe(
+      'Pacific/Auckland',
+    )
+  })
+
+  it('falls back to the tour timezone when the record has none', () => {
+    expect(resolveTimezone({ timezone: null }, 'Europe/London')).toBe('Europe/London')
+  })
+
+  it('falls back to UTC when neither the record nor the tour has one', () => {
+    expect(resolveTimezone({ timezone: null }, null)).toBe('UTC')
   })
 })
 
