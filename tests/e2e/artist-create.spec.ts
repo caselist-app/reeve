@@ -31,6 +31,13 @@ test('creating an artist from the workspace nav saves its slug', async ({ page }
 
   await expect(page).toHaveURL('/tours/new')
 
+  // REE-261: createArtistAction had no revalidatePath, so the router.push
+  // above could land on a Router Cache snapshot of /tours/new from before
+  // the artist existed, silently leaving it out of the picker.
+  await page.getByRole('combobox', { name: 'Select artist' }).click()
+  await expect(page.getByRole('option', { name: artistName })).toBeVisible()
+  await page.keyboard.press('Escape')
+
   const { data: artist, error } = await testDb
     .from('artists')
     .select('id, slug')
