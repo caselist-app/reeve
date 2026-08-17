@@ -41,7 +41,7 @@ type ScheduleHotelStay = Pick<
 // of kind 'other', so one panel edits everything on a day.
 type ScheduleDayItem = Pick<
   Tables<'day_items'>,
-  'id' | 'show_id' | 'kind' | 'title' | 'starts_at' | 'ends_at' | 'location' | 'notes'
+  'id' | 'kind' | 'title' | 'starts_at' | 'ends_at' | 'location' | 'notes'
 >
 
 // Mirrors AddCategory from components/schedule/add/add-flow.tsx
@@ -164,11 +164,18 @@ export type PanelDescriptor =
       // Brief 42: one panel for anything on a day, replacing the show panel's
       // twenty-field day sheet and the event panel. `tourId` is here for the
       // change alert: who to notify is resolved from the tour's people.
+      //
+      // dayShowId is the show on this item's day, if any (REE-96), resolved by
+      // the caller from tour_date_id rather than read off the item: a typed
+      // item's own show_id is null even on a show day, so gating the notify
+      // offer on the item's column offered nothing for anything typed since
+      // Brief 42. null on a day with no show.
       type: 'day-item'
       key: string
       tourId: string
       item: ScheduleDayItem
       timezone: string
+      dayShowId: string | null
     }
   // Brief 33: the add-to-day form, opened from the category popover/sheet in
   // day-view-client.tsx. onBack closes this panel and reopens that picker,

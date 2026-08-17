@@ -12,9 +12,9 @@ const DAY_ITEM_PANEL: Extract<PanelDescriptor, { type: 'day-item' }> = {
   key: 'day_item:abc',
   tourId: 'tour-1',
   timezone: 'Europe/London',
+  dayShowId: null,
   item: {
     id: 'abc',
-    show_id: null,
     kind: 'catering_breakfast',
     title: 'Breakfast',
     starts_at: '2026-08-31T05:00:00.000Z',

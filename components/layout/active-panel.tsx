@@ -132,6 +132,7 @@ export function ActivePanel() {
           item={panel.item}
           tourId={panel.tourId}
           timezone={panel.timezone}
+          dayShowId={panel.dayShowId}
         />
       )
     case 'transport':
