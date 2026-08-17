@@ -16,18 +16,24 @@ import { useEntityForm } from '@/hooks/use-entity-form'
 import { readForm } from '@/lib/forms/read-form'
 import { useSidePanel } from '@/stores/side-panel-store'
 import { NotifyPanel } from '@/components/broadcast/notify-panel'
+import { resolveNotifyOffer, type NotifyOffer } from '@/lib/schedule/day-item-notify'
 import type { Tables } from '@/lib/types/database'
-import type { ChangeDescriptor } from '@/lib/comms/affected'
 
 type DayItem = Pick<
   Tables<'day_items'>,
-  'id' | 'show_id' | 'kind' | 'title' | 'starts_at' | 'ends_at' | 'location' | 'notes'
+  'id' | 'kind' | 'title' | 'starts_at' | 'ends_at' | 'location' | 'notes'
 >
 
 interface DayItemPanelProps {
   item: DayItem
   tourId: string
   timezone: string
+  // The show on this item's day, if any. Resolved by the caller from
+  // tour_date_id (day-calendar.tsx), not read off item.show_id: that column is
+  // null for anything typed through the add flow since Brief 42, show day or
+  // not, so gating the notify offer on it offered nothing for a typed item
+  // (REE-96). null on a day with no show.
+  dayShowId: string | null
 }
 
 // One panel for anything on a day. Brief 42, REE-17.
@@ -43,27 +49,14 @@ interface DayItemPanelProps {
 // deliberately cannot do that yet, so offering it would be a control that
 // silently does nothing. See lib/validators/day-item.ts.
 
-// Which kinds are worth offering to tell crew about when they move. Same two the
-// show panel offered, and the same reasoning: a load-in affects everyone
-// travelling to the venue that day, and a curfew affects transport home.
-//
-// Ordered, so a save that moves both offers one message rather than two, and
-// load_in wins because it reaches more people.
-const NOTIFY_KINDS = ['load_in', 'curfew'] as const
-
-type NotifyState = {
-  change: Extract<ChangeDescriptor, { type: 'show' }>
-  previousValue: string | null
-}
-
 function toClock(iso: string | null, tz: string): string {
   return iso ? localTimeInZone(iso, tz) : ''
 }
 
-export function DayItemPanel({ item, tourId, timezone }: DayItemPanelProps) {
+export function DayItemPanel({ item, tourId, timezone, dayShowId }: DayItemPanelProps) {
   const router = useRouter()
   const { close } = useSidePanel()
-  const [notify, setNotify] = useState<NotifyState | null>(null)
+  const [notify, setNotify] = useState<NotifyOffer | null>(null)
 
   const label = dayItemLabel(item.kind)
   const isCustom = item.kind === 'other'
@@ -110,21 +103,7 @@ export function DayItemPanel({ item, tourId, timezone }: DayItemPanelProps) {
       const start = submittedStart
       if (start === undefined) return
 
-      const isNotifiable = (NOTIFY_KINDS as readonly string[]).includes(item.kind)
-      // A freeform item has no show to hang a change alert off, and the alert's
-      // descriptor is keyed by show. Nothing to offer, so nothing is offered.
-      if (isNotifiable && item.show_id && (start ?? '') !== savedStart) {
-        setNotify({
-          change: {
-            type: 'show',
-            showId: item.show_id,
-            field: item.kind === 'load_in' ? 'load_in' : 'curfew',
-          },
-          // Null when there was nothing there before: an initial entry is not a
-          // change to anything, and "was TBC" reads worse than saying nothing.
-          previousValue: savedStart || null,
-        })
-      }
+      setNotify(resolveNotifyOffer(item.kind, dayShowId, start, savedStart))
 
       // Recorded whether or not it was notifiable, so the next save compares
       // against what is actually stored.

@@ -409,7 +409,8 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
       const key = `${source}:${recordId}`
       if (source === 'day_item') {
         const item = itemsById.get(recordId)
-        if (item) openSidePanel({ type: 'day-item', key, tourId, item, timezone })
+        const dayShowId = records.shows[0]?.id ?? null
+        if (item) openSidePanel({ type: 'day-item', key, tourId, item, timezone, dayShowId })
       } else if (source === 'segment') {
         const segment = segmentsById.get(recordId)
         if (segment) openSidePanel({ type: 'transport', key, tourId, segment, timezone })
@@ -418,7 +419,7 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
         if (stay) openSidePanel({ type: 'hotel', key, tourId, stay })
       }
     }
-  }, [itemsById, segmentsById, hotelsById, openSidePanel, tourId, timezone])
+  }, [itemsById, segmentsById, hotelsById, openSidePanel, tourId, timezone, records.shows])
 
   const openEvent = useMemo(() => {
     return (event: CalendarEvent) => openRecord(event.source, event.recordId)
