@@ -20,6 +20,44 @@ import type {
   WrapData,
 } from '@/lib/comms/templates/day-blocks'
 import type { NotificationDataMap, NotifyContact } from '@/lib/comms/notify/types'
+import type { SupabaseClient } from '@supabase/supabase-js'
+import type { Database } from '@/lib/types/database'
+
+// Everyone on the tour with at least one usable address. Telegram counts: a
+// Telegram-only contact has no whatsapp_number and no contact_email, so
+// filtering on those two alone would drop them before notify() ever resolved
+// their channels. This is the one definition of "contactable" for a day send,
+// shared with lib/actions/day-message.ts's resend preview/confirm so the count
+// a TM sees before pressing the button never drifts from who the send below
+// actually reaches. Works on either the RLS or the admin client: the caller
+// decides which is appropriate for its own tour-ownership check.
+//
+// sendDayMessage itself does not call this: it needs the fuller contact row
+// (name, operational_channel, email_enabled) to avoid notify() re-fetching it
+// per block per person (REE-108), so it runs its own richer query below with
+// the same filter.
+export async function fetchContactablePeople(
+  supabase: SupabaseClient<Database>,
+  tourId: string
+): Promise<{ people: { id: string }[]; error: string | null }> {
+  const { data, error } = await supabase
+    .from('people')
+    .select('id, contacts(whatsapp_number, telegram_chat_id, contact_email)')
+    .eq('tour_id', tourId)
+
+  if (error) return { people: [], error: error.message }
+
+  const people = (data ?? []).filter((r) => {
+    const c = r.contacts as {
+      whatsapp_number: string | null
+      telegram_chat_id: number | null
+      contact_email: string | null
+    } | null
+    return !!(c?.whatsapp_number || c?.telegram_chat_id || c?.contact_email)
+  })
+
+  return { people, error: null }
+}
 
 // The send half of the show-day message: given a tour and a date, sends the
 // opener/show-information/catering/wrap block sequence and the email digest

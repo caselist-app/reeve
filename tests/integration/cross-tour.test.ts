@@ -5,6 +5,8 @@ import { recordTransportOption, createTransportSegment } from '@/lib/actions/tra
 import { recordHotelOption, createHotelStay } from '@/lib/actions/hotels'
 import { createDayItem, updateDayItem } from '@/lib/actions/day-items'
 import { sendBroadcast, previewBroadcast } from '@/lib/actions/broadcast'
+import { previewDayResend, resendDay } from '@/lib/actions/day-message'
+import { resendDayJob } from '@/trigger/jobs/resend-day'
 
 // REE-206. recordHotelOption now awaits resolveHotelGeocodeJob.trigger() when the
 // option carries an address, which needs TRIGGER_SECRET_KEY and a running
@@ -13,6 +15,13 @@ import { sendBroadcast, previewBroadcast } from '@/lib/actions/broadcast'
 // create-show-revalidate.test.ts does for resolve-hub.
 vi.mock('@/trigger/jobs/resolve-hotel-geocode', () => ({
   resolveHotelGeocodeJob: { trigger: vi.fn() },
+}))
+
+// resendDay awaits resendDayJob.trigger(), same reason as above. Mocked so a
+// rejected cross-tour call can be told apart from one that simply never
+// reached Trigger.dev.
+vi.mock('@/trigger/jobs/resend-day', () => ({
+  resendDayJob: { trigger: vi.fn() },
 }))
 
 // CLAUDE.md: "RLS scopes rows by tour, it does not check that two ids in the
@@ -67,6 +76,7 @@ describe('cross-tour id checks', () => {
   beforeEach(async () => {
     fixture = await createFixture()
     other = await createSecondTour(fixture)
+    vi.mocked(resendDayJob.trigger).mockClear()
   })
 
   afterEach(async () => {
@@ -264,6 +274,38 @@ describe('cross-tour id checks', () => {
       expect(preview.people).toHaveLength(0)
       expect(preview.message).toBe('')
       expect(preview.message).not.toContain('Other Venue')
+    })
+  })
+
+  describe('day resend', () => {
+    it('accepts when the tour_date is on the tour', async () => {
+      const preview = await previewDayResend(fixture.tourId, fixture.tourDateId)
+      expect(preview.error).toBeNull()
+      expect(preview.date).toBe(fixture.date)
+
+      const result = await resendDay(fixture.tourId, fixture.tourDateId)
+      expect(result.error).toBeNull()
+    })
+
+    it('rejects a tour_date from another tour on preview', async () => {
+      // other.tourDateId's show is "Other Venue", on the other tour. Without the
+      // tour_id check this would come back describing that show instead of an
+      // error, the same leak previewBroadcast guards against above.
+      const preview = await previewDayResend(fixture.tourId, other.tourDateId)
+      expect(preview.error).toBeTruthy()
+      expect(preview.date).toBeNull()
+      expect(preview.venueName).toBeNull()
+    })
+
+    it('rejects a tour_date from another tour on send', async () => {
+      const result = await resendDay(fixture.tourId, other.tourDateId)
+      expect(result.error).toBeTruthy()
+      expect(result.sent).toBeUndefined()
+    })
+
+    it('triggers no job when it rejects', async () => {
+      await resendDay(fixture.tourId, other.tourDateId)
+      expect(resendDayJob.trigger).not.toHaveBeenCalled()
     })
   })
 })
