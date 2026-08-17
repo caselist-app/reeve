@@ -108,3 +108,15 @@ export interface Recipient {
   operationalChannel: 'whatsapp' | 'telegram' | null
   emailEnabled: boolean
 }
+
+// The raw people->contacts join shape notify() needs. A caller that already
+// holds this (having fetched it for its own purposes) can pass it straight
+// in and skip notify()'s own lookup. Same shape the join in notify() selects.
+export interface NotifyContact {
+  name: string
+  whatsapp_number: string | null
+  telegram_chat_id: number | null
+  contact_email: string | null
+  operational_channel: 'whatsapp' | 'telegram' | null
+  email_enabled: boolean
+}
