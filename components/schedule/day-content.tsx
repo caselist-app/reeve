@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { fetchDayRecords } from '@/lib/schedule/day-records'
 import { fetchDayRoster } from '@/lib/schedule/day-roster'
 import { fetchGuestListSummary } from '@/lib/schedule/guest-list-summary'
+import { fetchAdvanceSummary } from '@/lib/schedule/advance-summary'
 import { resolveHotelForDay } from '@/lib/schedule/day-hotel'
 import { resolveRehearsalForDay } from '@/lib/schedule/day-rehearsal'
 import { DayViewClient } from '@/components/schedule/day-view-client'
@@ -48,19 +49,21 @@ export async function DayContent({ tourId, tourName, timezone, selectedDate, tou
   })
 
   // Roster fetched once here and shared by the info panel and the mobile dock.
-  // The guest list count and the day's hotel for the info block ride alongside
-  // it: all three depend only on `records` or the day itself, so they run in
-  // parallel rather than in series. A day with no show passes a null show id
-  // and the summary short-circuits to zeros; a date with no tour_date row has
-  // no day to resolve a hotel for, so that call is skipped rather than run
-  // with a null link and a maybe-unrelated date match.
-  const [roster, guestListSummary, hotel, rehearsal] = await Promise.all([
+  // The guest list count, the advance summary and the day's hotel for the info
+  // block ride alongside it: all four depend only on `records` or the day
+  // itself, so they run in parallel rather than in series. A day with no show
+  // passes a null show id and both summaries short-circuit to zeros/defaults; a
+  // date with no tour_date row has no day to resolve a hotel for, so that call
+  // is skipped rather than run with a null link and a maybe-unrelated date
+  // match.
+  const [roster, guestListSummary, advanceSummary, hotel, rehearsal] = await Promise.all([
     fetchDayRoster(supabase, {
       tourId,
       segmentIds: records.segmentIds,
       hotelStayIds: records.hotelStayIds,
     }),
     fetchGuestListSummary(supabase, records.shows[0]?.id ?? null),
+    fetchAdvanceSummary(supabase, records.shows[0]?.id ?? null),
     tourDate
       ? resolveHotelForDay(supabase, { tourId, tourDateId: tourDate.id, date: selectedDate })
       : Promise.resolve(null),
@@ -125,6 +128,7 @@ export async function DayContent({ tourId, tourName, timezone, selectedDate, tou
           show={records.shows[0] ?? null}
           dayNotes={tourDate?.notes ?? null}
           guestListSummary={guestListSummary}
+          advanceSummary={advanceSummary}
           hotel={hotel}
           rehearsal={rehearsal}
         />

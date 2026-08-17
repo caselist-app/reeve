@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import { cn } from '@/lib/utils'
 import { updateAdvanceStatus } from '@/lib/actions/shows'
+import { useAdvanceStatuses } from '@/stores/advance-status-store'
 import type { Tables } from '@/lib/types/database'
 import type { Department, AdvanceStatus } from '@/lib/shows/advance'
 
@@ -35,11 +36,13 @@ export function AdvanceTracker({ showId, initialAdvance }: AdvanceTrackerProps) 
   })
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+  const setStoredStatuses = useAdvanceStatuses((s) => s.setStatuses)
 
   function setStatus(dept: Department, next: AdvanceStatus) {
     const prev = statuses[dept]
+    const optimistic = { ...statuses, [dept]: next }
     // Optimistic: reflect the change immediately before the server confirms.
-    setStatuses((s) => ({ ...s, [dept]: next }))
+    setStatuses(optimistic)
     setError(null)
 
     startTransition(async () => {
@@ -47,7 +50,15 @@ export function AdvanceTracker({ showId, initialAdvance }: AdvanceTrackerProps) 
       if (result.error) {
         setStatuses((s) => ({ ...s, [dept]: prev }))
         setError(result.error)
+        return
       }
+
+      // This panel is mounted in the app layout above the schedule route, so
+      // a revalidate does not reliably repaint the day-info Advance block
+      // below it (REE-65 class, same as guest list's REE-131). Write the
+      // confirmed statuses to the store so the block picks them up without a
+      // server round trip.
+      setStoredStatuses(showId, optimistic)
     })
   }
 
