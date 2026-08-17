@@ -40,7 +40,6 @@ export function AddDriveForm({ tourId, tourDateId, date, timezone, initialClock,
   const departDefault = `${date}T${initialClock ?? '09:00'}`
   const [computedArrival, setComputedArrival] = useState<string>('')
   const [computing, setComputing] = useState(false)
-  const [driveTimeError, setDriveTimeError] = useState<string | null>(null)
   const [departLocal, setDepartLocal] = useState(departDefault)
   // Controlled so the Places widget can write the selected place back in. The
   // rendered inputs still carry name/value, so the onBlur handlers below can keep
@@ -58,13 +57,14 @@ export function AddDriveForm({ tourId, tourDateId, date, timezone, initialClock,
   async function computeArrival(origin: string, destination: string, departAt: string) {
     if (!origin || !destination || !departAt) return
     setComputing(true)
-    setDriveTimeError(null)
     try {
       const result = await getDriveTime(origin, destination, departAt, timezone)
-      if (result.arrive_at) {
-        setComputedArrival(result.arrive_at)
+      if (result.arrive_at === null) {
+        setComputedArrival('')
+        setError(result.error)
       } else {
-        setDriveTimeError('Could not calculate arrival from Google Maps. You can enter it manually after saving.')
+        setComputedArrival(result.arrive_at)
+        setError(null)
       }
     } finally {
       setComputing(false)
@@ -80,17 +80,26 @@ export function AddDriveForm({ tourId, tourDateId, date, timezone, initialClock,
     const departUtc = fromDatetimeLocal(data.depart_at, timezone)
 
     // If no computed arrival yet, compute now before saving.
-    let arriveUtc: string | null = null
-    if (computedArrival) {
-      arriveUtc = computedArrival
-    } else if (data.origin && data.destination && data.depart_at) {
-      const dr = await getDriveTime(data.origin, data.destination, data.depart_at, timezone)
-      arriveUtc = dr.arrive_at ?? null
-      if (!arriveUtc) {
-        setDriveTimeError('Could not calculate arrival from Google Maps. You can enter it manually after saving.')
+    let arriveUtc: string | null = computedArrival || null
+    if (!arriveUtc && data.origin && data.destination && data.depart_at) {
+      const result = await getDriveTime(data.origin, data.destination, data.depart_at, timezone)
+      if (result.arrive_at === null) {
+        setError(result.error)
+        return
       }
+      arriveUtc = result.arrive_at
+      setComputedArrival(result.arrive_at)
     }
 
+    // No route resolved (unresolvable addresses, or the fields were never
+    // filled in): refuse to save a segment with no real arrival rather than
+    // letting it through silently (REE-159).
+    if (!arriveUtc) {
+      setError('Enter a from and to address to calculate the drive.')
+      return
+    }
+
+    setError(null)
     setPending({ origin: data.origin, destination: data.destination, depart_at: departUtc, arrive_at: arriveUtc })
   }
 
@@ -188,7 +197,6 @@ export function AddDriveForm({ tourId, tourDateId, date, timezone, initialClock,
           placeholder="Computed from Google Maps on save"
           className="h-7 text-xs bg-muted"
         />
-        {driveTimeError && <p className="text-xs text-destructive">{driveTimeError}</p>}
       </div>
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex gap-2">

@@ -66,7 +66,7 @@ export default async function InboxItemPage({
           ) : item.kind === 'guest_request' && subject && 'entryId' in subject ? (
             <GuestRequestItem tourId={item.tour_id} subject={subject} />
           ) : item.kind === 'email_extraction' && subject && 'forwardedEmailId' in subject ? (
-            <ExtractionItem subject={subject} />
+            <ExtractionItem subject={subject} resolvedAt={item.resolved_at} />
           ) : (
             <div className="space-y-2">
               {item.detail && <p className="text-sm text-muted-foreground">{item.detail}</p>}

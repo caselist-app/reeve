@@ -2,12 +2,15 @@
 
 import { requireUser } from '@/lib/auth/helpers'
 
-export type DriveTimeResult = { arrive_at: string | null; duration_min: number | null }
+export type DriveTimeResult =
+  | { arrive_at: string; duration_min: number; error?: undefined }
+  | { arrive_at: null; duration_min: null; error: string }
 
-interface DirectionsResponse {
-  status: string
-  error_message?: string
-  routes: Array<{ legs: Array<{ duration_in_traffic?: { value: number }; duration: { value: number } }> }>
+const NO_ROUTE_ERROR = 'Could not find a route between these addresses. Check them and try again.'
+const LOOKUP_FAILED_ERROR = 'Could not calculate the drive time. Try again.'
+
+function driveTimeFailure(error: string): DriveTimeResult {
+  return { arrive_at: null, duration_min: null, error }
 }
 
 // Calls Google Maps Directions API to get drive duration between two addresses.
@@ -23,7 +26,7 @@ export async function getDriveTime(
   const apiKey = process.env.GOOGLE_MAPS_API_KEY
   if (!apiKey) {
     console.error('[drive-time] GOOGLE_MAPS_API_KEY not set')
-    return { arrive_at: null, duration_min: null }
+    return driveTimeFailure(LOOKUP_FAILED_ERROR)
   }
 
   // Convert departure local time to Unix timestamp for Google.
@@ -39,13 +42,17 @@ export async function getDriveTime(
   url.searchParams.set('departure_time', String(departUnix))
   url.searchParams.set('key', apiKey)
 
-  let data: DirectionsResponse
+  let data: {
+    status: string
+    error_message?: string
+    routes: Array<{ legs: Array<{ duration_in_traffic?: { value: number }; duration: { value: number } }> }>
+  }
   try {
     const res = await fetch(url.toString())
-    data = (await res.json()) as DirectionsResponse
+    data = await res.json()
   } catch (err) {
     console.error('[drive-time] fetch error:', err)
-    return { arrive_at: null, duration_min: null }
+    return driveTimeFailure(LOOKUP_FAILED_ERROR)
   }
 
   const leg = data.routes[0]?.legs[0]
@@ -56,7 +63,7 @@ export async function getDriveTime(
       '| dest_sent:', destination,
       '| departure_time:', departUnix,
     )
-    return { arrive_at: null, duration_min: null }
+    return driveTimeFailure(NO_ROUTE_ERROR)
   }
 
   const durationSec = leg.duration_in_traffic?.value ?? leg.duration.value
