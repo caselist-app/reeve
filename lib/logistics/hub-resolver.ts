@@ -19,26 +19,32 @@ type KnownVenueEntry = {
   // show row. The venue map block simply has nothing to show for these.
   lat: null
   lng: null
+  // Hardcoded rather than resolved, same reasoning as lat/lng: a known venue
+  // never calls Maps, so its zone has to be known up front.
+  timezone: string
 }
 
 // Keyed by lowercase venue name or city. Expand this map as the known-venue
 // KB grows. Festivals go here first because geocoding a festival site fails.
 const KNOWN_VENUES: Record<string, KnownVenueEntry> = {
-  hellfest: { iata: 'NTE', rail: null, ground_minutes: 40, lat: null, lng: null },
-  clisson: { iata: 'NTE', rail: null, ground_minutes: 40, lat: null, lng: null },
-  glastonbury: { iata: 'BRS', rail: 'Castle Cary', ground_minutes: 35, lat: null, lng: null },
-  'download festival': { iata: 'EMA', rail: 'Derby', ground_minutes: 20, lat: null, lng: null },
-  'reading festival': { iata: 'LHR', rail: 'Reading', ground_minutes: 15, lat: null, lng: null },
-  'leeds festival': { iata: 'LBA', rail: 'Leeds', ground_minutes: 25, lat: null, lng: null },
-  coachella: { iata: 'PSP', rail: null, ground_minutes: 25, lat: null, lng: null },
-  lollapalooza: { iata: 'ORD', rail: null, ground_minutes: 30, lat: null, lng: null },
+  hellfest: { iata: 'NTE', rail: null, ground_minutes: 40, lat: null, lng: null, timezone: 'Europe/Paris' },
+  clisson: { iata: 'NTE', rail: null, ground_minutes: 40, lat: null, lng: null, timezone: 'Europe/Paris' },
+  glastonbury: { iata: 'BRS', rail: 'Castle Cary', ground_minutes: 35, lat: null, lng: null, timezone: 'Europe/London' },
+  'download festival': { iata: 'EMA', rail: 'Derby', ground_minutes: 20, lat: null, lng: null, timezone: 'Europe/London' },
+  'reading festival': { iata: 'LHR', rail: 'Reading', ground_minutes: 15, lat: null, lng: null, timezone: 'Europe/London' },
+  'leeds festival': { iata: 'LBA', rail: 'Leeds', ground_minutes: 25, lat: null, lng: null, timezone: 'Europe/London' },
+  coachella: { iata: 'PSP', rail: null, ground_minutes: 25, lat: null, lng: null, timezone: 'America/Los_Angeles' },
+  lollapalooza: { iata: 'ORD', rail: null, ground_minutes: 30, lat: null, lng: null, timezone: 'America/Chicago' },
 }
 
 // A resolution that may or may not carry a geocode, unlike KnownVenueEntry
-// whose lat/lng are always absent.
-type Resolution = Omit<KnownVenueEntry, 'lat' | 'lng'> & {
+// whose lat/lng are always absent. timezone widens the same way: a known
+// venue's is a hardcoded string, a geocoded one can come back null if the
+// Time Zone endpoint fails after the Geocoding call already succeeded.
+type Resolution = Omit<KnownVenueEntry, 'lat' | 'lng' | 'timezone'> & {
   lat: number | null
   lng: number | null
+  timezone: string | null
 }
 
 function lookupKnownVenue(venueName: string): Resolution | null {
@@ -68,16 +74,52 @@ export function resolveHubSync(
   return { iata: airport.iata, rail: null, ground_minutes: estimateGroundMinutes(distKm) }
 }
 
+// Geocodes an address, then resolves the IANA timezone for the coordinates it
+// finds. Shared: any caller that needs a venue's coordinates always needs its
+// zone too, so this is the one function to reach for rather than composing
+// geocodeAddress with a second, separate Time Zone call at each call site.
+// Returns null only when the geocode itself fails; a Time Zone failure after
+// a successful geocode still returns the coordinates with timezone: null,
+// since the caller can use the lat/lng even without a zone.
+export async function geocodeVenueTimezone(
+  address: string
+): Promise<{ lat: number; lng: number; timezone: string | null } | null> {
+  const geocoded = await geocodeAddress(address)
+  if (!geocoded) return null
+
+  const timezone = await fetchTimezone(geocoded.lat, geocoded.lng)
+  return { lat: geocoded.lat, lng: geocoded.lng, timezone }
+}
+
+async function fetchTimezone(lat: number, lng: number): Promise<string | null> {
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY
+  if (!apiKey) return null
+
+  const timestamp = Math.floor(Date.now() / 1000)
+  const url = `https://maps.googleapis.com/maps/api/timezone/json?location=${lat},${lng}&timestamp=${timestamp}&key=${apiKey}`
+
+  let data: { status: string; timeZoneId?: string }
+  try {
+    const res = await fetch(url)
+    data = (await res.json()) as typeof data
+  } catch {
+    return null
+  }
+
+  if (data.status !== 'OK' || !data.timeZoneId) return null
+  return data.timeZoneId
+}
+
 // Google Maps geocode + nearest airport from the bundled airport list.
 // Geocodes the venue address to lat/lng, then finds the nearest airport by
 // haversine distance. Ground time is estimated from straight-line distance.
 async function resolveViaGoogleMaps(
   address: string
 ): Promise<Resolution | null> {
-  const geocoded = await geocodeAddress(address)
+  const geocoded = await geocodeVenueTimezone(address)
   if (!geocoded) return null
 
-  const { lat, lng } = geocoded
+  const { lat, lng, timezone } = geocoded
   const { airport, distKm } = nearestAirport(lat, lng)
   const groundMin = estimateGroundMinutes(distKm)
 
@@ -87,6 +129,7 @@ async function resolveViaGoogleMaps(
     ground_minutes: groundMin,
     lat,
     lng,
+    timezone,
   }
 }
 
@@ -153,7 +196,7 @@ export async function resolveHub(show_id: string): Promise<HubResolution> {
 
   const { data: show, error } = await admin
     .from('shows')
-    .select('id, venue_name, address, hub_resolved_at, transport_hub_iata, transport_hub_rail, hub_ground_minutes, venue_lat, venue_lng')
+    .select('id, venue_name, address, hub_resolved_at, transport_hub_iata, transport_hub_rail, hub_ground_minutes, venue_lat, venue_lng, timezone')
     .eq('id', show_id)
     .single()
 
@@ -170,8 +213,11 @@ export async function resolveHub(show_id: string): Promise<HubResolution> {
 
   // Return cached resolution only if it produced a usable hub code.
   // A prior run that yielded null/null (standardFallback) is NOT treated as
-  // resolved so we retry when the TM later adds an address.
-  if (show.hub_resolved_at && (show.transport_hub_iata || show.transport_hub_rail) && hasCoordinates) {
+  // resolved so we retry when the TM later adds an address. show.timezone is
+  // the same REE-204 story again: a show resolved before this shipped has a
+  // hub and (for a geocoded one) coordinates, but no zone, so treating it as
+  // fully resolved would strand it without one forever.
+  if (show.hub_resolved_at && (show.transport_hub_iata || show.transport_hub_rail) && hasCoordinates && show.timezone) {
     return {
       iata: show.transport_hub_iata,
       rail: show.transport_hub_rail,
@@ -198,7 +244,9 @@ export async function resolveHub(show_id: string): Promise<HubResolution> {
   // Cache the result on the show row. Only mark hub_resolved_at when we have
   // a usable code so empty results are always retried. The geocode, when we
   // have one, is cached alongside it: it is what the venue map block in day
-  // info renders from, and it would otherwise never be stored anywhere.
+  // info renders from, and it would otherwise never be stored anywhere. The
+  // timezone rides along the same way, so nothing downstream has to guess the
+  // show's local time from the tour's zone.
   const hasCode = !!(resolved.iata || resolved.rail)
   await admin
     .from('shows')
@@ -207,6 +255,7 @@ export async function resolveHub(show_id: string): Promise<HubResolution> {
       transport_hub_rail: resolved.rail,
       hub_ground_minutes: resolved.ground_minutes,
       hub_resolved_at: hasCode ? new Date().toISOString() : null,
+      timezone: resolved.timezone,
       ...(resolved.lat != null && resolved.lng != null
         ? { venue_lat: resolved.lat, venue_lng: resolved.lng }
         : {}),
