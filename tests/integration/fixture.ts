@@ -169,6 +169,10 @@ export interface E2eSeed {
     // wall clock, not a fixed elapsed offset, so a block past the 01:00 -> 02:00
     // change lands on its label rather than an hour off (REE-116).
     zonedDst: ZonedShowDay
+    // An identity_documents row on account A's seeded contact, for
+    // tests/e2e/access.spec.ts (REE-202): the only way to prove account B
+    // cannot sign account A's document is a real row to try it against.
+    identityDocumentId: string
   }
   // A second ACCOUNT, not a second tour. createSecondTour puts both tours on
   // one account, which is right for cross-tour id checks and proves nothing
@@ -229,6 +233,38 @@ export async function createE2eSeed(): Promise<E2eSeed> {
     starts_at: `${a.date}${E2E_SEEDED_LOAD_IN_UTC}`,
   })
   if (loadInError) throw new Error(`seed: could not set the load-in: ${loadInError.message}`)
+
+  // A real object, not just a row: tests/e2e/access.spec.ts also asserts
+  // account A can sign its own document, and Supabase Storage's
+  // createSignedUrl errors against a path with nothing behind it, so a fake
+  // path would make that positive control fail for the wrong reason.
+  const identityDocumentPath = `${a.userId}/${a.contactId}/seeded.pdf`
+  const { error: identityUploadError } = await testDb.storage
+    .from('identity-documents')
+    .upload(identityDocumentPath, new TextEncoder().encode('%PDF-1.4 seeded'), {
+      contentType: 'application/pdf',
+    })
+  if (identityUploadError) {
+    throw new Error(`seed: could not upload identity document: ${identityUploadError.message}`)
+  }
+
+  const { data: identityDocument, error: identityDocumentError } = await testDb
+    .from('identity_documents')
+    .insert({
+      account_id: a.userId,
+      contact_id: a.contactId,
+      kind: 'passport',
+      storage_path: identityDocumentPath,
+      file_name: 'seeded.pdf',
+      mime_type: 'application/pdf',
+      byte_size: 16,
+      is_primary: true,
+    })
+    .select('id')
+    .single()
+  if (identityDocumentError || !identityDocument) {
+    throw new Error(`seed: could not create identity document: ${identityDocumentError?.message}`)
+  }
 
   // Same day as the show, so the stay sits on the day view the schedule specs
   // open. tour_date_id and check_in_date are a composite foreign key onto
@@ -348,6 +384,7 @@ export async function createE2eSeed(): Promise<E2eSeed> {
       zoned,
       zonedDst,
       itemId: item.id,
+      identityDocumentId: identityDocument.id,
     },
     b,
   }
@@ -438,7 +475,17 @@ function zonedWallClockToUtc(local: string, tz: string): string {
 }
 
 // Two deletes, and the cascade does the rest, same as destroyFixture.
-export async function destroyE2eSeed(seed: { a: { userId: string }; b: { userId: string } }) {
+export async function destroyE2eSeed(seed: {
+  a: { userId: string; contactId: string }
+  b: { userId: string }
+}) {
+  // Deleting the auth user cascades the identity_documents row away, but not
+  // the object it points at: same gap destroyFixture has, and the same fix,
+  // done before the user delete so the path is still derivable from live ids.
+  await testDb.storage
+    .from('identity-documents')
+    .remove([`${seed.a.userId}/${seed.a.contactId}/seeded.pdf`])
+
   await testDb.auth.admin.deleteUser(seed.a.userId)
   await testDb.auth.admin.deleteUser(seed.b.userId)
 }

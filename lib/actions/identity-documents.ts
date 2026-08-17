@@ -25,6 +25,12 @@ const EXTENSIONS: Record<string, string> = {
   'image/webp': 'webp',
 }
 
+// The URL is consumed immediately by the click that requested it (Brief 45
+// View scan), so it only needs to live long enough for the browser to load
+// it, not to persist. A product decision, not a deployment one, so it is a
+// constant here rather than an env var.
+const SIGNED_URL_TTL_SECONDS = 60
+
 // Uploads a passport or visa scan and creates its identity_documents row
 // (REE-199, Brief 45 step 4). Flow: validate, upload to Storage, then insert
 // the row. Every failure path from the upload onward deletes the object
@@ -283,6 +289,41 @@ export async function deleteIdentityDocument(
   if (deleteError) return { error: deleteError.message }
 
   return { error: null }
+}
+
+export type SignIdentityDocumentUrlResult = { error: string | null; url: string | null }
+
+// Signs a short-lived URL for "View scan" (Brief 45). Signed at click, never
+// at render: the only two existing createSignedUrl calls in the repo
+// (trigger/jobs/boarding-pass.ts, app/a/[token]/page.tsx) both sign ahead of
+// time on the admin client, and neither is the pattern here. The account
+// scoping on the select is the whole isolation guarantee: a document id from
+// another account simply does not resolve, so nothing account-specific ever
+// reaches storage.
+export async function signIdentityDocumentUrl(
+  documentId: string
+): Promise<SignIdentityDocumentUrlResult> {
+  const user = await requireUser()
+  const supabase = await createClient()
+
+  const { data: existing } = await supabase
+    .from('identity_documents')
+    .select('id, storage_path')
+    .eq('id', documentId)
+    .eq('account_id', user.id)
+    .single()
+
+  if (!existing) return { error: 'Document not found.', url: null }
+
+  const { data: signed, error: signError } = await supabase.storage
+    .from('identity-documents')
+    .createSignedUrl(existing.storage_path, SIGNED_URL_TTL_SECONDS)
+
+  if (signError || !signed?.signedUrl) {
+    return { error: signError?.message ?? 'Could not sign that scan.', url: null }
+  }
+
+  return { error: null, url: signed.signedUrl }
 }
 
 // Writes the five contacts.passport_* cache columns from the contact's
