@@ -16,6 +16,7 @@ import {
 } from '@/lib/actions/rehearsals'
 import { toDatetimeLocal, fromDatetimeLocal, resolveTimezone } from '@/lib/schedule/datetime'
 import { useSidePanel } from '@/stores/side-panel-store'
+import { useRehearsalLocations } from '@/stores/rehearsal-location-store'
 import type { Tables } from '@/lib/types/database'
 
 interface RehearsalPanelProps {
@@ -34,6 +35,7 @@ type Rehearsal = Tables<'rehearsals'>
 export function RehearsalPanel({ rehearsalId, locationName, tourTimezone }: RehearsalPanelProps) {
   const router = useRouter()
   const { close } = useSidePanel()
+  const setLocation = useRehearsalLocations((s) => s.setLocation)
   const [rehearsal, setRehearsal] = useState<Rehearsal | null>(null)
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
@@ -78,9 +80,10 @@ export function RehearsalPanel({ rehearsalId, locationName, tourTimezone }: Rehe
 
     const fd = new FormData(e.currentTarget)
     const timezone = resolveTimezone(rehearsal ?? { timezone: null }, tourTimezone)
+    const locationName = fd.get('location_name') as string
 
     const result = await updateRehearsal(rehearsalId, {
-      location_name: fd.get('location_name') as string,
+      location_name: locationName,
       address: (fd.get('address') as string) || null,
       google_maps_url: (fd.get('google_maps_url') as string) || null,
       start_at: fromDatetimeLocal(fd.get('start_at') as string, timezone),
@@ -97,6 +100,7 @@ export function RehearsalPanel({ rehearsalId, locationName, tourTimezone }: Rehe
 
     setSaveError(null)
     setSaved(true)
+    setLocation(rehearsalId, locationName)
     router.refresh()
 
     // Refetch rather than reconstruct locally: an address change clears
