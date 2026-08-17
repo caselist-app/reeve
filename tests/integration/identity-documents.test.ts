@@ -306,6 +306,62 @@ describe('createIdentityDocument cleans up the uploaded object when the row is n
   })
 })
 
+// REE-201 / Brief 45 step 6. setPrimaryIdentityDocument writes its two
+// updates as unset-then-set, in that order, because
+// identity_documents_one_primary_per_kind_idx is a partial unique index on
+// (contact_id, kind) where is_primary: setting the new primary before
+// unsetting the old one collides with the row the action hasn't cleared yet.
+//
+// Red first: reverse the two statements in setPrimaryIdentityDocument (set
+// before unset) and the assertion below fails, because the set update
+// returns a 23505 unique_violation instead of succeeding, leaving the first
+// passport still primary. That red is the proof the index is doing its job,
+// not just that the action happens to write compatible rows.
+describe('setPrimaryIdentityDocument switches which document is primary', () => {
+  let fixture: Fixture
+
+  beforeEach(async () => {
+    fixture = await createFixture()
+  })
+
+  afterEach(async () => {
+    await destroyFixture(fixture)
+  })
+
+  it('leaves exactly one row is_primary true, and it is the newly primary document', async () => {
+    const first = new FormData()
+    first.set('kind', 'passport')
+    first.set('file', pdfFile('first.pdf'))
+    const firstResult = await createIdentityDocument(fixture.contactId, first)
+    expect(firstResult.error).toBeNull()
+
+    const second = new FormData()
+    second.set('kind', 'passport')
+    second.set('file', pdfFile('second.pdf'))
+    const secondResult = await createIdentityDocument(fixture.contactId, second)
+    expect(secondResult.error).toBeNull()
+
+    try {
+      const setPrimaryResult = await setPrimaryIdentityDocument(secondResult.documentId!)
+      expect(setPrimaryResult.error).toBeNull()
+
+      const { data: rows, error } = await testDb
+        .from('identity_documents')
+        .select('id, is_primary')
+        .eq('contact_id', fixture.contactId)
+        .eq('kind', 'passport')
+
+      expect(error).toBeNull()
+      const primaries = (rows ?? []).filter((row) => row.is_primary)
+      expect(primaries).toHaveLength(1)
+      expect(primaries[0]?.id).toBe(secondResult.documentId)
+    } finally {
+      await cleanupUploadedObject(firstResult.documentId!)
+      await cleanupUploadedObject(secondResult.documentId!)
+    }
+  })
+})
+
 // REE-200 / Brief 45 step 5. syncPassportCache is a private helper, exercised
 // only through the actions that call it: create and setPrimaryIdentityDocument
 // write the five contacts.passport_* columns forward from the primary
