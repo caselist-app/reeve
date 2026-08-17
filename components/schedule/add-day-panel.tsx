@@ -100,7 +100,16 @@ export function AddDayPanel({ tourId, tourDateId, initialDayType, initialDate, i
       return
     }
     close()
-    router.refresh()
+    // createTourDate already revalidates `/tours/{tourId}/schedule`
+    // server-side, which Next.js applies to every currently-mounted segment on
+    // this route automatically, including the @secondaryPanel Dates sidebar
+    // (see CLAUDE.md's secondary-panel note). A client-side router.refresh()
+    // here is not just redundant, it is actively harmful: it re-fetches for
+    // the *current* (old) `?date=` URL, and if a TM clicks the new day's link
+    // in the sidebar before that fetch resolves, the stale refresh can commit
+    // after the click's navigation and snap the URL back to the old date
+    // (REE-251). The rehearsal branch above never had this bug because it
+    // never called refresh() in the first place.
   }
 
   // Edit mode: just day type + notes (date is fixed). Setting the type to a
