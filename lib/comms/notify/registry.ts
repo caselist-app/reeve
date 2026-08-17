@@ -50,13 +50,19 @@ export const registry: Registry = {
   // timeCritical, like bus_call/lobby_call: disruption info for a flight
   // already on the schedule is core value, not an optional broadcast, so it
   // bypasses operational-channel preference for whichever real-time channel
-  // the person has. Telegram only for now (production-verified, Brief 24);
-  // whatsapp() needs an approved Meta template outside the 24h reply window,
-  // which the brief explicitly says not to block on. No email() renderer:
-  // this is a real-time nudge, not a formal document, same reasoning as the
+  // the person has. whatsapp() reuses the existing broadcast template (same
+  // shape as change_alert): a proactive send outside the 24h reply window
+  // must go through an approved template, and WHATSAPP_TEMPLATE_BROADCAST is
+  // already approved and live for change_alert. No email() renderer: this is
+  // a real-time nudge, not a formal document, same reasoning as the
   // day-blocks below.
   flight_status_alert: {
     timeCritical: true,
+    whatsapp: (d) => ({
+      kind: 'template',
+      templateName: process.env.WHATSAPP_TEMPLATE_BROADCAST ?? '',
+      bodyParams: [d.message],
+    }),
     telegram: (d) => ({ body: d.message }),
   },
 
