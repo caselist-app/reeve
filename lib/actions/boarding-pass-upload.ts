@@ -69,6 +69,7 @@ export async function uploadBoardingPassAction(
       .from('documents')
       .update({ storage_path: storagePath, updated_at: new Date().toISOString() })
       .eq('id', existingAssignment.boarding_pass_document_id)
+      .eq('tour_id', tourId)
 
     if (updateError) return { error: updateError.message }
     docId = existingAssignment.boarding_pass_document_id
