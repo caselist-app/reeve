@@ -56,6 +56,29 @@ export async function createArtistAction(
   return { error: null, artistId: data?.id }
 }
 
+// Used only by the standalone /artists/new form. new-tour-form.tsx's inline
+// "+ New artist" flow calls createArtistAction directly and must not redirect,
+// since it goes on to create the tour in the same submission.
+//
+// Redirecting server-side, rather than having the client call router.push
+// after the action resolves, is the pattern createTourAction already uses
+// (lib/actions/tours.ts): the navigation is part of the action's own response
+// instead of a separate client-triggered fetch racing the revalidatePath
+// above. A client-side push here was intermittently leaving /tours/new stuck
+// on its loading.tsx fallback in e2e (REE-261).
+export async function createArtistAndGoToNewTourAction(
+  prev: ArtistActionState,
+  formData: FormData
+): Promise<ArtistActionState> {
+  // Server actions are publicly POSTable, so this needs its own requireUser()
+  // even though createArtistAction below repeats the check.
+  await requireUser()
+
+  const result = await createArtistAction(prev, formData)
+  if (result.error) return result
+  redirect('/tours/new')
+}
+
 export async function deleteArtistAction(artistId: string): Promise<void> {
   const user = await requireUser()
   const supabase = await createClient()

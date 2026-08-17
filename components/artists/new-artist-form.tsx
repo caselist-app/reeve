@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useId, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
-import { createArtistAction } from '@/lib/actions/artists'
+import { useActionState, useState, useId } from 'react'
+import { createArtistAndGoToNewTourAction } from '@/lib/actions/artists'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,36 +15,19 @@ function toSlug(value: string): string {
 
 export function NewArtistForm() {
   const formId = useId()
-  const router = useRouter()
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
+  // createArtistAndGoToNewTourAction redirects server-side on success, the
+  // same pattern createTourAction uses. A client-side router.push after the
+  // action resolved (tried during REE-261) left /tours/new intermittently
+  // stuck on its loading.tsx fallback in e2e: the RSC payload had already
+  // arrived, but the client-triggered navigation never committed it. Letting
+  // the redirect live in the action's own response sidesteps that.
+  const [state, formAction, pending] = useActionState(createArtistAndGoToNewTourAction, {
+    error: null,
+  })
   const [slug, setSlug] = useState('')
 
-  // Navigating from a render-body side effect (the previous useActionState
-  // version called router.push directly whenever state.artistId was truthy)
-  // races the revalidatePath the server action just issued: the push can
-  // fire before Next.js has committed the invalidation, serving /tours/new
-  // a stale Router Cache snapshot missing the new artist (REE-261). Routing
-  // from inside the transition, after the action's promise has resolved,
-  // is the pattern every other form in this app uses (useEntityForm,
-  // new-tour-form.tsx) and keeps the push strictly after the revalidation.
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    setError(null)
-    const formData = new FormData(e.currentTarget)
-
-    startTransition(async () => {
-      const result = await createArtistAction({ error: null }, formData)
-      if (result.error || !result.artistId) {
-        setError(result.error ?? 'Failed to create artist')
-        return
-      }
-      router.push('/tours/new')
-    })
-  }
-
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <form action={formAction} className="space-y-5">
       <div className="space-y-2">
         <Label htmlFor={`${formId}-name`}>Artist name</Label>
         <Input
@@ -72,8 +54,8 @@ export function NewArtistForm() {
         />
       </div>
 
-      {error && (
-        <p className="text-sm text-destructive">{error}</p>
+      {state.error && (
+        <p className="text-sm text-destructive">{state.error}</p>
       )}
 
       <Button type="submit" className="w-full" disabled={pending}>
