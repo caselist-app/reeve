@@ -132,6 +132,46 @@ describe('resolveTimezone', () => {
   })
 })
 
+// REE-248: rehearsal-form.tsx and the rehearsal detail page used to read raw
+// UTC digits off start_at/end_at with no timezone conversion at all
+// (`iso.slice(0, 16)`), so a rehearsal's stored times rendered and saved as
+// though the tour ran on UTC. This pins the fix's exact call shape,
+// resolveTimezone(rehearsal, tour.timezone) feeding toDatetimeLocal and
+// fromDatetimeLocal, against Perth (UTC+8, no DST) rather than UTC, so a
+// regression back to slicing the ISO string directly would fail here even
+// though it happens to work by coincidence for a UTC tour.
+describe('rehearsal datetime round trip (REE-248)', () => {
+  it('round-trips start_at/end_at using the rehearsal\'s own resolved timezone', () => {
+    const rehearsal = { timezone: 'Australia/Perth' }
+    const tourTimezone = 'Europe/London'
+    const tz = resolveTimezone(rehearsal, tourTimezone)
+    expect(tz).toBe('Australia/Perth')
+
+    const startAt = '2030-06-15T01:00:00.000Z'
+    const endAt = '2030-06-15T04:00:00.000Z'
+
+    const startLocal = toDatetimeLocal(startAt, tz)
+    const endLocal = toDatetimeLocal(endAt, tz)
+    expect(startLocal).toBe('2030-06-15T09:00')
+    expect(endLocal).toBe('2030-06-15T12:00')
+
+    expect(fromDatetimeLocal(startLocal, tz)).toBe(startAt)
+    expect(fromDatetimeLocal(endLocal, tz)).toBe(endAt)
+  })
+
+  it('falls back to the tour timezone when the rehearsal has none, and round-trips against that', () => {
+    const rehearsal = { timezone: null }
+    const tourTimezone = 'Australia/Perth'
+    const tz = resolveTimezone(rehearsal, tourTimezone)
+    expect(tz).toBe('Australia/Perth')
+
+    const startAt = '2030-06-15T01:00:00.000Z'
+    const startLocal = toDatetimeLocal(startAt, tz)
+    expect(startLocal).toBe('2030-06-15T09:00')
+    expect(fromDatetimeLocal(startLocal, tz)).toBe(startAt)
+  })
+})
+
 // Plain calendar arithmetic, no timezone. These moved here from the retired
 // day-sheet-times module (REE-23): the day item roll-over still needs them, and
 // they belong beside the other date helpers rather than in a file named after a

@@ -4,6 +4,7 @@ import { useTransition, useState, useId } from 'react'
 import { useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { updateRehearsal, deleteRehearsal } from '@/lib/actions/rehearsals'
+import { toDatetimeLocal, fromDatetimeLocal } from '@/lib/schedule/datetime'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { PlacesAddressInput } from '@/components/shows/places-address-input'
@@ -22,16 +23,11 @@ interface RehearsalFormProps {
     end_at: string | null
     notes: string | null
   }
+  timezone: string
   className?: string
 }
 
-// Formats a UTC timestamptz ISO string into the datetime-local input format (YYYY-MM-DDTHH:MM).
-function toDatetimeLocal(iso: string | null | undefined): string {
-  if (!iso) return ''
-  return iso.slice(0, 16)
-}
-
-export function RehearsalForm({ tourId, rehearsalId, initialData, className }: RehearsalFormProps) {
+export function RehearsalForm({ tourId, rehearsalId, initialData, timezone, className }: RehearsalFormProps) {
   const formId = useId()
   const router = useRouter()
   const [pending, startTransition] = useTransition()
@@ -58,8 +54,8 @@ export function RehearsalForm({ tourId, rehearsalId, initialData, className }: R
         location_name: fd.get('location_name') as string,
         address: (fd.get('address') as string) || null,
         google_maps_url: (fd.get('google_maps_url') as string) || null,
-        start_at: (fd.get('start_at') as string) || null,
-        end_at: (fd.get('end_at') as string) || null,
+        start_at: fromDatetimeLocal(fd.get('start_at') as string, timezone),
+        end_at: fromDatetimeLocal(fd.get('end_at') as string, timezone),
         notes: (fd.get('notes') as string) || null,
       })
 
@@ -115,7 +111,7 @@ export function RehearsalForm({ tourId, rehearsalId, initialData, className }: R
             id={`${formId}-start_at`}
             name="start_at"
             type="datetime-local"
-            defaultValue={toDatetimeLocal(initialData.start_at)}
+            defaultValue={toDatetimeLocal(initialData.start_at, timezone)}
           />
         </div>
         <div className="space-y-2">
@@ -124,7 +120,7 @@ export function RehearsalForm({ tourId, rehearsalId, initialData, className }: R
             id={`${formId}-end_at`}
             name="end_at"
             type="datetime-local"
-            defaultValue={toDatetimeLocal(initialData.end_at)}
+            defaultValue={toDatetimeLocal(initialData.end_at, timezone)}
           />
         </div>
       </div>
