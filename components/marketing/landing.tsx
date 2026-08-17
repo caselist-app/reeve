@@ -1,11 +1,14 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import Image from 'next/image'
 import { Newsreader, Inter, Kaushan_Script } from 'next/font/google'
 
 // Self-contained marketing landing page. Editorial, black-on-off-white, hairline-rule
-// driven layout (reference: harvey.ai). Styles are namespaced under `.rvl` so nothing
-// leaks into the app UI. Fonts are loaded locally to this page, not the app shell.
+// driven layout (reference: harvey.ai), warmed up with the real hand-lettered wordmark,
+// a faint paper grain and a stamped-tag eyebrow treatment for a more crafted feel.
+// Styles are namespaced under `.rvl` so nothing leaks into the app UI. Fonts are loaded
+// locally to this page, not the app shell.
 
 const newsreader = Newsreader({
   subsets: ['latin'],
@@ -51,7 +54,14 @@ export function Landing({ isAuthed = false }: { isAuthed?: boolean }) {
       <nav className="rvl-nav">
         <div className="wrap nav-in">
           <a href="/home" className="brand" aria-label="Reeve, home">
-            Reeve
+            <Image
+              src="/logo/reeve-full-light.png"
+              alt="Reeve"
+              width={438}
+              height={166}
+              priority
+              className="brand-logo"
+            />
           </a>
           <div className="navlinks">
             <a href="#how">How it works</a>
@@ -73,7 +83,9 @@ export function Landing({ isAuthed = false }: { isAuthed?: boolean }) {
         <div className="wrap">
           <p className="eyebrow">Platform overview / Tour operations</p>
           <div className="hero-grid">
-            <h1>The operating system for the people who run tours</h1>
+            <h1>
+              The operating system for the people who <em>run</em> tours
+            </h1>
             <div className="hero-side">
               <p>
                 You put the tour in. Reeve handles the routing, travel, day sheets and crew
@@ -166,6 +178,10 @@ export function Landing({ isAuthed = false }: { isAuthed?: boolean }) {
 
       <section id="how">
         <div className="wrap">
+          <p className="position-lede">
+            Most tour software is a filing cabinet: data in, documents out.{' '}
+            <span className="hl">Reeve keeps working on what you put in.</span>
+          </p>
           <p className="intro-line">
             Input. Enrich. Alert. Act.{' '}
             <span className="dim">
@@ -239,6 +255,10 @@ export function Landing({ isAuthed = false }: { isAuthed?: boolean }) {
                 <div className="feat">
                   <h4>Comms</h4>
                   <p>WhatsApp and email, on your tour&apos;s own branding. Push, not pull.</p>
+                </div>
+                <div className="feat">
+                  <h4>Answers</h4>
+                  <p>Crew text a real question, Claude answers from that tour&apos;s own data. Opt in per tour, nothing fires until you switch it on.</p>
                 </div>
                 <div className="feat">
                   <h4>Travel</h4>
@@ -321,8 +341,18 @@ export function Landing({ isAuthed = false }: { isAuthed?: boolean }) {
       </section>
 
       <section className="closing">
+        <Image
+          src="/logo/reeve-mark-light.png"
+          alt=""
+          aria-hidden="true"
+          width={256}
+          height={214}
+          className="closing-mark"
+        />
         <div className="wrap closing-grid">
-          <h2>The tour runs on you. Run it on Reeve.</h2>
+          <h2>
+            The tour runs on you. <em>Run</em> it on Reeve.
+          </h2>
           <div className="hero-cta">
             <a href={isAuthed ? '/tours/new' : '/signup'} className="btn btn-solid">
               Start your first tour
@@ -339,7 +369,13 @@ export function Landing({ isAuthed = false }: { isAuthed?: boolean }) {
           <div className="foot-grid">
             <div>
               <a href="/home" className="foot-brand" aria-label="Reeve, home">
-                Reeve
+                <Image
+                  src="/logo/reeve-full-dark.png"
+                  alt="Reeve"
+                  width={438}
+                  height={166}
+                  className="foot-brand-logo"
+                />
               </a>
             </div>
             <div className="foot-col">
@@ -375,6 +411,7 @@ const CSS = `
   --line: rgba(20,19,16,.12); --line-soft: rgba(20,19,16,.08);
   --dark:#141310; --dark-2:#1D1B17;
   --dark-line: rgba(247,246,242,.14); --dark-text-soft: rgba(247,246,242,.6);
+  --accent:#B4884C; --accent-soft: rgba(180,136,76,.14);
   --font-serif: var(--font-newsreader), Georgia, serif;
   --font-sans: var(--font-inter), -apple-system, BlinkMacSystemFont, sans-serif;
   --font-script: var(--font-script), cursive;
@@ -384,27 +421,41 @@ const CSS = `
 .rvl *{box-sizing:border-box;margin:0;padding:0}
 .rvl .wrap{max-width:1240px; margin:0 auto; padding:0 40px}
 .rvl a{color:inherit; text-decoration:none}
+.rvl em{font-style:italic}
+
+.rvl::after{
+  content:""; position:fixed; inset:0; z-index:40; pointer-events:none;
+  opacity:.045; mix-blend-mode:overlay;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size:160px 160px;
+}
 
 .rvl .rvl-nav{position:sticky; top:0; z-index:50; background:rgba(247,246,242,.9); backdrop-filter:blur(8px); border-bottom:1px solid transparent; transition:border-color .2s}
 .rvl .rvl-nav.scrolled{border-bottom-color:var(--line)}
 .rvl .nav-in{display:flex; align-items:center; justify-content:space-between; height:78px}
-.rvl .brand{font-family:var(--font-script); font-size:1.7rem; color:var(--ink)}
+.rvl .brand{display:flex; align-items:center}
+.rvl .brand-logo{height:26px; width:auto; display:block}
 .rvl .navlinks{display:flex; align-items:center; gap:36px; font-size:.92rem; color:var(--ink-soft)}
+.rvl .navlinks a{position:relative; padding-bottom:2px}
+.rvl .navlinks a::after{content:""; position:absolute; left:0; right:0; bottom:-4px; height:1px; background:var(--accent); transform:scaleX(0); transform-origin:left; transition:transform .18s ease}
 .rvl .navlinks a:hover{color:var(--ink)}
+.rvl .navlinks a:hover::after{transform:scaleX(1)}
 .rvl .nav-cta{display:flex; align-items:center; gap:20px}
 .rvl .nav-cta .login{font-size:.92rem; color:var(--ink-soft)}
 .rvl .nav-cta .login:hover{color:var(--ink)}
 @media(max-width:860px){.rvl .navlinks{display:none}.rvl .nav-cta .login{display:none}}
 
-.rvl .btn{display:inline-flex; align-items:center; gap:8px; font-family:var(--font-sans); font-weight:500; font-size:.92rem; padding:13px 24px; border-radius:999px; transition:opacity .15s ease}
+.rvl .btn{display:inline-flex; align-items:center; gap:8px; font-family:var(--font-sans); font-weight:500; font-size:.92rem; padding:13px 24px; border-radius:999px; transition:opacity .15s ease, transform .1s ease}
 .rvl .btn-solid{background:var(--ink); color:var(--paper)}
 .rvl .btn-solid:hover{opacity:.82}
 .rvl .btn-outline{border:1px solid var(--line); color:var(--ink)}
 .rvl .btn-outline:hover{background:var(--line-soft)}
 .rvl .btn-sm{padding:10px 20px; font-size:.86rem}
+.rvl .btn:active{transform:translateY(1px)}
 
 .rvl .hero{padding:88px 0 0}
-.rvl .eyebrow{font-size:.82rem; color:var(--ink-faint)}
+.rvl .eyebrow{display:inline-flex; align-items:center; gap:7px; font-size:.82rem; color:var(--ink-faint); border:1px solid var(--line); border-radius:999px; padding:5px 12px 5px 9px; transform:rotate(-1deg)}
+.rvl .eyebrow::before{content:""; width:5px; height:5px; border-radius:50%; background:var(--accent); flex:0 0 auto}
 .rvl .hero-grid{display:grid; grid-template-columns:1.15fr 1fr; gap:60px; margin-top:26px; align-items:end}
 .rvl .hero h1{font-family:var(--font-serif); font-weight:500; font-size:clamp(2.6rem,4.6vw,4.3rem); line-height:1.06; letter-spacing:-.01em; max-width:11ch}
 .rvl .hero-side{padding-bottom:8px}
@@ -420,7 +471,7 @@ const CSS = `
 .rvl .rail-i{display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:8px; font-size:.86rem; color:var(--ink-soft)}
 .rvl .rail-i .ic{width:6px; height:6px; border-radius:50%; background:currentColor; opacity:.5}
 .rvl .rail-i.active{background:var(--ink); color:var(--paper)}
-.rvl .rail-i.active .ic{background:var(--paper); opacity:1}
+.rvl .rail-i.active .ic{background:var(--accent); opacity:1}
 .rvl .app-main{padding:28px 32px}
 .rvl .app-top{display:flex; align-items:baseline; justify-content:space-between; padding-bottom:16px; border-bottom:1px solid var(--line)}
 .rvl .app-top h4{font-family:var(--font-serif); font-weight:500; font-size:1.2rem}
@@ -435,7 +486,9 @@ const CSS = `
 @media(max-width:760px){.rvl .appcard{grid-template-columns:1fr}.rvl .app-rail{display:none}}
 
 .rvl section{padding:120px 0}
-.rvl .intro-line{font-family:var(--font-serif); font-weight:500; font-size:clamp(1.5rem,2.6vw,2.1rem); line-height:1.35; max-width:30ch}
+.rvl .position-lede{font-family:var(--font-serif); font-weight:500; font-size:clamp(1.6rem,2.8vw,2.3rem); line-height:1.35; max-width:34ch; color:var(--ink-faint)}
+.rvl .position-lede .hl{color:var(--ink)}
+.rvl .intro-line{font-family:var(--font-serif); font-weight:500; font-size:clamp(1.5rem,2.6vw,2.1rem); line-height:1.35; max-width:30ch; margin-top:22px}
 .rvl .intro-line .dim{color:var(--ink-faint)}
 
 .rvl .block{display:grid; grid-template-columns:1fr 1fr; gap:64px; padding-top:64px; margin-top:64px; border-top:1px solid var(--line)}
@@ -454,7 +507,7 @@ const CSS = `
 .rvl .mv-route{display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:24px}
 .rvl .mv-node{border:1px solid var(--line); background:var(--paper); border-radius:10px; padding:9px 12px; font-size:.78rem; font-weight:500}
 .rvl .mv-node small{display:block; color:var(--ink-faint); font-weight:400; font-size:.68rem; margin-top:2px}
-.rvl .mv-node.hub{border-color:var(--ink)}
+.rvl .mv-node.hub{border-color:var(--accent)}
 .rvl .mv-wa{padding:20px; width:100%}
 .rvl .mv-wa .b{padding:9px 13px; border-radius:12px; font-size:.82rem; max-width:80%; margin-bottom:8px}
 .rvl .mv-wa .b.in{background:var(--paper); border:1px solid var(--line)}
@@ -466,13 +519,13 @@ const CSS = `
 .rvl .stat-grid{margin-top:56px; display:grid; grid-template-columns:repeat(3,1fr); border-top:1px solid var(--line)}
 .rvl .stat{padding:32px 28px 0; border-right:1px solid var(--line)}
 .rvl .stat:last-child{border-right:0}
-.rvl .stat .num{font-family:var(--font-serif); font-weight:500; font-size:clamp(2.6rem,4.6vw,3.6rem)}
+.rvl .stat .num{font-family:var(--font-serif); font-weight:500; font-size:clamp(2.6rem,4.6vw,3.6rem); display:inline-block; border-bottom:2px solid var(--accent); padding-bottom:2px}
 .rvl .stat p{margin-top:10px; color:var(--ink-soft); font-size:.94rem; max-width:28ch}
 .rvl .stats-cta{margin-top:48px}
 @media(max-width:760px){.rvl .stat-grid{grid-template-columns:1fr}.rvl .stat{border-right:0; border-top:1px solid var(--line); padding-top:28px}}
 
 .rvl .dark{background:var(--dark); color:var(--paper)}
-.rvl .dark .eyebrow{color:var(--dark-text-soft)}
+.rvl .dark .eyebrow{color:var(--dark-text-soft); border-color:var(--dark-line)}
 .rvl .dark h2{font-family:var(--font-serif); font-weight:500; font-size:clamp(2rem,3.6vw,2.8rem); margin-top:14px}
 .rvl .dark-grid{display:grid; grid-template-columns:1fr 1.15fr; gap:56px; margin-top:60px}
 .rvl .dark-list .item{padding:22px 0; border-top:1px solid var(--dark-line)}
@@ -487,13 +540,16 @@ const CSS = `
 .rvl .dark-mock .card .foot{margin-top:16px; padding-top:14px; border-top:1px solid var(--line); font-size:.8rem; color:var(--ink-faint)}
 @media(max-width:860px){.rvl .dark-grid{grid-template-columns:1fr}}
 
-.rvl .closing{padding:130px 0}
-.rvl .closing-grid{display:flex; align-items:flex-end; justify-content:space-between; gap:40px; flex-wrap:wrap}
+.rvl .closing{position:relative; padding:130px 0; overflow:hidden}
+.rvl .closing-mark{position:absolute; top:50%; right:40px; transform:translateY(-50%); width:280px; height:auto; opacity:.05; pointer-events:none}
+.rvl .closing-grid{position:relative; display:flex; align-items:flex-end; justify-content:space-between; gap:40px; flex-wrap:wrap}
 .rvl .closing h2{font-family:var(--font-serif); font-weight:500; font-size:clamp(2.2rem,4.6vw,3.6rem); max-width:14ch; line-height:1.1}
+@media(max-width:760px){.rvl .closing-mark{display:none}}
 
 .rvl footer{background:var(--dark); color:var(--dark-text-soft); padding:64px 0 40px; border-top:1px solid var(--dark-line)}
 .rvl .foot-grid{display:grid; grid-template-columns:1.4fr repeat(3,1fr); gap:32px}
-.rvl .foot-brand{font-family:var(--font-script); font-size:1.7rem; color:var(--paper)}
+.rvl .foot-brand{display:inline-flex}
+.rvl .foot-brand-logo{height:26px; width:auto; display:block}
 .rvl .foot-col p.h{font-size:.8rem; color:var(--paper); margin-bottom:14px}
 .rvl .foot-col a{display:block; font-size:.88rem; padding:5px 0; color:var(--dark-text-soft)}
 .rvl .foot-col a:hover{color:var(--paper)}
