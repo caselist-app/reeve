@@ -10,6 +10,13 @@ import type { ExtractionSubject } from '@/lib/inbox/item'
 
 interface Props {
   subject: ExtractionSubject
+  // The attention_items row's own resolved_at, not derived from
+  // extraction_status: discardExtraction sets extraction_status to 'failed',
+  // the same value a genuine extraction failure leaves behind, so status
+  // alone cannot tell a discarded extraction from one still waiting to be
+  // discarded. resolved_at is the one signal that actually means "done"
+  // (REE-232).
+  resolvedAt: string | null
 }
 
 function decrementInboxCount() {
@@ -36,14 +43,16 @@ function rowCountLine(subject: ExtractionSubject): string | null {
 // discarding the whole email both happen from the panel or from the Discard
 // button here, both of which resolve the Inbox row through their own action,
 // never from this component directly (same shape as guest-request-item.tsx).
-export function ExtractionItem({ subject }: Props) {
+export function ExtractionItem({ subject, resolvedAt }: Props) {
   const router = useRouter()
   const { open } = useSidePanel()
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
 
   const countLine = rowCountLine(subject)
-  const resolved = subject.status === 'confirmed'
+  const resolved = resolvedAt !== null
+  const confirmed = resolved && subject.status === 'confirmed'
+  const discarded = resolved && subject.status !== 'confirmed'
 
   function reviewRows() {
     open({
@@ -87,7 +96,9 @@ export function ExtractionItem({ subject }: Props) {
         )}
       </div>
 
-      {resolved && <p className="text-sm text-muted-foreground">This extraction was already confirmed.</p>}
+      {confirmed && <p className="text-sm text-muted-foreground">This extraction was already confirmed.</p>}
+
+      {discarded && <p className="text-sm text-muted-foreground">This extraction was discarded.</p>}
 
       {!resolved && subject.status === 'failed' && (
         <p className="text-sm text-destructive">

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import Link from 'next/link'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 import { ListRow } from '@/components/ui/list-row'
@@ -12,6 +13,10 @@ import type { InboxGroup, InboxItem } from '@/lib/inbox/group'
 interface Props {
   groups: InboxGroup[]
   error: string | null
+  // ?view=archive (REE-232): groups already came back resolved, newest
+  // resolved first (fetchResolvedInbox). This view never writes: no read
+  // tracking, no unread dot, just a look back at what got cleared.
+  archive: boolean
 }
 
 function humanizeKind(kind: string): string {
@@ -25,13 +30,14 @@ function humanizeKind(kind: string): string {
 // account owns, grouped by artist. Clicking a row marks the item read and
 // navigates to its detail route (/inbox/[itemId]). A read item is not a
 // resolved one (REE-148), so it stays in the list, just no longer marked unread.
-export function InboxView({ groups, error }: Props) {
+export function InboxView({ groups, error, archive }: Props) {
   const [, startTransition] = useTransition()
   const [readIds, setReadIds] = useState<Set<string>>(
     () => new Set(groups.flatMap((g) => g.items).filter((i) => i.read_at).map((i) => i.id))
   )
 
   function handleOpen(item: InboxItem) {
+    if (archive) return
     if (readIds.has(item.id)) return
 
     // Optimistic: the dot clears immediately, the write follows. A failed
@@ -53,14 +59,35 @@ export function InboxView({ groups, error }: Props) {
 
   return (
     <>
-      <PageHeader title="Inbox" description="Everything waiting on you, across every tour." />
+      <PageHeader
+        title="Inbox"
+        description={
+          archive ? 'Resolved items, across every tour.' : 'Everything waiting on you, across every tour.'
+        }
+        actions={
+          archive ? (
+            <Link href="/inbox" className="text-sm text-muted-foreground hover:text-foreground">
+              Back to inbox
+            </Link>
+          ) : (
+            <Link
+              href="/inbox?view=archive"
+              className="text-sm text-muted-foreground hover:text-foreground"
+            >
+              View archive
+            </Link>
+          )
+        }
+      />
 
       {error ? (
         <p className="text-sm text-destructive">
           Could not load your inbox. Try refreshing the page.
         </p>
       ) : groups.length === 0 ? (
-        <p className="text-sm text-muted-foreground">You&rsquo;re all caught up.</p>
+        <p className="text-sm text-muted-foreground">
+          {archive ? 'Nothing resolved yet.' : <>You&rsquo;re all caught up.</>}
+        </p>
       ) : (
         <div className="space-y-8">
           {groups.map((group) => (
@@ -70,21 +97,23 @@ export function InboxView({ groups, error }: Props) {
               </p>
               <div className="space-y-2">
                 {group.items.map((item) => {
-                  const isRead = readIds.has(item.id)
+                  const isRead = archive || readIds.has(item.id)
                   return (
                     <ListRow
                       key={item.id}
                       href={`/inbox/${item.id}`}
-                      onClick={() => handleOpen(item)}
+                      onClick={archive ? undefined : () => handleOpen(item)}
                       className="flex items-center gap-4"
                     >
-                      <span
-                        aria-hidden="true"
-                        className={cn(
-                          'h-2 w-2 shrink-0 rounded-full',
-                          isRead ? 'bg-transparent' : 'bg-primary'
-                        )}
-                      />
+                      {!archive && (
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            'h-2 w-2 shrink-0 rounded-full',
+                            isRead ? 'bg-transparent' : 'bg-primary'
+                          )}
+                        />
+                      )}
                       <div className="min-w-0 flex-1">
                         <p className={cn('text-sm', isRead ? 'text-muted-foreground' : 'font-medium')}>
                           {item.title}
@@ -102,7 +131,7 @@ export function InboxView({ groups, error }: Props) {
                         </p>
                       </div>
                       <span className="shrink-0 text-xs text-muted-foreground">
-                        {relativeLabel(item.created_at, item.timezone)}
+                        {relativeLabel(archive ? (item.resolved_at ?? item.created_at) : item.created_at, item.timezone)}
                       </span>
                     </ListRow>
                   )
