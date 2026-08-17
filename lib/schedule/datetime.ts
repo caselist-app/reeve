@@ -110,6 +110,17 @@ export function localDayWindowUtc(date: string, tz: string): { start: string; en
 }
 
 /**
+ * The timezone a timezone-aware read should use for one record: the record's
+ * own resolved timezone if it has one, otherwise the tour's, otherwise UTC.
+ * The one place this fallback chain is written, so every caller (shows,
+ * rehearsals, and anything else that resolves its own timezone) reads it the
+ * same way instead of reimplementing the `?? ?? 'UTC'` per call site.
+ */
+export function resolveTimezone(record: { timezone: string | null }, tourTimezone: string | null): string {
+  return record.timezone ?? tourTimezone ?? 'UTC'
+}
+
+/**
  * `date` shifted forward by `offset` days, as YYYY-MM-DD.
  *
  * Deliberately UTC arithmetic on a plain calendar date, with no timezone
