@@ -20,6 +20,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { useCommandPalette } from '@/stores/command-palette-store'
 import { useTourNameStore } from '@/stores/tour-name-store'
 import { useInboxCountStore, selectOpenCount } from '@/stores/inbox-count-store'
+import { tourIdFromPathname } from '@/lib/layout/tour-id-from-pathname'
 
 interface Tour {
   id: string
@@ -92,8 +93,7 @@ export function Sidebar({
   }, [openItemCount, setServerCount])
   const inboxCount = selectOpenCount(openItemCount, inboxCountOverride)
 
-  const tourIdMatch = pathname.match(/\/tours\/([^/]+)/)
-  const pathTourId = tourIdMatch?.[1] ?? null
+  const pathTourId = tourIdFromPathname(pathname)
 
   const [rememberedTourId, setRememberedTourId] = useState<string | null>(lastTourId)
   useEffect(() => {
