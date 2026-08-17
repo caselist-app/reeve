@@ -23,6 +23,7 @@ export interface InboxItem {
   related_id: string | null
   created_at: string
   read_at: string | null
+  resolved_at: string | null
 }
 
 export interface InboxGroup {

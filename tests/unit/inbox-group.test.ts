@@ -22,6 +22,7 @@ function item(over: Partial<InboxItem> = {}): InboxItem {
     related_id: null,
     created_at: '2026-08-12T10:00:00.000Z',
     read_at: null,
+    resolved_at: null,
     ...over,
   }
 }

@@ -16,6 +16,45 @@ export interface InboxResult {
   error: string | null
 }
 
+// The select shared by fetchInbox and fetchResolvedInbox: every column an
+// InboxItem needs, plus the tour and artist join. `!inner` on both, per
+// CLAUDE.md ("A filter on an embedded table needs !inner"), because each
+// caller filters on `tours.account_id`.
+const ATTENTION_ITEM_SELECT = `
+  id,
+  tour_id,
+  kind,
+  severity,
+  title,
+  detail,
+  related_table,
+  related_id,
+  created_at,
+  read_at,
+  resolved_at,
+  tours!inner (
+    name,
+    account_id,
+    timezone,
+    artists!inner ( id, name )
+  )
+`
+
+type AttentionItemRow = {
+  id: string
+  tour_id: string
+  kind: string
+  severity: number
+  title: string
+  detail: string | null
+  related_table: string | null
+  related_id: string | null
+  created_at: string
+  read_at: string | null
+  resolved_at: string | null
+  tours: unknown
+}
+
 export async function fetchInbox(supabase: Client, accountId: string): Promise<InboxResult> {
   // PostgREST cannot filter or order by an embedded column: a `.eq`/`.order`
   // naming `tours.account_id` or `tours.name` changes nothing about which
@@ -26,26 +65,7 @@ export async function fetchInbox(supabase: Client, accountId: string): Promise<I
   // joined tour or artist name.
   const { data, error } = await supabase
     .from('attention_items')
-    .select(
-      `
-      id,
-      tour_id,
-      kind,
-      severity,
-      title,
-      detail,
-      related_table,
-      related_id,
-      created_at,
-      read_at,
-      tours!inner (
-        name,
-        account_id,
-        timezone,
-        artists!inner ( id, name )
-      )
-    `
-    )
+    .select(ATTENTION_ITEM_SELECT)
     .is('resolved_at', null)
     .eq('tours.account_id', accountId)
     .order('created_at', { ascending: false })
@@ -56,20 +76,42 @@ export async function fetchInbox(supabase: Client, accountId: string): Promise<I
   // clear".
   if (error) return { items: [], error: error.message }
 
-  const rows = data ?? []
+  return { items: await mapRowsToItems(supabase, data ?? []), error: null }
+}
 
-  // Batched second read: a guest_request row is joined to a show through its
-  // guest_list_entries row, and that show's own resolved venue zone should win
-  // over the tour's fallback for this item's relative label, the same rule
-  // every other reader of tours.timezone now follows (Brief 56). Guarded
-  // against an empty id list before the .in(), which would otherwise be a
-  // round trip that can only return nothing.
+// The archive read behind the Inbox (REE-231): the same account-wide,
+// !inner-scoped shape as fetchInbox, but resolved rows instead of open ones.
+// Ordered by resolved_at, newest first, since this is a log of what the TM
+// has cleared rather than a queue of what is waiting: the thing that changed
+// most recently is resolution, not creation.
+export async function fetchResolvedInbox(supabase: Client, accountId: string): Promise<InboxResult> {
+  const { data, error } = await supabase
+    .from('attention_items')
+    .select(ATTENTION_ITEM_SELECT)
+    .not('resolved_at', 'is', null)
+    .eq('tours.account_id', accountId)
+    .order('resolved_at', { ascending: false })
+
+  if (error) return { items: [], error: error.message }
+
+  return { items: await mapRowsToItems(supabase, data ?? []), error: null }
+}
+
+// Shared row-to-InboxItem mapping for fetchInbox and fetchResolvedInbox: the
+// guest_request timezone batching (a guest_request row is joined to a show
+// through its guest_list_entries row, and that show's own resolved venue zone
+// should win over the tour's fallback for this item's relative label, the
+// same rule every other reader of tours.timezone now follows, Brief 56) plus
+// the row shape itself.
+async function mapRowsToItems(supabase: Client, rows: AttentionItemRow[]): Promise<InboxItem[]> {
+  // Guarded against an empty id list before the .in(), which would otherwise
+  // be a round trip that can only return nothing.
   const guestRequestEntryIds = rows
     .filter((row) => row.kind === 'guest_request' && row.related_table === 'guest_list_entries' && row.related_id)
     .map((row) => row.related_id as string)
   const showTimezoneByEntryId = await fetchShowTimezonesForEntries(supabase, guestRequestEntryIds)
 
-  const items: InboxItem[] = rows.map((row) => {
+  return rows.map((row) => {
     const tour = row.tours as unknown as {
       name: string
       timezone: string | null
@@ -96,10 +138,9 @@ export async function fetchInbox(supabase: Client, accountId: string): Promise<I
       related_id: row.related_id,
       created_at: row.created_at,
       read_at: row.read_at,
+      resolved_at: row.resolved_at,
     }
   })
-
-  return { items, error: null }
 }
 
 // A show's resolved timezone per guest_list_entries id, for every guest_request

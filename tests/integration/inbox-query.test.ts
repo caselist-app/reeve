@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { testDb } from './test-db'
 import { createFixture, destroyFixture, createSecondTour, type Fixture } from './fixture'
-import { fetchInbox } from '@/lib/inbox/query'
+import { fetchInbox, fetchResolvedInbox } from '@/lib/inbox/query'
 
 // REE-149. fetchInbox is the account-wide open-items read behind the Inbox
 // (brief 53): every attention_items row across every tour the account owns,
@@ -117,5 +117,53 @@ describe('fetchInbox', () => {
 
     expect(error).toBeNull()
     expect(items.map((i) => i.id)).toEqual([newerItem.id, olderItem.id])
+  })
+})
+
+// REE-231. fetchResolvedInbox is the archive read: the same account-wide,
+// !inner-scoped shape as fetchInbox, but resolved rows instead of open ones.
+// Seeding one of each in the same test is the regression guard the issue
+// asks for: fetchInbox's existing exclusion of resolved rows has to keep
+// holding now that a resolved row exists to exclude.
+describe('fetchResolvedInbox', () => {
+  let fixture: Fixture
+
+  beforeEach(async () => {
+    fixture = await createFixture()
+  })
+
+  afterEach(async () => {
+    await destroyFixture(fixture)
+  })
+
+  function item(overrides: Record<string, unknown> = {}) {
+    return {
+      tour_id: fixture.tourId,
+      kind: 'email_extraction',
+      title: 'Forwarded email',
+      ...overrides,
+    }
+  }
+
+  it('returns exactly the resolved item, and fetchInbox still excludes it', async () => {
+    const { error: resolvedError } = await testDb
+      .from('attention_items')
+      .insert(item({ resolved_at: new Date().toISOString(), title: 'Resolved item' }))
+    expect(resolvedError).toBeNull()
+
+    const { error: openError } = await testDb.from('attention_items').insert(item({ title: 'Open item' }))
+    expect(openError).toBeNull()
+
+    const { items: resolvedItems, error: resolvedFetchError } = await fetchResolvedInbox(testDb, fixture.userId)
+    expect(resolvedFetchError).toBeNull()
+    expect(resolvedItems).toHaveLength(1)
+    expect(resolvedItems[0].title).toBe('Resolved item')
+    expect(resolvedItems[0].resolved_at).not.toBeNull()
+
+    const { items: openItems, error: openFetchError } = await fetchInbox(testDb, fixture.userId)
+    expect(openFetchError).toBeNull()
+    expect(openItems).toHaveLength(1)
+    expect(openItems[0].title).toBe('Open item')
+    expect(openItems[0].resolved_at).toBeNull()
   })
 })
