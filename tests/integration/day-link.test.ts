@@ -8,6 +8,8 @@ import { updateTransportSegment, createTransportSegment } from '@/lib/actions/tr
 import { createHotelStay } from '@/lib/actions/hotels'
 import { createTourDate } from '@/lib/actions/tour-dates'
 import { fetchDayRecords } from '@/lib/schedule/day-records'
+import { buildDayCalendarView } from '@/lib/schedule/day-calendar-view'
+import { resolveTimezone, wallClockToUtc, localTimeInZone } from '@/lib/schedule/datetime'
 import { renderItinerary } from '@/lib/comms/templates/itinerary'
 
 // Brief 36 Part 1. Brief 19 made tour_dates the spine and retrofitted a
@@ -56,6 +58,21 @@ describe('the day link survives an edit', () => {
     return data
   }
 
+  // The timezone the schedule day view renders this date in: the day's own
+  // show if resolveHub has resolved one, otherwise the tour's, otherwise UTC.
+  // This mirrors app/(app)/tours/[id]/schedule/page.tsx (REE-246), which reads
+  // it the same way before ever calling fetchDayRecords.
+  async function dayTimezone(date: string) {
+    const day = await tourDateFor(date)
+    const [{ data: tour }, { data: show }] = await Promise.all([
+      testDb.from('tours').select('timezone').eq('id', fixture.tourId).single(),
+      day
+        ? testDb.from('shows').select('timezone').eq('tour_date_id', day.id).maybeSingle()
+        : Promise.resolve({ data: null }),
+    ])
+    return resolveTimezone(show ?? { timezone: null }, tour?.timezone ?? null)
+  }
+
   // What the schedule day view actually renders for a date. Off-calendar dates
   // (no tour_dates row) render no timeline at all, which is what the null
   // tourDateId branch of fetchDayRecords returns.
@@ -65,16 +82,16 @@ describe('the day link survives an edit', () => {
   // by a tour-local day window, so a harness that omitted it would assert
   // against UTC boundaries the product never uses and fail a correct fix.
   async function dayRecords(date: string) {
-    const [day, { data: tour }] = await Promise.all([
+    const [day, timezone] = await Promise.all([
       tourDateFor(date),
-      testDb.from('tours').select('timezone').eq('id', fixture.tourId).single(),
+      dayTimezone(date),
     ])
 
     return fetchDayRecords(testDb, {
       tourId: fixture.tourId,
       tourDateId: day?.id ?? null,
       date,
-      timezone: tour?.timezone ?? 'UTC',
+      timezone,
     })
   }
 
@@ -654,6 +671,79 @@ describe('the day link survives an edit', () => {
       const records = await dayRecords(DATE)
       expect(records.segments.map((s) => s.id)).not.toContain(unlinked)
       expect(records.segments.map((s) => s.id)).not.toContain(linked)
+    })
+  })
+
+  // REE-246, Brief 56. A show resolves its own venue timezone (resolveHub,
+  // REE-242) and the day view is supposed to render in it instead of always
+  // falling back to the tour's. Both directions matter: a resolved show
+  // timezone must win over the tour's, and a show with none yet (hub
+  // resolution pending, or no address) must still fall back cleanly.
+  describe("resolving the day's own timezone", () => {
+    it("renders a load-in at the show's own Perth wall-clock time, not shifted by the Sydney gap", async () => {
+      fixture = await createFixture({ date: DATE, timezone: 'Australia/Sydney' })
+
+      const { error: tzError } = await testDb
+        .from('shows')
+        .update({ timezone: 'Australia/Perth' })
+        .eq('id', fixture.showId)
+      if (tzError) throw new Error(`could not set show timezone: ${tzError.message}`)
+
+      // Perth is two hours behind Sydney in June (no daylight saving on either
+      // side that month): 10:00 Perth is 12:00 Sydney. Written directly as the
+      // instant 10:00 Perth names, bypassing createDayItem, which still resolves
+      // HH:MM against the tour's timezone (writes are a separate ticket) and
+      // would produce the wrong instant for this case.
+      const startsAt = wallClockToUtc(`${DATE}T10:00`, 'Australia/Perth')
+      const { error: itemError } = await testDb.from('day_items').insert({
+        tour_id: fixture.tourId,
+        tour_date_id: fixture.tourDateId,
+        show_id: fixture.showId,
+        kind: 'load_in',
+        starts_at: startsAt,
+      })
+      if (itemError) throw new Error(`could not create load-in: ${itemError.message}`)
+
+      const timezone = await dayTimezone(DATE)
+      expect(timezone).toBe('Australia/Perth')
+
+      const records = await dayRecords(DATE)
+      const view = buildDayCalendarView(records, timezone, DATE)
+
+      const loadIn = view.events.find((e) => e.title === 'Load-in')
+      if (!loadIn) throw new Error('load-in did not render on the grid')
+
+      // The real instant renders back as 10:00 in the zone the day resolved to.
+      // Reading it against the tour's Sydney zone instead (the bug this ticket
+      // fixes) would read 12:00.
+      expect(localTimeInZone(loadIn.realStart.toISOString(), timezone)).toBe('10:00')
+    })
+
+    it("falls back to the tour's timezone when the show has none resolved yet", async () => {
+      fixture = await createFixture({ date: DATE, timezone: 'Australia/Sydney' })
+      // shows.timezone is null until resolveHub runs (or never, with no
+      // address): createFixture leaves it unset, which is the case under test.
+
+      const startsAt = wallClockToUtc(`${DATE}T10:00`, 'Australia/Sydney')
+      const { error: itemError } = await testDb.from('day_items').insert({
+        tour_id: fixture.tourId,
+        tour_date_id: fixture.tourDateId,
+        show_id: fixture.showId,
+        kind: 'load_in',
+        starts_at: startsAt,
+      })
+      if (itemError) throw new Error(`could not create load-in: ${itemError.message}`)
+
+      const timezone = await dayTimezone(DATE)
+      expect(timezone).toBe('Australia/Sydney')
+
+      const records = await dayRecords(DATE)
+      const view = buildDayCalendarView(records, timezone, DATE)
+
+      const loadIn = view.events.find((e) => e.title === 'Load-in')
+      if (!loadIn) throw new Error('load-in did not render on the grid')
+
+      expect(localTimeInZone(loadIn.realStart.toISOString(), timezone)).toBe('10:00')
     })
   })
 })
