@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation'
 import { schedules } from '@trigger.dev/sdk/v3'
 import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
+import { readForm } from '@/lib/forms/read-form'
+import { definedOnly } from '@/lib/forms/write-row'
 import { tourSchema, tourSettingsSchema } from '@/lib/validators/tour'
 
 export type TourActionState = { error: string | null }
@@ -32,14 +34,25 @@ function parseTourFormData(formData: FormData) {
 // so it validates against tourSettingsSchema. Parsing it with the create schema
 // meant artist_id came back null and every save failed. Do not "simplify" this
 // back into parseTourFormData: the two forms send different field sets.
+//
+// Read through readForm, not `formData.get(x) || undefined` (REE-266): the old
+// form collapsed a blank submission to undefined, indistinguishable from the
+// field never having been sent, so clearing an optional field like territory
+// back to blank silently did nothing. readForm keeps blank-but-submitted as
+// null, which tourSettingsSchema now accepts, and updateTourAction below
+// writes through definedOnly so that null actually clears the column.
 function parseTourSettingsFormData(formData: FormData) {
+  const fields = readForm(formData, {
+    name: 'requiredString',
+    start_date: 'string',
+    end_date: 'string',
+    territory: 'string',
+    base_currency: 'requiredString',
+    timezone: 'string',
+  })
+
   return tourSettingsSchema.safeParse({
-    name: formData.get('name'),
-    start_date: formData.get('start_date') || undefined,
-    end_date: formData.get('end_date') || undefined,
-    territory: formData.get('territory') || undefined,
-    base_currency: formData.get('base_currency') || 'GBP',
-    timezone: formData.get('timezone') || undefined,
+    ...fields,
     // Toggles post as hidden inputs carrying 'true' or 'false'.
     inbound_qa_enabled: formData.get('inbound_qa_enabled') === 'true',
     morning_message_enabled: formData.get('morning_message_enabled') === 'true',
@@ -96,7 +109,7 @@ export async function updateTourAction(
   const supabase = await createClient()
   const { data: updated, error } = await supabase
     .from('tours')
-    .update(parsed.data)
+    .update(definedOnly(parsed.data))
     .eq('id', tourId)
     .eq('account_id', user.id)
     .select('id, timezone, morning_message_enabled')
