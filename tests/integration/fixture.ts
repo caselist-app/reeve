@@ -151,7 +151,6 @@ export interface E2eSeed {
   // off this one.
   a: Fixture & {
     hotelStayId: string
-    rehearsalId: string
     rehearsalDate: string
     // A pending guest_request attention_items row on account A's seeded show,
     // for /inbox/{itemId} (REE-152). Its own guest_list_entries row, not one
@@ -185,10 +184,12 @@ export interface E2eSeed {
 // than per spec: these tests read pages far more than they write rows, and a
 // per-spec account would mean signing in again for every file.
 //
-// The hotel stay and the rehearsal exist for one reason each: they are the only
-// way to reach /tours/[id]/shows/[showId]/hotels/[stayId] and
-// /tours/[id]/rehearsals/[rehearsalId], and a smoke spec that skips a route
-// because it could not build an id is a smoke spec with a hole in it.
+// The hotel stay exists for one reason: it is the only way to reach
+// /tours/[id]/shows/[showId]/hotels/[stayId], and a smoke spec that skips a
+// route because it could not build an id is a smoke spec with a hole in it.
+// The rehearsal exists for the day view specs that need a non-show day to run
+// against (add-to-day.spec.ts) and now, since REE-36 moved rehearsal editing
+// into the day view side panel, for rehearsal-panel.spec.ts as well.
 export async function createE2eSeed(): Promise<E2eSeed> {
   const a = await createFixture({ tourName: E2E_TOUR_A_NAME, artistName: 'Seeded Artist' })
   const b = await createFixture({ tourName: E2E_TOUR_B_NAME, artistName: 'Other Artist' })
@@ -392,7 +393,6 @@ export async function createE2eSeed(): Promise<E2eSeed> {
     a: {
       ...a,
       hotelStayId: stay.id,
-      rehearsalId: rehearsal.id,
       rehearsalDate,
       zoned,
       zonedDst,

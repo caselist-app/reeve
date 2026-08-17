@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { definedOnly } from '@/lib/forms/write-row'
 import { revertDayTypeIfOrphaned } from '@/lib/schedule/day-type-revert'
 import { resolveRehearsalTimezoneJob } from '@/trigger/jobs/resolve-rehearsal-timezone'
+import type { Tables } from '@/lib/types/database'
 import { z } from 'zod'
 
 const rehearsalSchema = z.object({
@@ -110,6 +111,31 @@ export async function createRehearsal(
   await triggerRehearsalTimezoneResolve(rehearsal.id)
 
   return { error: null, rehearsalId: rehearsal.id }
+}
+
+// Everything the rehearsal panel needs to edit a rehearsal. Fetched when the
+// panel opens rather than carried on the side-panel descriptor, same reasoning
+// as getShowVenueDetail: the day view would otherwise fetch every rehearsal
+// column on every date click to feed a panel a TM opens occasionally.
+export async function getRehearsalDetail(
+  rehearsalId: string
+): Promise<{ data: Tables<'rehearsals'> | null; error: string | null }> {
+  await requireUser()
+
+  // RLS on rehearsals scopes by owns_tour, so a rehearsal on someone else's
+  // tour reads as not found rather than needing an ownership query of its own.
+  const supabase = await createClient()
+
+  const { data: rehearsal, error } = await supabase
+    .from('rehearsals')
+    .select('*')
+    .eq('id', rehearsalId)
+    .maybeSingle()
+
+  if (error) return { data: null, error: error.message }
+  if (!rehearsal) return { data: null, error: 'Rehearsal not found.' }
+
+  return { data: rehearsal, error: null }
 }
 
 export async function updateRehearsal(

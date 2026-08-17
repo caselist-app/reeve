@@ -40,7 +40,6 @@ const AUTHENTICATED_ROUTES = [
   '/tours/{tourId}/transport',
   '/tours/{tourId}/transport/planner',
   '/tours/{tourId}/settings',
-  '/tours/{tourId}/rehearsals/{rehearsalId}',
 ]
 
 // Reachable with no session at all. Visited signed out, below.
@@ -65,7 +64,6 @@ function resolve(template: string): string {
     .replace('{contactId}', seed.a.contactId)
     .replace('{showId}', seed.a.showId)
     .replace('{stayId}', seed.a.hotelStayId)
-    .replace('{rehearsalId}', seed.a.rehearsalId)
     .replace('{date}', seed.a.date)
     .replace('{itemId}', seed.a.itemId)
 }
@@ -150,7 +148,7 @@ test('every page under app/(app) is in the list above', () => {
   // same reason: an empty list produces no tests at all, and a suite that runs
   // nothing reports green.
   expect(pages.length).toBeGreaterThan(10)
-  expect(AUTHENTICATED_ROUTES.length).toBe(23)
+  expect(AUTHENTICATED_ROUTES.length).toBe(22)
   expect(PUBLIC_ROUTES.length).toBe(5)
   expect(pages.length, `app/(app) pages:\n${pages.join('\n')}`).toBe(APP_GROUP_ROUTE_COUNT)
 })
