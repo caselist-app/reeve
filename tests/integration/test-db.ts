@@ -28,9 +28,12 @@ if (!url || !serviceKey) {
 }
 
 // Service role: the integration tests are about write semantics, not
-// authorization. The cross-tour tests deliberately use their own RLS-scoped
-// client instead, because that is the thing they are checking, and the e2e
-// suite drives a real browser holding a real session for the same reason.
+// authorization. No RLS-scoped client exists anywhere in tests/, so no
+// integration test can prove isolation: tests/integration/cross-tour.test.ts
+// covers cross-tour id checks with two tours on one account, which RLS
+// passes on regardless of whether the check is correct. Only
+// tests/e2e/access.spec.ts, which drives a real browser holding a real
+// session for a second account, can actually exercise RLS.
 export const testDb = createSupabaseClient<Database>(url, serviceKey, {
   auth: { autoRefreshToken: false, persistSession: false },
 })
