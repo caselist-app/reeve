@@ -40,6 +40,7 @@ export function AddDriveForm({ tourId, tourDateId, date, timezone, initialClock,
   const departDefault = `${date}T${initialClock ?? '09:00'}`
   const [computedArrival, setComputedArrival] = useState<string>('')
   const [computing, setComputing] = useState(false)
+  const [driveTimeError, setDriveTimeError] = useState<string | null>(null)
   const [departLocal, setDepartLocal] = useState(departDefault)
   // Controlled so the Places widget can write the selected place back in. The
   // rendered inputs still carry name/value, so the onBlur handlers below can keep
@@ -57,9 +58,14 @@ export function AddDriveForm({ tourId, tourDateId, date, timezone, initialClock,
   async function computeArrival(origin: string, destination: string, departAt: string) {
     if (!origin || !destination || !departAt) return
     setComputing(true)
+    setDriveTimeError(null)
     try {
       const result = await getDriveTime(origin, destination, departAt, timezone)
-      if (result.arrive_at) setComputedArrival(result.arrive_at)
+      if (result.arrive_at) {
+        setComputedArrival(result.arrive_at)
+      } else {
+        setDriveTimeError('Could not calculate arrival from Google Maps. You can enter it manually after saving.')
+      }
     } finally {
       setComputing(false)
     }
@@ -80,6 +86,9 @@ export function AddDriveForm({ tourId, tourDateId, date, timezone, initialClock,
     } else if (data.origin && data.destination && data.depart_at) {
       const dr = await getDriveTime(data.origin, data.destination, data.depart_at, timezone)
       arriveUtc = dr.arrive_at ?? null
+      if (!arriveUtc) {
+        setDriveTimeError('Could not calculate arrival from Google Maps. You can enter it manually after saving.')
+      }
     }
 
     setPending({ origin: data.origin, destination: data.destination, depart_at: departUtc, arrive_at: arriveUtc })
@@ -179,6 +188,7 @@ export function AddDriveForm({ tourId, tourDateId, date, timezone, initialClock,
           placeholder="Computed from Google Maps on save"
           className="h-7 text-xs bg-muted"
         />
+        {driveTimeError && <p className="text-xs text-destructive">{driveTimeError}</p>}
       </div>
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex gap-2">
