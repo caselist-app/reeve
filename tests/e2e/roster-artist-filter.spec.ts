@@ -30,6 +30,12 @@ test('the roster page filters by artist and surfaces an Unassigned bucket', asyn
   const linkedName = `E2E Linked Contact ${stamp}`
   const unassignedName = `E2E Unassigned Contact ${stamp}`
 
+  // Each roster card also carries a sr-only link with the same accessible
+  // name, for keyboard/screen-reader navigation to the detail page, so a
+  // plain getByText(name) resolves to two elements. Scope to the visible
+  // name paragraph instead.
+  const cardName = (name: string) => page.locator('p').filter({ hasText: name })
+
   const { data: linkedContact, error: linkedError } = await testDb
     .from('contacts')
     .insert({ account_id: seed.a.userId, name: linkedName })
@@ -58,8 +64,8 @@ test('the roster page filters by artist and surfaces an Unassigned bucket', asyn
 
     // Defaults to all contacts: both the second-artist-only contact and the
     // zero-link contact are visible with no filter applied.
-    await expect(page.getByText(linkedName)).toBeVisible()
-    await expect(page.getByText(unassignedName)).toBeVisible()
+    await expect(cardName(linkedName)).toBeVisible()
+    await expect(cardName(unassignedName)).toBeVisible()
 
     // Pills exist for "All artists", every artist on the account (the global
     // seed's "Seeded Artist" and this test's new artist), and "Unassigned".
@@ -74,21 +80,21 @@ test('the roster page filters by artist and surfaces an Unassigned bucket', asyn
     // contacts and updates the URL.
     await artistPill.click()
     await expect(page).toHaveURL(`/roster?artist=${secondArtist.id}`)
-    await expect(page.getByText(linkedName)).toBeVisible()
-    await expect(page.getByText(unassignedName)).toBeHidden()
+    await expect(cardName(linkedName)).toBeVisible()
+    await expect(cardName(unassignedName)).toBeHidden()
 
     // Selecting "Unassigned" shows the zero-link contact and hides the
     // artist-linked one.
     await unassignedPill.click()
     await expect(page).toHaveURL('/roster?artist=unassigned')
-    await expect(page.getByText(unassignedName)).toBeVisible()
-    await expect(page.getByText(linkedName)).toBeHidden()
+    await expect(cardName(unassignedName)).toBeVisible()
+    await expect(cardName(linkedName)).toBeHidden()
 
     // Back to "All artists" shows both again.
     await allPill.click()
     await expect(page).toHaveURL('/roster')
-    await expect(page.getByText(linkedName)).toBeVisible()
-    await expect(page.getByText(unassignedName)).toBeVisible()
+    await expect(cardName(linkedName)).toBeVisible()
+    await expect(cardName(unassignedName)).toBeVisible()
   } finally {
     // Cascades away contact_artists; the artist and contacts are the only
     // rows left to remove explicitly.
