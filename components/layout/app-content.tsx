@@ -2,13 +2,20 @@
 
 import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
-import * as SheetPrimitive from '@radix-ui/react-dialog'
+import dynamic from 'next/dynamic'
 import { cn } from '@/lib/utils'
 import { useSidePanel } from '@/stores/side-panel-store'
 import { ActivePanel } from '@/components/layout/active-panel'
 import { MobileTopBar } from '@/components/layout/mobile-top-bar'
 import { useIsMobile } from '@/hooks/use-is-mobile'
 import { hasSecondaryPanel } from '@/lib/layout/secondary-panel-routes'
+
+// Keeps @radix-ui/react-dialog out of the app shell bundle (REE-267): the
+// mobile Sheet chrome only loads once the side panel has actually opened.
+const MobilePanelSheet = dynamic(
+  () => import('@/components/layout/mobile-panel-sheet').then((mod) => mod.MobilePanelSheet),
+  { ssr: false },
+)
 
 interface AppContentProps {
   children: React.ReactNode
@@ -36,6 +43,14 @@ export function AppContent({ children, secondaryPanel }: AppContentProps) {
       const t = setTimeout(() => setShowPanel(false), 200)
       return () => clearTimeout(t)
     }
+  }, [isOpen])
+
+  // Gates the dynamic import of MobilePanelSheet: stays false (so the Radix
+  // Sheet chrome never loads) until the side panel has opened at least once.
+  const [hasOpenedPanel, setHasOpenedPanel] = useState(false)
+
+  useEffect(() => {
+    if (isOpen) setHasOpenedPanel(true)
   }, [isOpen])
 
   // Escape key closes the panel.
@@ -84,24 +99,11 @@ export function AppContent({ children, secondaryPanel }: AppContentProps) {
           </main>
         </div>
 
-        <SheetPrimitive.Root open={isOpen} onOpenChange={(open) => { if (!open) close() }}>
-          <SheetPrimitive.Portal>
-            <SheetPrimitive.Overlay className="fixed inset-0 z-50 bg-black/60 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
-            <SheetPrimitive.Content
-              className={cn(
-                'fixed inset-y-0 right-0 z-50 w-full max-w-sm flex flex-col',
-                'bg-background border-l border-border',
-                'pt-[var(--safe-top)] pb-[var(--safe-bottom)]',
-                'data-[state=open]:animate-in data-[state=closed]:animate-out',
-                'data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right',
-                'duration-200',
-              )}
-            >
-              <SheetPrimitive.Title className="sr-only">Panel</SheetPrimitive.Title>
-              {panelContent}
-            </SheetPrimitive.Content>
-          </SheetPrimitive.Portal>
-        </SheetPrimitive.Root>
+        {hasOpenedPanel && (
+          <MobilePanelSheet isOpen={isOpen} onOpenChange={(open) => { if (!open) close() }}>
+            {panelContent}
+          </MobilePanelSheet>
+        )}
       </div>
     )
   }
