@@ -14,6 +14,7 @@ const SendDocumentSheet = dynamic(() => import('@/components/shows/send-document
 const VenuePanel = dynamic(() => import('@/components/schedule/panels/venue-panel').then((m) => m.VenuePanel), { ssr: false })
 const AdvancePanel = dynamic(() => import('@/components/schedule/panels/advance-panel').then((m) => m.AdvancePanel), { ssr: false })
 const GuestListPanel = dynamic(() => import('@/components/schedule/panels/guest-list-panel').then((m) => m.GuestListPanel), { ssr: false })
+const RehearsalPanel = dynamic(() => import('@/components/schedule/panels/rehearsal-panel').then((m) => m.RehearsalPanel), { ssr: false })
 const AddDayPanel = dynamic(() => import('@/components/schedule/add-day-panel').then((m) => m.AddDayPanel), { ssr: false })
 // Brief 33: schedule day view detail and add panels.
 // Brief 42: the show panel and the event panel are one day-item panel now.
@@ -83,6 +84,14 @@ export function ActivePanel() {
           tourId={panel.tourId}
           showId={panel.showId}
           venueName={panel.venueName}
+        />
+      )
+    case 'rehearsal':
+      return (
+        <RehearsalPanel
+          rehearsalId={panel.rehearsalId}
+          locationName={panel.locationName}
+          tourTimezone={panel.tourTimezone}
         />
       )
     case 'send-rider':

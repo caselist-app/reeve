@@ -31,17 +31,30 @@ export type MorningMessageData = {
 export async function buildMorningMessageData(
   person_id: string,
   show_id: string,
-  timezone: string
+  timezone: string,
+  // First name already resolved by the caller. send-day-message fetches
+  // every person's contact once for the whole run and passes it through
+  // here rather than have this query the same people->contacts row again
+  // per person (REE-108). Omit to have this fetch it, as the dev
+  // notify-test route (the other caller) does.
+  personFirstName?: string
 ): Promise<MorningMessageData | null> {
   const admin = createAdminClient()
 
   const [
-    { data: person },
+    firstName,
     { data: show },
     showItems,
     { data: roomAssignment },
   ] = await Promise.all([
-    admin.from('people').select('contacts(name)').eq('id', person_id).single(),
+    personFirstName !== undefined
+      ? Promise.resolve(personFirstName)
+      : admin
+          .from('people')
+          .select('contacts(name)')
+          .eq('id', person_id)
+          .single()
+          .then(({ data }) => ((data?.contacts as { name: string } | null)?.name ?? '').split(' ')[0]),
     admin.from('shows').select('venue_name, date').eq('id', show_id).single(),
     fetchShowItems(admin, show_id),
     // Find the hotel stay the person is assigned to. check_out_time is a
@@ -54,7 +67,7 @@ export async function buildMorningMessageData(
       .maybeSingle(),
   ])
 
-  if (!person || !show) return null
+  if (!show) return null
 
   // Null rather than a message with every time missing. The caller skips the
   // send on null, which is the right answer: a morning message that says the
@@ -77,10 +90,6 @@ export async function buildMorningMessageData(
   const hotelCheckout = hotel?.check_out_time
     ? hotel.check_out_time.slice(0, 5)
     : null
-
-  // First name only: everything before the first space. Name lives on the contact.
-  const personName = (person.contacts as { name: string } | null)?.name ?? ''
-  const firstName = personName.split(' ')[0]
 
   return {
     person_first_name: firstName,

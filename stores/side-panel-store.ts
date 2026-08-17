@@ -102,6 +102,23 @@ export type PanelDescriptor =
       venueName: string
     }
   | {
+      // A rehearsal's detail, loaded by the panel from rehearsalId. Same
+      // reasoning as 'venue': the day view fetches only id and location_name
+      // for the block, and the panel fetches the rest on open. REE-36: the
+      // route this replaced, /tours/[id]/rehearsals/[rehearsalId], had nothing
+      // linking to it from the day view.
+      //
+      // No tourId: unlike updateShow/deleteShow, updateRehearsal and
+      // deleteRehearsal resolve the tour from the rehearsal row itself under
+      // RLS, so the panel has no action that needs it.
+      type: 'rehearsal'
+      rehearsalId: string
+      locationName: string
+      // The rehearsal's own timezone falls back to this when unresolved
+      // (resolveTimezone), same as the deleted rehearsal detail page read it.
+      tourTimezone: string
+    }
+  | {
       type: 'send-rider'
       tourId: string
       // Fixed and hidden from the picker when the caller already knows the

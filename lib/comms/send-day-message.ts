@@ -19,7 +19,7 @@ import type {
   CateringData,
   WrapData,
 } from '@/lib/comms/templates/day-blocks'
-import type { NotificationDataMap } from '@/lib/comms/notify/types'
+import type { NotificationDataMap, NotifyContact } from '@/lib/comms/notify/types'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/types/database'
 
@@ -31,6 +31,11 @@ import type { Database } from '@/lib/types/database'
 // a TM sees before pressing the button never drifts from who the send below
 // actually reaches. Works on either the RLS or the admin client: the caller
 // decides which is appropriate for its own tour-ownership check.
+//
+// sendDayMessage itself does not call this: it needs the fuller contact row
+// (name, operational_channel, email_enabled) to avoid notify() re-fetching it
+// per block per person (REE-108), so it runs its own richer query below with
+// the same filter.
 export async function fetchContactablePeople(
   supabase: SupabaseClient<Database>,
   tourId: string
@@ -158,11 +163,25 @@ export async function sendDayMessage(input: SendDayMessageInput): Promise<SendDa
 
   const daySheet = showBlockTimesFromItems(items, show.catering_type)
 
-  // This pre-filter only skips people with no address at all; resolveChannels
-  // still makes the real per-notification decision. The error is intentionally
-  // not checked here, unchanged from before this was extracted: a failed read
-  // reads as "no contactable people" and skips, same as it always has.
-  const { people } = await fetchContactablePeople(admin, tourId)
+  // Everyone on the tour with at least one usable address. Telegram counts:
+  // a Telegram-only contact has no whatsapp_number and no contact_email, so
+  // filtering on those two alone dropped them before notify() ever resolved
+  // their channels. This pre-filter only skips people with no address at all;
+  // resolveChannels still makes the real per-notification decision.
+  //
+  // Selects everything notify() itself would otherwise query per call (name,
+  // operational_channel, email_enabled alongside the three addresses), so the
+  // same contact row fetched here once per person is reused for every block
+  // send and the digest below, instead of notify() re-fetching it each time
+  // (REE-108).
+  const { data: peopleRows } = await admin
+    .from('people')
+    .select('id, contacts(name, whatsapp_number, telegram_chat_id, contact_email, operational_channel, email_enabled)')
+    .eq('tour_id', tourId)
+
+  const people = (peopleRows ?? [])
+    .map((r) => ({ id: r.id, contact: r.contacts as NotifyContact | null }))
+    .filter((p) => !!(p.contact?.whatsapp_number || p.contact?.telegram_chat_id || p.contact?.contact_email))
 
   if (people.length === 0) {
     return { skipped: true, reason: 'no_contactable_people', date, people_count: 0, results: [], failures: [] }
@@ -214,14 +233,9 @@ export async function sendDayMessage(input: SendDayMessageInput): Promise<SendDa
 
       const blockPlan = resolveDayBlocks(blockInput, onwardLeg)
 
-      // Fetch person's first name for the opener block.
-      const { data: personRow } = await admin
-        .from('people')
-        .select('contacts(name)')
-        .eq('id', person.id)
-        .single()
-      const fullName = (personRow?.contacts as { name: string } | null)?.name ?? ''
-      const firstName = fullName.split(' ')[0]
+      // First name for the opener block, off the contact row fetched once
+      // above for the whole tour rather than re-queried per person.
+      const firstName = (person.contact?.name ?? '').split(' ')[0]
 
       // Send each block in sequence with a stagger so it reads like texting.
       let isFirst = true
@@ -247,6 +261,7 @@ export async function sendDayMessage(input: SendDayMessageInput): Promise<SendDa
           type: blockType,
           data,
           dedupDimension,
+          contact: person.contact,
         })
 
         results.push({ person_id: person.id, channels: result.channels })
@@ -255,7 +270,7 @@ export async function sendDayMessage(input: SendDayMessageInput): Promise<SendDa
       // Email digest: no WhatsApp renderer so resolveChannels skips
       // WhatsApp contacts automatically. Email-preferring contacts get
       // this consolidated view instead of the block sequence.
-      const morningData = await buildMorningMessageData(person.id, show.id, showTimezone)
+      const morningData = await buildMorningMessageData(person.id, show.id, showTimezone, firstName)
       if (morningData) {
         const result = await notify({
           tourId,
@@ -263,6 +278,7 @@ export async function sendDayMessage(input: SendDayMessageInput): Promise<SendDa
           type: 'morning_message',
           data: morningData,
           dedupDimension,
+          contact: person.contact,
         })
         results.push({ person_id: person.id, channels: result.channels })
       }

@@ -4,7 +4,7 @@ import { resolveChannels } from './channels'
 import { sendWhatsAppRendered } from './adapters/whatsapp'
 import { sendEmailRendered } from './adapters/email'
 import { sendTelegramRendered } from './adapters/telegram'
-import type { Channel, ImplementedType, NotificationDataMap, Recipient, RenderedWhatsApp, RenderedEmail, RenderedTelegram } from './types'
+import type { Channel, ImplementedType, NotificationDataMap, NotifyContact, Recipient, RenderedWhatsApp, RenderedEmail, RenderedTelegram } from './types'
 
 export type NotifyInput<T extends ImplementedType> = {
   tourId: string
@@ -15,6 +15,10 @@ export type NotifyInput<T extends ImplementedType> = {
   // morning message or the assignment id for a boarding pass. Combined with
   // (tour, person, type, channel) it is the durable idempotency key.
   dedupDimension: string
+  // A caller that already fetched this person's contact row (send-day-message
+  // does, once per person, for every block it sends) can pass it in to skip
+  // notify()'s own people->contacts lookup. Omit to have notify() fetch it.
+  contact?: NotifyContact | null
 }
 
 export type ChannelOutcome = {
@@ -44,20 +48,21 @@ export async function notify<T extends ImplementedType>(
   const def = registry[input.type]
 
   // Identity and channel preference live on the contact (Brief 20, Brief 24).
-  const { data: personRow } = await admin
-    .from('people')
-    .select('contacts(name, whatsapp_number, telegram_chat_id, contact_email, operational_channel, email_enabled)')
-    .eq('id', input.personId)
-    .single()
+  // A caller sending several notifications to the same person in one run
+  // (send-day-message.ts, one call per block plus the digest) passes this in
+  // once instead of paying for the same join again on every call.
+  let contact: NotifyContact | null
+  if (input.contact !== undefined) {
+    contact = input.contact
+  } else {
+    const { data: personRow } = await admin
+      .from('people')
+      .select('contacts(name, whatsapp_number, telegram_chat_id, contact_email, operational_channel, email_enabled)')
+      .eq('id', input.personId)
+      .single()
 
-  const contact = personRow?.contacts as {
-    name: string
-    whatsapp_number: string | null
-    telegram_chat_id: number | null
-    contact_email: string | null
-    operational_channel: 'whatsapp' | 'telegram' | null
-    email_enabled: boolean
-  } | null
+    contact = personRow?.contacts as NotifyContact | null
+  }
 
   if (!contact) return { personId: input.personId, channels: [] }
 
