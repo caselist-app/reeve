@@ -273,10 +273,19 @@ for (const file of sourceFiles) {
 // ---- Rule 6: no em-dashes, anywhere ----
 const PROSE_FILES = [
   'CLAUDE.md', 'COMPONENTS.md', '.cursorrules', '.env.example', 'README.md',
-  'tests/README.md',
+  'tests/README.md', 'OPERATIONS.md',
 ]
+// Scoped separately from sourceFiles rather than added to its extension list:
+// sourceFiles feeds every other rule in this script, and those all assume
+// TS/JS syntax. A .css file has no exports, no server actions, nothing those
+// rules look for, so folding it in would just be dead weight on every other
+// loop. The em-dash check is the only one that cares about prose in CSS.
+const cssFiles = SOURCE_DIRS
+  .flatMap((d) => walk(join(ROOT, d)))
+  .filter((f) => extname(f) === '.css')
 const emDashTargets = [
   ...sourceFiles,
+  ...cssFiles,
   ...walk(join(ROOT, 'supabase', 'migrations')).filter((f) => f.endsWith('.sql')),
   ...PROSE_FILES.map((f) => join(ROOT, f)).filter(existsSync),
   // The workflow files carry real explanatory prose now (the deploy job's comment

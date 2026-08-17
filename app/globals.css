@@ -37,7 +37,7 @@
 }
 
 :root {
-  /* Sidebar — light mode */
+  /* Sidebar: light mode */
   --sidebar: #f5f5f5;
   --sidebar-foreground: #1a1a1a;
   --sidebar-accent: #e5e5e5;
@@ -67,7 +67,7 @@
 }
 
 .dark {
-  /* Sidebar — dark mode */
+  /* Sidebar: dark mode */
   --sidebar: #111111;
   --sidebar-foreground: #fafafa;
   --sidebar-accent: #1a1a1a;
