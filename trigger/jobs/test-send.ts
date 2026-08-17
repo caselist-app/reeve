@@ -25,13 +25,14 @@ export type TestSendType =
   | 'wrap'
   | 'boarding_pass'
   | 'change_alert'
+  | 'flight_status_alert'
 
 export type TestSendPayload = {
   type: TestSendType
   personId: string
   // Variant to test. Defaults to the richest variant for the type if omitted.
   variant?: ShowInfoVariant | CateringVariant | WrapVariant
-  // change_alert only: overrides the default sample message.
+  // change_alert and flight_status_alert only: overrides the default sample message.
   message?: string
   // boarding_pass only: pass a real signed Storage URL to test the document
   // send path. Omitted by default, which sends text only.
@@ -163,5 +164,8 @@ function buildSampleData(
 
     case 'change_alert':
       return { message: payload.message ?? 'This is a test change alert. Ignore if received during testing.' }
+
+    case 'flight_status_alert':
+      return { message: payload.message ?? 'Flight update: BA442 (LHR to CDG)\nNow delayed. Gate: A12' }
   }
 }
