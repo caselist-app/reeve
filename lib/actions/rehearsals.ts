@@ -23,6 +23,19 @@ export type RehearsalActionState = {
   rehearsalId?: string
 }
 
+// Enqueuing is best-effort, the same reasoning as bustTourContextCache
+// (lib/ai/context.ts): a rehearsal's timezone is enrichment that falls back to
+// the tour's zone when absent, not a write the TM is blocked on, so a broken
+// Trigger.dev connection must not fail the save. Swallowed rather than
+// awaited-and-ignored so the caller does not have to reason about it either.
+async function triggerRehearsalTimezoneResolve(rehearsalId: string) {
+  try {
+    await resolveRehearsalTimezoneJob.trigger({ rehearsal_id: rehearsalId })
+  } catch (err) {
+    console.warn('[rehearsals] resolve-rehearsal-timezone enqueue failed:', err)
+  }
+}
+
 // Creates the tour_dates row (upsert) and the rehearsals row together.
 // Returns the rehearsalId so the caller can redirect to the detail page.
 export async function createRehearsal(
@@ -78,11 +91,6 @@ export async function createRehearsal(
 
   if (rError) return { error: rError.message }
 
-  // Triggered unconditionally, same as a show's resolve-hub fallback path: the
-  // job itself is a no-op when there is no address, so the caller does not have
-  // to duplicate that check.
-  await resolveRehearsalTimezoneJob.trigger({ rehearsal_id: rehearsal.id })
-
   // This upserts a tour_dates row, which is the Dates sidebar. That sidebar is
   // a Next.js layout inside the @secondaryPanel slot, and a soft navigation
   // does not re-resolve a layout. The caller pushes (add-day-panel.tsx sends
@@ -95,6 +103,11 @@ export async function createRehearsal(
   // line turns the Dates spec in tests/e2e/revalidate.spec.ts red, which is
   // where that claim was checked rather than assumed (Brief 41).
   revalidatePath(`/tours/${tourId}/schedule`)
+
+  // Triggered unconditionally, same as a show's resolve-hub fallback path: the
+  // job itself is a no-op when there is no address, so the caller does not have
+  // to duplicate that check.
+  await triggerRehearsalTimezoneResolve(rehearsal.id)
 
   return { error: null, rehearsalId: rehearsal.id }
 }
@@ -157,7 +170,7 @@ export async function updateRehearsal(
   // Same unconditional trigger as create: the job no-ops when the new address
   // is null, so this does not need to duplicate that check.
   if (addressChanged) {
-    await resolveRehearsalTimezoneJob.trigger({ rehearsal_id: rehearsalId })
+    await triggerRehearsalTimezoneResolve(rehearsalId)
   }
 
   return { error: null, rehearsalId }
