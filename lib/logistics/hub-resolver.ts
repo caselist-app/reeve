@@ -191,6 +191,38 @@ export async function getFromHub(
   return homeCity
 }
 
+// Resolves and caches a rehearsal's venue coordinates and timezone. Unlike
+// resolveHub, there is no airport lookup: a rehearsal space is not a touring
+// stop the planner ranks travel against, so all it needs is geocodeVenueTimezone.
+// No-op when the rehearsal has no address, and never throws: unlike a show's
+// hub, a rehearsal's timezone is a nice-to-have that falls back to the tour's
+// zone, not something the TM has to be blocked on.
+export async function resolveRehearsalTimezone(rehearsal_id: string): Promise<void> {
+  const admin = createAdminClient()
+
+  const { data: rehearsal, error } = await admin
+    .from('rehearsals')
+    .select('id, address')
+    .eq('id', rehearsal_id)
+    .single()
+
+  if (error || !rehearsal) throw new Error(`Rehearsal not found: ${rehearsal_id}`)
+
+  if (!rehearsal.address) return
+
+  const geocoded = await geocodeVenueTimezone(rehearsal.address)
+  if (!geocoded) return
+
+  await admin
+    .from('rehearsals')
+    .update({
+      venue_lat: geocoded.lat,
+      venue_lng: geocoded.lng,
+      timezone: geocoded.timezone,
+    })
+    .eq('id', rehearsal_id)
+}
+
 export async function resolveHub(show_id: string): Promise<HubResolution> {
   const admin = createAdminClient()
 

@@ -5,6 +5,7 @@ import { requireUser } from '@/lib/auth/helpers'
 import { createClient } from '@/lib/supabase/server'
 import { definedOnly } from '@/lib/forms/write-row'
 import { revertDayTypeIfOrphaned } from '@/lib/schedule/day-type-revert'
+import { resolveRehearsalTimezoneJob } from '@/trigger/jobs/resolve-rehearsal-timezone'
 import { z } from 'zod'
 
 const rehearsalSchema = z.object({
@@ -20,6 +21,19 @@ const rehearsalSchema = z.object({
 export type RehearsalActionState = {
   error: string | null
   rehearsalId?: string
+}
+
+// Enqueuing is best-effort, the same reasoning as bustTourContextCache
+// (lib/ai/context.ts): a rehearsal's timezone is enrichment that falls back to
+// the tour's zone when absent, not a write the TM is blocked on, so a broken
+// Trigger.dev connection must not fail the save. Swallowed rather than
+// awaited-and-ignored so the caller does not have to reason about it either.
+async function triggerRehearsalTimezoneResolve(rehearsalId: string) {
+  try {
+    await resolveRehearsalTimezoneJob.trigger({ rehearsal_id: rehearsalId })
+  } catch (err) {
+    console.warn('[rehearsals] resolve-rehearsal-timezone enqueue failed:', err)
+  }
 }
 
 // Creates the tour_dates row (upsert) and the rehearsals row together.
@@ -90,6 +104,11 @@ export async function createRehearsal(
   // where that claim was checked rather than assumed (Brief 41).
   revalidatePath(`/tours/${tourId}/schedule`)
 
+  // Triggered unconditionally, same as a show's resolve-hub fallback path: the
+  // job itself is a no-op when there is no address, so the caller does not have
+  // to duplicate that check.
+  await triggerRehearsalTimezoneResolve(rehearsal.id)
+
   return { error: null, rehearsalId: rehearsal.id }
 }
 
@@ -102,21 +121,30 @@ export async function updateRehearsal(
   const supabase = await createClient()
 
   // RLS on rehearsals enforces owns_tour(tour_id), so this is null when the
-  // caller does not own it. Read for the revalidate path, and as the ownership
-  // gate that gives a clean message instead of a silent no-op update.
+  // caller does not own it. Read for the revalidate path, for the address-change
+  // check below, and as the ownership gate that gives a clean message instead
+  // of a silent no-op update.
   const { data: existing } = await supabase
     .from('rehearsals')
-    .select('tour_id')
+    .select('tour_id, address')
     .eq('id', rehearsalId)
     .single()
 
   if (!existing) return { error: 'Rehearsal not found.' }
+
+  // undefined means the form never sent address, so nothing about it changed.
+  const addressChanged = data.address !== undefined && data.address !== existing.address
 
   // The parameter is a Partial, and every field was being written as
   // `data.field ?? null`, so any caller submitting a subset would have cleared
   // the rest. Its one caller happens to send everything, which is the only
   // reason this had not destroyed anything yet. definedOnly makes that a
   // property of the action rather than a property of today's caller.
+  //
+  // A stale coordinate pair beats no coordinate pair: if the address changed,
+  // the old venue_lat/venue_lng/timezone belong to the old address, so they are
+  // cleared in this same write rather than left to read as though they still
+  // describe the new one until the async job comes back.
   const { error } = await supabase
     .from('rehearsals')
     .update(
@@ -127,6 +155,7 @@ export async function updateRehearsal(
         start_at: data.start_at,
         end_at: data.end_at,
         notes: data.notes,
+        ...(addressChanged ? { venue_lat: null, venue_lng: null, timezone: null } : {}),
       }),
     )
     .eq('id', rehearsalId)
@@ -137,6 +166,12 @@ export async function updateRehearsal(
   // that sets `saved` and never refreshes. Without this the panel said "Saved."
   // over a timeline still rendering the old location and times.
   revalidatePath(`/tours/${existing.tour_id}/schedule`)
+
+  // Same unconditional trigger as create: the job no-ops when the new address
+  // is null, so this does not need to duplicate that check.
+  if (addressChanged) {
+    await triggerRehearsalTimezoneResolve(rehearsalId)
+  }
 
   return { error: null, rehearsalId }
 }
