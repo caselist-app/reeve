@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 import type { Tables } from '@/lib/types/database'
 import { expiryStatus, formatExpiry } from '@/lib/roster/expiry'
 import { getContact, deleteContact } from '@/lib/actions/contacts'
-import type { TourMembership } from '@/lib/actions/contacts'
+import type { TourMembership, ContactArtist } from '@/lib/actions/contacts'
 import type { ContactTourContext } from '@/stores/side-panel-store'
 import { useSidePanel } from '@/stores/side-panel-store'
 import { PanelShell } from '@/components/layout/panel-shell'
@@ -38,6 +38,7 @@ export function ContactPanel({ contactId, tourContext, onSuccess }: Props) {
   const { close, open } = useSidePanel()
   const [contact, setContact] = useState<Tables<'contacts'> | null>(null)
   const [tours, setTours] = useState<TourMembership[]>([])
+  const [artists, setArtists] = useState<ContactArtist[]>([])
   const [identityDocuments, setIdentityDocuments] = useState<Tables<'identity_documents'>[]>([])
   const [loading, setLoading] = useState(true)
   const [fetchError, setFetchError] = useState<string | null>(null)
@@ -50,6 +51,7 @@ export function ContactPanel({ contactId, tourContext, onSuccess }: Props) {
       if (data) {
         setContact(data.contact)
         setTours(data.tours)
+        setArtists(data.artists)
         setIdentityDocuments(data.identityDocuments)
       } else {
         setFetchError(error ?? 'Could not load contact.')
@@ -254,6 +256,18 @@ export function ContactPanel({ contactId, tourContext, onSuccess }: Props) {
               <Separator className="my-5" />
               <SectionHeader>Notes</SectionHeader>
               <p className="whitespace-pre-wrap text-sm text-muted-foreground">{contact.notes}</p>
+            </>
+          )}
+
+          {artists.length > 0 && (
+            <>
+              <Separator className="my-5" />
+              <SectionHeader>Artists</SectionHeader>
+              <div className="flex flex-wrap gap-1.5">
+                {artists.map((a) => (
+                  <StatusBadge key={a.id} label={a.name} />
+                ))}
+              </div>
             </>
           )}
 

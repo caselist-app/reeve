@@ -21,10 +21,13 @@ export type TourMembership = {
   personType: string
 }
 
+export type ContactArtist = { id: string; name: string }
+
 export type ContactWithTours = {
   contact: Tables<'contacts'>
   tours: TourMembership[]
   identityDocuments: Tables<'identity_documents'>[]
+  artists: ContactArtist[]
 }
 
 // Returns roster contacts that are not yet on the given tour, ordered by name.
@@ -66,15 +69,17 @@ export async function getContact(
   const user = await requireUser()
   const supabase = await createClient()
 
-  // None of these three depend on each other's result, only on contactId.
-  const [{ data: contact }, { data: memberships }, { data: documents }] = await Promise.all([
-    supabase.from('contacts').select('*').eq('id', contactId).eq('account_id', user.id).single(),
-    supabase
-      .from('people')
-      .select('id, person_type, role, tour_id, tours(name, artists(name), status)')
-      .eq('contact_id', contactId),
-    supabase.from('identity_documents').select('*').eq('contact_id', contactId),
-  ])
+  // None of these four depend on each other's result, only on contactId.
+  const [{ data: contact }, { data: memberships }, { data: documents }, { data: artistLinks }] =
+    await Promise.all([
+      supabase.from('contacts').select('*').eq('id', contactId).eq('account_id', user.id).single(),
+      supabase
+        .from('people')
+        .select('id, person_type, role, tour_id, tours(name, artists(name), status)')
+        .eq('contact_id', contactId),
+      supabase.from('identity_documents').select('*').eq('contact_id', contactId),
+      supabase.from('contact_artists').select('artists(id, name)').eq('contact_id', contactId),
+    ])
 
   if (!contact) return { data: null, error: 'Contact not found.' }
 
@@ -93,7 +98,104 @@ export async function getContact(
 
   const identityDocuments = sortIdentityDocuments(documents ?? [])
 
-  return { data: { contact, tours, identityDocuments }, error: null }
+  const artists: ContactArtist[] = (artistLinks ?? [])
+    .map((l) => l.artists as ContactArtist | null)
+    .filter((a): a is ContactArtist => a !== null)
+    .sort((a, b) => a.name.localeCompare(b.name))
+
+  return { data: { contact, tours, identityDocuments, artists }, error: null }
+}
+
+// The account's full artist list, plus which of them the given contact is
+// currently linked to. Powers the roster-only Artists checklist on
+// ContactSheet: contactId is null while creating a contact (nothing is
+// checked yet) and the id being edited otherwise. One call serves both, so
+// the sheet does not need a second round trip once it already knows the
+// contact id.
+export async function getContactArtistOptions(
+  contactId: string | null
+): Promise<{ data: { options: ContactArtist[]; selectedIds: string[] } | null; error: string | null }> {
+  const user = await requireUser()
+  const supabase = await createClient()
+
+  const [{ data: artists, error }, { data: links }] = await Promise.all([
+    supabase.from('artists').select('id, name').eq('account_id', user.id).order('name'),
+    contactId
+      ? supabase.from('contact_artists').select('artist_id').eq('contact_id', contactId)
+      : Promise.resolve({ data: [] as { artist_id: string }[], error: null }),
+  ])
+
+  if (error) return { data: null, error: error.message }
+
+  return {
+    data: { options: artists ?? [], selectedIds: (links ?? []).map((l) => l.artist_id) },
+    error: null,
+  }
+}
+
+// Replaces the full set of artists a contact is linked to. The roster-only
+// Artists checklist always submits the whole current selection, not a diff,
+// so this deletes and reinserts rather than reconciling row by row (the same
+// shape the brief for this ticket names explicitly).
+//
+// RLS scopes contact_artists by ownership of both the contact and the artist,
+// but the admin/service-role path used in tests bypasses RLS, so the
+// ownership checks below are the actual enforcement there, not a belt and
+// braces duplicate of it. Verifying both ids belong to the caller before
+// writing is also the general rule (CLAUDE.md: an action taking more than one
+// entity id must verify they belong together), not just a test-only concern.
+export async function setContactArtists(
+  contactId: string,
+  artistIds: string[]
+): Promise<{ error: string | null }> {
+  const user = await requireUser()
+  const supabase = await createClient()
+
+  const { data: contact } = await supabase
+    .from('contacts')
+    .select('id')
+    .eq('id', contactId)
+    .eq('account_id', user.id)
+    .single()
+
+  if (!contact) {
+    return { error: 'Contact not found.' }
+  }
+
+  if (artistIds.length > 0) {
+    const { data: owned } = await supabase
+      .from('artists')
+      .select('id')
+      .eq('account_id', user.id)
+      .in('id', artistIds)
+
+    if ((owned ?? []).length !== artistIds.length) {
+      return { error: 'One or more artists were not found.' }
+    }
+  }
+
+  const { error: deleteError } = await supabase
+    .from('contact_artists')
+    .delete()
+    .eq('contact_id', contactId)
+
+  if (deleteError) {
+    return { error: deleteError.message }
+  }
+
+  if (artistIds.length === 0) {
+    return { error: null }
+  }
+
+  const { error: insertError } = await supabase
+    .from('contact_artists')
+    .insert(artistIds.map((artistId) => ({ contact_id: contactId, artist_id: artistId })))
+
+  if (insertError) {
+    return { error: insertError.message }
+  }
+
+  return { error: null }
 }
 
 // Maps the contact form DTO to a contacts row.

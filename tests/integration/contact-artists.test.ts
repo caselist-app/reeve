@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { testDb } from './test-db'
+import { testDb, setTestUserId } from './test-db'
 import { createFixture, destroyFixture, type Fixture } from './fixture'
+import { setContactArtists } from '@/lib/actions/contacts'
 
 // REE-233 / Brief 29 step 1. add_contact_to_tour is owns_tour()-gated
 // (supabase/migrations/20260817105105_contact_artists.sql), so it cannot run
@@ -96,5 +97,96 @@ describe('contact_artists is keyed on (contact_id, artist_id)', () => {
     expect((data ?? []).map((r) => r.artist_id).sort()).toEqual(
       [fixture.artistId, otherArtist!.id].sort()
     )
+  })
+})
+
+// REE-234 / Brief 29 step 2, "The save mechanism". setContactArtists is a
+// plain server action, not an owns_tour()-gated RPC, so unlike
+// add_contact_to_tour above it runs here without a real session:
+// tests/integration/setup.ts mocks requireUser() to report the fixture's
+// account and mocks createClient() to hand back testDb, so the action's own
+// code runs for real against a real Postgres. That client is still
+// service-role, so it does not enforce contact_artists' RLS policy itself;
+// what proves "scoped to the caller's account" below is the action's own
+// ownership check on both the contact and every artist id, the same shape as
+// createTelegramLinkToken's contact lookup and the cross-tour-id rule in
+// CLAUDE.md. Red first: setContactArtists does not exist yet.
+describe('setContactArtists replaces the full set for a contact', () => {
+  let fixture: Fixture
+  let other: Fixture
+
+  beforeEach(async () => {
+    fixture = await createFixture()
+    other = await createFixture()
+  })
+
+  afterEach(async () => {
+    await destroyFixture(fixture)
+    await destroyFixture(other)
+  })
+
+  async function linkedArtistIds(contactId: string) {
+    const { data } = await testDb
+      .from('contact_artists')
+      .select('artist_id')
+      .eq('contact_id', contactId)
+    return (data ?? []).map((r) => r.artist_id)
+  }
+
+  it('inserts the given artists when none existed before', async () => {
+    setTestUserId(fixture.userId)
+
+    const result = await setContactArtists(fixture.contactId, [fixture.artistId])
+    expect(result.error).toBeNull()
+
+    expect(await linkedArtistIds(fixture.contactId)).toEqual([fixture.artistId])
+  })
+
+  it('replaces the full set: adding one and removing one in the same call', async () => {
+    setTestUserId(fixture.userId)
+
+    const { data: secondArtist, error: secondArtistError } = await testDb
+      .from('artists')
+      .insert({ account_id: fixture.userId, name: 'Second Artist' })
+      .select('id')
+      .single()
+    expect(secondArtistError).toBeNull()
+
+    const first = await setContactArtists(fixture.contactId, [fixture.artistId])
+    expect(first.error).toBeNull()
+
+    const second = await setContactArtists(fixture.contactId, [secondArtist!.id])
+    expect(second.error).toBeNull()
+
+    expect(await linkedArtistIds(fixture.contactId)).toEqual([secondArtist!.id])
+  })
+
+  it('clears every link when called with an empty array', async () => {
+    setTestUserId(fixture.userId)
+
+    await setContactArtists(fixture.contactId, [fixture.artistId])
+
+    const cleared = await setContactArtists(fixture.contactId, [])
+    expect(cleared.error).toBeNull()
+
+    expect(await linkedArtistIds(fixture.contactId)).toHaveLength(0)
+  })
+
+  it('is scoped to the caller: rejects a contact belonging to another account', async () => {
+    setTestUserId(fixture.userId)
+
+    const result = await setContactArtists(other.contactId, [other.artistId])
+    expect(result.error).not.toBeNull()
+
+    expect(await linkedArtistIds(other.contactId)).toHaveLength(0)
+  })
+
+  it('is scoped to the caller: rejects an artist id belonging to another account', async () => {
+    setTestUserId(fixture.userId)
+
+    const result = await setContactArtists(fixture.contactId, [other.artistId])
+    expect(result.error).not.toBeNull()
+
+    expect(await linkedArtistIds(fixture.contactId)).toHaveLength(0)
   })
 })
