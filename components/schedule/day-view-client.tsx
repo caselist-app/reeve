@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { SendDayDialog } from '@/components/schedule/send-day-dialog'
 import { deleteTourDate } from '@/lib/actions/tour-dates'
 
 interface DayViewClientProps {
@@ -38,10 +39,14 @@ interface DayViewClientProps {
 // sheet so the two stay identical.
 function DayOptionsMenu({
   onEdit,
+  onSend,
   onDelete,
   triggerClassName,
 }: {
   onEdit: () => void
+  // Present only on a show day (REE-105). Absent rather than disabled on
+  // every other day type: there is nothing to send.
+  onSend?: () => void
   onDelete: () => void
   triggerClassName?: string
 }) {
@@ -61,6 +66,7 @@ function DayOptionsMenu({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-40">
         <DropdownMenuItem onClick={onEdit}>Edit day</DropdownMenuItem>
+        {onSend && <DropdownMenuItem onClick={onSend}>Send the day</DropdownMenuItem>}
         <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={onDelete}
@@ -81,6 +87,7 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
   const { open: openSidePanel } = useSidePanel()
   const router = useRouter()
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [sendDayDialogOpen, setSendDayDialogOpen] = useState(false)
   const [dayInfoOpen, setDayInfoOpen] = useState(false)
 
   // REE-89: one door into a day. The '+', the '/' shortcut and the mobile FAB
@@ -147,6 +154,7 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
       {dayMeta && (
         <DayOptionsMenu
           onEdit={handleEditDay}
+          onSend={dayMeta.dayType === 'show' ? () => setSendDayDialogOpen(true) : undefined}
           onDelete={() => setDeleteDialogOpen(true)}
           triggerClassName="h-8 w-8"
         />
@@ -236,6 +244,16 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
         onConfirm={handleDeleteConfirm}
       />
 
+      {/* Send the day confirmation (REE-105) */}
+      {dayMeta && (
+        <SendDayDialog
+          open={sendDayDialogOpen}
+          onOpenChange={setSendDayDialogOpen}
+          tourId={addContext.tourId}
+          tourDateId={dayMeta.tourDateId}
+        />
+      )}
+
       {/* Bottom-sheet for the day-info panel below lg (venue, guest list, notes,
           hotel). Always mounted: Radix's Dialog.Root renders nothing while
           open is false, and dayInfoOpen only ever flips true via the dock
@@ -247,6 +265,11 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
             {dayMeta && (
               <DayOptionsMenu
                 onEdit={() => { setDayInfoOpen(false); handleEditDay() }}
+                onSend={
+                  dayMeta.dayType === 'show'
+                    ? () => { setDayInfoOpen(false); setSendDayDialogOpen(true) }
+                    : undefined
+                }
                 onDelete={() => { setDayInfoOpen(false); setDeleteDialogOpen(true) }}
                 triggerClassName="h-9 w-9"
               />

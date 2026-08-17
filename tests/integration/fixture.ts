@@ -207,6 +207,18 @@ export async function createE2eSeed(): Promise<E2eSeed> {
     throw new Error(`seed: could not link seeded contact to artist: ${contactArtistError.message}`)
   }
 
+  // createFixture's contact has no WhatsApp, Telegram or email set, so it is
+  // not contactable. tests/e2e/send-day.spec.ts (REE-105) needs a real
+  // recipient count on account A's show day to assert the confirm dialog
+  // names one, so the seeded crew member gets a WhatsApp number here.
+  const { error: contactChannelError } = await testDb
+    .from('contacts')
+    .update({ whatsapp_number: '+15555550100' })
+    .eq('id', a.contactId)
+  if (contactChannelError) {
+    throw new Error(`seed: could not set contact whatsapp number: ${contactChannelError.message}`)
+  }
+
   // A Pacific/Auckland tour on account A, for the timezone regression. June, so
   // Auckland holds UTC+12 with no DST in play: 09:00 local is a clean morning
   // hour whose UTC instant (21:00Z the day before) reads as a very different hour
