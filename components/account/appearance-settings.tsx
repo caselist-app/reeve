@@ -12,7 +12,7 @@ export function AppearanceSettings() {
   useEffect(() => setMounted(true), [])
 
   return (
-    <div className="rounded-3xl border border-border bg-background p-5">
+    <div className="p-5">
       <div className="flex flex-col gap-1">
         <h2 className="text-sm font-medium">Appearance</h2>
         <p className="text-sm text-muted-foreground">Choose how Reeve looks on this device.</p>
