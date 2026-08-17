@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { flightStatusLabel } from '@/lib/logistics/flight-status-label'
 
 // /travel slash command. Zero-AI template render.
 // Returns the person's next booked transport segment.
@@ -48,6 +49,9 @@ export async function renderTravel(
       booking_reference,
       status,
       book_url,
+      flight_status,
+      gate,
+      terminal,
       transport_assignments!inner (
         seat,
         ticket_reference,
@@ -92,6 +96,17 @@ export async function renderTravel(
   if (seg.vehicle_or_flight_no) lines.push(`Flight/train: ${seg.vehicle_or_flight_no}`)
   if (assignment?.seat) lines.push(`Seat: ${assignment.seat}`)
   if (seg.booking_reference) lines.push(`Ref: ${seg.booking_reference}`)
+
+  // Live tracking (Brief 31, AirLabs) only exists on flight segments, so a
+  // ground or rail segment never gets a Status line, and neither does a flight
+  // with no status reported yet: an unset field gets no line, never a
+  // placeholder, matching the day-item-lines.ts convention.
+  if (seg.mode === 'flight') {
+    const statusLabel = flightStatusLabel(seg.flight_status)
+    if (statusLabel) lines.push(`Status: ${statusLabel}`)
+    if (seg.gate) lines.push(`Gate: ${seg.gate}`)
+    if (seg.terminal) lines.push(`Terminal: ${seg.terminal}`)
+  }
 
   if (seg.status === 'planned' && seg.book_url) {
     lines.push(``)
