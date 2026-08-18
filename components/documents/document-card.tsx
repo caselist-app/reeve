@@ -1,4 +1,5 @@
 import { ListRow } from '@/components/ui/list-row'
+import { DocumentTitle } from '@/components/documents/document-title'
 import { ShareLog } from '@/components/documents/share-log'
 import { OlderVersions } from '@/components/documents/older-versions'
 import type { DocumentRow, DocumentShareRow, OlderVersionRow } from '@/lib/documents/queries'
@@ -24,7 +25,7 @@ export function DocumentCard({
 }: Props) {
   return (
     <ListRow className="flex flex-col items-stretch gap-3 text-left">
-      <p className="truncate text-sm font-medium">{document.title}</p>
+      <DocumentTitle documentId={document.id} title={document.title} />
       <ShareLog shares={shares} error={sharesError} />
       <OlderVersions versions={olderVersions} error={olderVersionsError} />
     </ListRow>
