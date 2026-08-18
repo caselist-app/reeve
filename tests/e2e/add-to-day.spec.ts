@@ -92,8 +92,11 @@ test('a rail item with no time set opens its detail panel', async ({ page }) => 
   await expect(input).toBeVisible()
 
   // No time on the line, so the row reads "no time yet" rather than a clock.
+  // Exact match: 'soundcheck' also surfaces a "Custom: “Soundcheck”" row with
+  // the same "no time yet" trailing text, which a substring match would catch
+  // too and make this locator ambiguous.
   await input.fill('soundcheck')
-  const soundcheckRow = page.getByRole('button', { name: /Soundcheck.*no time yet/ })
+  const soundcheckRow = page.getByRole('button', { name: 'Soundcheck no time yet', exact: true })
   await expect(soundcheckRow).toBeVisible()
   await expect(soundcheckRow).toHaveClass(/bg-accent/)
   await page.keyboard.press('Enter')
