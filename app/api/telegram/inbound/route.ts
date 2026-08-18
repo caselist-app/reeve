@@ -16,6 +16,11 @@ const LINK_EXPIRED_MESSAGE = 'This link has expired, ask your tour manager to se
 export async function POST(request: NextRequest) {
   const rawBody = await request.text()
 
+  // REE-273 temporary: confirming whether Telegram delivers a message_reaction
+  // update at all before any Telegram-specific reaction code is written.
+  // Removed before this step's commit, win or lose.
+  console.log('REE-273 raw telegram update:', rawBody)
+
   // Telegram has no HMAC-over-body scheme like Meta's x-hub-signature-256.
   // setWebhook is called once with a secret_token, echoed back on every
   // request as this header. Fail closed if the secret is unset, same rule as
