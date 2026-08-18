@@ -93,8 +93,11 @@ export function AddHotelForm({ tourId, tourDateId, date, initialClock, people, o
   return (
     <form onSubmit={(e) => { e.preventDefault(); handleFieldsSubmit(new FormData(e.currentTarget)) }} className="space-y-3">
       <div className="space-y-1">
-        <Label className="text-xs">Hotel name</Label>
+        <Label htmlFor="add-hotel-name" className="text-xs">
+          Hotel name
+        </Label>
         <Input
+          id="add-hotel-name"
           name="name"
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -103,8 +106,11 @@ export function AddHotelForm({ tourId, tourDateId, date, initialClock, people, o
         />
       </div>
       <div className="space-y-1">
-        <Label className="text-xs">Address</Label>
+        <Label htmlFor="add-hotel-address" className="text-xs">
+          Address
+        </Label>
         <PlacesAddressInput
+          id="add-hotel-address"
           name="address"
           value={address}
           onChange={setAddress}
@@ -119,8 +125,11 @@ export function AddHotelForm({ tourId, tourDateId, date, initialClock, people, o
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
-          <Label className="text-xs">Check-in date</Label>
+          <Label htmlFor="add-hotel-check_in_date" className="text-xs">
+            Check-in date
+          </Label>
           <Input
+            id="add-hotel-check_in_date"
             name="check_in_date"
             type="date"
             defaultValue={date}
@@ -130,18 +139,36 @@ export function AddHotelForm({ tourId, tourDateId, date, initialClock, people, o
           <DateMoveNotice currentDate={date} value={checkInDate} />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Check-in time</Label>
-          <Input name="check_in_time" type="time" defaultValue={initialClock ?? '15:00'} className="h-7 text-xs" />
+          <Label htmlFor="add-hotel-check_in_time" className="text-xs">
+            Check-in time
+          </Label>
+          <Input
+            id="add-hotel-check_in_time"
+            name="check_in_time"
+            type="time"
+            defaultValue={initialClock ?? '15:00'}
+            className="h-7 text-xs"
+          />
         </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
-          <Label className="text-xs">Check-out date</Label>
-          <Input name="check_out_date" type="date" className="h-7 text-xs" />
+          <Label htmlFor="add-hotel-check_out_date" className="text-xs">
+            Check-out date
+          </Label>
+          <Input id="add-hotel-check_out_date" name="check_out_date" type="date" className="h-7 text-xs" />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Check-out time</Label>
-          <Input name="check_out_time" type="time" defaultValue="11:00" className="h-7 text-xs" />
+          <Label htmlFor="add-hotel-check_out_time" className="text-xs">
+            Check-out time
+          </Label>
+          <Input
+            id="add-hotel-check_out_time"
+            name="check_out_time"
+            type="time"
+            defaultValue="11:00"
+            className="h-7 text-xs"
+          />
         </div>
       </div>
       {error && <p className="text-xs text-destructive">{error}</p>}

@@ -143,8 +143,11 @@ export function AddDriveForm({ tourId, tourDateId, date, timezone, initialClock,
     <form onSubmit={(e) => { e.preventDefault(); handleFieldsSubmit(new FormData(e.currentTarget)) }} className="space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
-          <Label className="text-xs">From</Label>
+          <Label htmlFor="add-drive-origin" className="text-xs">
+            From
+          </Label>
           <PlacesAddressInput
+            id="add-drive-origin"
             name="origin"
             value={origin}
             onChange={setOrigin}
@@ -159,8 +162,11 @@ export function AddDriveForm({ tourId, tourDateId, date, timezone, initialClock,
           />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">To</Label>
+          <Label htmlFor="add-drive-destination" className="text-xs">
+            To
+          </Label>
           <PlacesAddressInput
+            id="add-drive-destination"
             name="destination"
             value={destination}
             onChange={setDestination}
@@ -176,8 +182,11 @@ export function AddDriveForm({ tourId, tourDateId, date, timezone, initialClock,
         </div>
       </div>
       <div className="space-y-1">
-        <Label className="text-xs">Departure</Label>
+        <Label htmlFor="add-drive-depart_at" className="text-xs">
+          Departure
+        </Label>
         <Input
+          id="add-drive-depart_at"
           name="depart_at"
           type="datetime-local"
           defaultValue={departDefault}
@@ -193,10 +202,11 @@ export function AddDriveForm({ tourId, tourDateId, date, timezone, initialClock,
         <DateMoveNotice currentDate={date} value={departLocal ? broadcastDateOfWallClock(departLocal) : departLocal} />
       </div>
       <div className="space-y-1">
-        <Label className="text-xs">
+        <Label htmlFor="add-drive-arrival" className="text-xs">
           Arrival {computing && <span className="text-muted-foreground">(calculating...)</span>}
         </Label>
         <Input
+          id="add-drive-arrival"
           value={computedArrival}
           readOnly
           placeholder="Computed from Google Maps on save"

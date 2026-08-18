@@ -99,13 +99,18 @@ export function HotelPanel({ stay, tourId }: HotelPanelProps) {
       <div className="space-y-4">
         <form onSubmit={submit} className="space-y-3">
           <div className="space-y-1">
-            <Label className="text-xs">Hotel name</Label>
-            <Input name="name" defaultValue={stay.name ?? ''} className="h-7 text-xs" />
+            <Label htmlFor="hotel-name" className="text-xs">
+              Hotel name
+            </Label>
+            <Input id="hotel-name" name="name" defaultValue={stay.name ?? ''} className="h-7 text-xs" />
           </div>
 
           <div className="space-y-1">
-            <Label className="text-xs">Address</Label>
+            <Label htmlFor="hotel-address" className="text-xs">
+              Address
+            </Label>
             <PlacesAddressInput
+              id="hotel-address"
               name="address"
               value={address}
               onChange={setAddress}
@@ -115,8 +120,11 @@ export function HotelPanel({ stay, tourId }: HotelPanelProps) {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label className="text-xs">Check-in date</Label>
+              <Label htmlFor="hotel-check_in_date" className="text-xs">
+                Check-in date
+              </Label>
               <Input
+                id="hotel-check_in_date"
                 name="check_in_date"
                 type="date"
                 defaultValue={stay.check_in_date ?? ''}
@@ -128,8 +136,11 @@ export function HotelPanel({ stay, tourId }: HotelPanelProps) {
               <DateMoveNotice currentDate={stay.check_in_date} value={checkInDate} />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Check-in time</Label>
+              <Label htmlFor="hotel-check_in_time" className="text-xs">
+                Check-in time
+              </Label>
               <Input
+                id="hotel-check_in_time"
                 name="check_in_time"
                 type="time"
                 defaultValue={stay.check_in_time ? String(stay.check_in_time).slice(0, 5) : ''}
@@ -140,12 +151,23 @@ export function HotelPanel({ stay, tourId }: HotelPanelProps) {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label className="text-xs">Check-out date</Label>
-              <Input name="check_out_date" type="date" defaultValue={stay.check_out_date ?? ''} className="h-7 text-xs" />
+              <Label htmlFor="hotel-check_out_date" className="text-xs">
+                Check-out date
+              </Label>
+              <Input
+                id="hotel-check_out_date"
+                name="check_out_date"
+                type="date"
+                defaultValue={stay.check_out_date ?? ''}
+                className="h-7 text-xs"
+              />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">Check-out time</Label>
+              <Label htmlFor="hotel-check_out_time" className="text-xs">
+                Check-out time
+              </Label>
               <Input
+                id="hotel-check_out_time"
                 name="check_out_time"
                 type="time"
                 defaultValue={stay.check_out_time ? String(stay.check_out_time).slice(0, 5) : ''}
@@ -156,12 +178,26 @@ export function HotelPanel({ stay, tourId }: HotelPanelProps) {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label className="text-xs">WiFi network</Label>
-              <Input name="wifi_network" defaultValue={stay.wifi_network ?? ''} className="h-7 text-xs" />
+              <Label htmlFor="hotel-wifi_network" className="text-xs">
+                WiFi network
+              </Label>
+              <Input
+                id="hotel-wifi_network"
+                name="wifi_network"
+                defaultValue={stay.wifi_network ?? ''}
+                className="h-7 text-xs"
+              />
             </div>
             <div className="space-y-1">
-              <Label className="text-xs">WiFi password</Label>
-              <Input name="wifi_password" defaultValue={stay.wifi_password ?? ''} className="h-7 text-xs" />
+              <Label htmlFor="hotel-wifi_password" className="text-xs">
+                WiFi password
+              </Label>
+              <Input
+                id="hotel-wifi_password"
+                name="wifi_password"
+                defaultValue={stay.wifi_password ?? ''}
+                className="h-7 text-xs"
+              />
             </div>
           </div>
 
