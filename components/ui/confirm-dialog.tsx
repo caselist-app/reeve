@@ -11,6 +11,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { buttonVariants } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 // The one confirm dialog in the app. See COMPONENTS.md and Brief 51 for why:
@@ -146,9 +147,7 @@ export function ConfirmDialog({
             <AlertDialogAction
               onClick={handleConfirm}
               disabled={pending || confirmDisabled}
-              className={cn(
-                destructive && 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
-              )}
+              className={cn(destructive && buttonVariants({ variant: 'destructive' }))}
             >
               {pending ? pendingLabel : confirmLabel}
             </AlertDialogAction>
