@@ -247,7 +247,7 @@ export function DayForm({
           </div>
         )}
 
-        <div className="max-h-72 space-y-3 overflow-y-auto">
+        <div className="space-y-3">
           {bookOptions.length > 0 && (
             <div>
               <p className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Book</p>
