@@ -46,33 +46,29 @@ describe('the advance panel gets real data', () => {
   }
 
   describe('the documents', () => {
-    it('files a production_rider under both audio and staging (REE-295)', async () => {
-      // Per REE-292/REE-295, tech_rider and staging_rider merged into a single
-      // production_rider doc_type, so one uploaded document now files under
-      // both departments, not just one.
+    it('files a production_rider under production (REE-294)', async () => {
+      // Per REE-292/REE-294, audio and staging merged into a single PRODUCTION
+      // department, so the production_rider doc_type (REE-295) files under
+      // exactly one department again.
       const productionRiderId = await addRider('production_rider', 'Production Rider v3')
       await addRider('hospitality_rider', 'Hospitality Rider')
 
       const { data, error } = await getShowAdvance(fixture.tourId, fixture.showId)
       if (error) throw new Error(`could not load the advance: ${error}`)
 
-      const audio = data?.departments.find((d) => d.department === 'audio')
-      expect(audio?.documents.map((doc) => doc.id)).toEqual([productionRiderId])
-
-      const staging = data?.departments.find((d) => d.department === 'staging')
-      expect(staging?.documents.map((doc) => doc.id)).toEqual([productionRiderId])
+      const production = data?.departments.find((d) => d.department === 'production')
+      expect(production?.documents.map((doc) => doc.id)).toEqual([productionRiderId])
 
       // Every documented department is present whether or not it has a rider,
       // so the panel can show a TM which ones have nothing to send.
       expect(data?.departments.map((d) => d.department).sort()).toEqual([
-        'audio',
         'hospitality',
-        'lighting',
-        'staging',
+        'lx',
+        'production',
       ])
 
-      const lighting = data?.departments.find((d) => d.department === 'lighting')
-      expect(lighting?.documents).toEqual([])
+      const lx = data?.departments.find((d) => d.department === 'lx')
+      expect(lx?.documents).toEqual([])
     })
 
     it('leaves out a document that is not a rider', async () => {
@@ -172,14 +168,14 @@ describe('the advance panel gets real data', () => {
       if (error) throw new Error(`could not seed show_advance for ${showId}: ${error.message}`)
     }
 
-    async function statusAudio(showId: string) {
+    async function statusProduction(showId: string) {
       const { data, error } = await testDb
         .from('show_advance')
-        .select('status_audio')
+        .select('status_production')
         .eq('show_id', showId)
         .single()
       if (error || !data) throw new Error(`could not read show_advance for ${showId}: ${error?.message}`)
-      return data.status_audio
+      return data.status_production
     }
 
     it('advances only the show the rider was sent against', async () => {
@@ -204,9 +200,9 @@ describe('the advance panel gets real data', () => {
       await nudgeAdvanceFromShareClick(testDb, shareToken)
 
       // The show the rider went to is nudged.
-      expect(await statusAudio(fixture.showId)).toBe('in_progress')
-      // Show B never received a rider, so its audio advance must be unchanged.
-      expect(await statusAudio(showBId)).toBe('not_started')
+      expect(await statusProduction(fixture.showId)).toBe('in_progress')
+      // Show B never received a rider, so its production advance must be unchanged.
+      expect(await statusProduction(showBId)).toBe('not_started')
     })
   })
 

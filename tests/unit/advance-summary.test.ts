@@ -13,25 +13,21 @@ describe('summarise', () => {
     expect(summarise(null, null)).toEqual({
       error: null,
       statuses: {
-        audio: 'not_started',
-        lighting: 'not_started',
-        staging: 'not_started',
+        production: 'not_started',
+        lx: 'not_started',
         hospitality: 'not_started',
-        travel: 'not_started',
       },
     })
   })
 
-  // A failed read is an error, never five confident, plausible, wrong statuses.
+  // A failed read is an error, never three confident, plausible, wrong statuses.
   it('returns the error shape on a query error, not the not-started defaults', () => {
     expect(summarise(null, { message: 'connection reset' })).toEqual({
       error: 'Could not load the advance.',
       statuses: {
-        audio: 'not_started',
-        lighting: 'not_started',
-        staging: 'not_started',
+        production: 'not_started',
+        lx: 'not_started',
         hospitality: 'not_started',
-        travel: 'not_started',
       },
     })
   })
@@ -39,35 +35,29 @@ describe('summarise', () => {
   // An error takes precedence even if a row happens to come back alongside it.
   it('returns the error shape even when a row is also present', () => {
     const row = {
-      status_audio: 'done',
-      status_lighting: 'done',
-      status_staging: 'done',
+      status_production: 'done',
+      status_lx: 'done',
       status_hospitality: 'done',
-      status_travel: 'done',
     }
 
     expect(summarise(row, { message: 'timeout' }).error).toBe('Could not load the advance.')
   })
 
   // A row with a mix of statuses maps each column to its department, in
-  // DEPARTMENT_LABELS order (audio, lighting, staging, hospitality, travel).
-  it('maps a mixed row to the right five values', () => {
+  // DEPARTMENT_LABELS order (production, lx, hospitality).
+  it('maps a mixed row to the right three values', () => {
     const row = {
-      status_audio: 'done',
-      status_lighting: 'in_progress',
-      status_staging: 'not_started',
-      status_hospitality: 'done',
-      status_travel: 'in_progress',
+      status_production: 'done',
+      status_lx: 'in_progress',
+      status_hospitality: 'not_started',
     }
 
     expect(summarise(row, null)).toEqual({
       error: null,
       statuses: {
-        audio: 'done',
-        lighting: 'in_progress',
-        staging: 'not_started',
-        hospitality: 'done',
-        travel: 'in_progress',
+        production: 'done',
+        lx: 'in_progress',
+        hospitality: 'not_started',
       },
     })
   })

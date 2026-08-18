@@ -1290,6 +1290,8 @@ export type Database = {
           status_audio: string
           status_hospitality: string
           status_lighting: string
+          status_lx: string
+          status_production: string
           status_staging: string
           status_travel: string
           tour_id: string
@@ -1301,6 +1303,8 @@ export type Database = {
           status_audio?: string
           status_hospitality?: string
           status_lighting?: string
+          status_lx?: string
+          status_production?: string
           status_staging?: string
           status_travel?: string
           tour_id: string
@@ -1312,6 +1316,8 @@ export type Database = {
           status_audio?: string
           status_hospitality?: string
           status_lighting?: string
+          status_lx?: string
+          status_production?: string
           status_staging?: string
           status_travel?: string
           tour_id?: string

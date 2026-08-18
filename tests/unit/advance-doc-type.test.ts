@@ -16,19 +16,18 @@ import { docTypeToAdvanceColumn } from '@/lib/shows/advance'
 // show_advance column mapping so the map cannot drift without a test
 // noticing, and pins the specific stray value from REE-8 to null.
 //
-// REE-295: tech_rider and staging_rider are consolidated into production_rider,
-// and lighting_rider becomes lx_rider. The old doc_type values no longer exist
-// in the database (migrated by the consolidation migration).
+// REE-292/REE-294/REE-295: tech_rider and staging_rider consolidated into
+// production_rider, which now maps 1:1 onto the single PRODUCTION department
+// (audio and staging merged into it), and lighting_rider became lx_rider,
+// mapping onto LX. The old doc_type values no longer exist in the database
+// (migrated by the consolidation migration).
 describe('docTypeToAdvanceColumn', () => {
-  it('returns null for production_rider (ambiguous: maps to both audio and staging)', () => {
-    // Per REE-295, both audio and staging map to production_rider. Since the
-    // function can only return one column, it returns null and callers should
-    // use docTypeToAllDepartments instead.
-    expect(docTypeToAdvanceColumn('production_rider')).toBeNull()
+  it('maps production_rider (formerly tech_rider/staging_rider) to status_production', () => {
+    expect(docTypeToAdvanceColumn('production_rider')).toBe('status_production')
   })
 
-  it('maps lx_rider (formerly lighting_rider) to status_lighting', () => {
-    expect(docTypeToAdvanceColumn('lx_rider')).toBe('status_lighting')
+  it('maps lx_rider (formerly lighting_rider) to status_lx', () => {
+    expect(docTypeToAdvanceColumn('lx_rider')).toBe('status_lx')
   })
 
   it('maps hospitality_rider to status_hospitality', () => {
@@ -43,9 +42,9 @@ describe('docTypeToAdvanceColumn', () => {
   })
 
   it('returns null for travel_brief, the exact stray doc_type from REE-8', () => {
-    // travel is the fifth show_advance department but has no doc_type entry
-    // in DEPARTMENT_DOC_TYPE: it is advanced by hand, never via a rider, so
-    // there is no doc_type that should ever resolve to status_travel.
+    // Travel dropped out of the advance vocabulary entirely (REE-292/REE-294):
+    // it has no doc_type entry in DEPARTMENT_DOC_TYPE, is moved by hand, and
+    // there is no doc_type that should ever resolve to a travel column.
     expect(docTypeToAdvanceColumn('travel_brief')).toBeNull()
   })
 

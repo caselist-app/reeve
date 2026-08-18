@@ -5,15 +5,13 @@ import { cn } from '@/lib/utils'
 import { updateAdvanceStatus } from '@/lib/actions/shows'
 import { useAdvanceStatuses } from '@/stores/advance-status-store'
 import type { Tables } from '@/lib/types/database'
-import type { Department, AdvanceStatus } from '@/lib/shows/advance'
+import type { AdvanceStatus } from '@/lib/shows/advance'
+// DEPARTMENT_LABELS and Department come from lib/shows/departments directly,
+// the same reason components/schedule/advance-block.tsx does: the single
+// source of truth for department names, not a second hardcoded copy.
+import { DEPARTMENT_LABELS, type Department } from '@/lib/shows/departments'
 
-const DEPARTMENTS: { key: Department; label: string }[] = [
-  { key: 'audio', label: 'Audio' },
-  { key: 'lighting', label: 'Lighting' },
-  { key: 'staging', label: 'Staging' },
-  { key: 'hospitality', label: 'Hospitality' },
-  { key: 'travel', label: 'Travel' },
-]
+const DEPARTMENTS = Object.keys(DEPARTMENT_LABELS) as Department[]
 
 const STATUSES: { value: AdvanceStatus; label: string }[] = [
   { value: 'not_started', label: 'Not started' },
@@ -28,11 +26,9 @@ interface AdvanceTrackerProps {
 
 export function AdvanceTracker({ showId, initialAdvance }: AdvanceTrackerProps) {
   const [statuses, setStatuses] = useState<Record<Department, AdvanceStatus>>({
-    audio: (initialAdvance?.status_audio as AdvanceStatus) ?? 'not_started',
-    lighting: (initialAdvance?.status_lighting as AdvanceStatus) ?? 'not_started',
-    staging: (initialAdvance?.status_staging as AdvanceStatus) ?? 'not_started',
+    production: (initialAdvance?.status_production as AdvanceStatus) ?? 'not_started',
+    lx: (initialAdvance?.status_lx as AdvanceStatus) ?? 'not_started',
     hospitality: (initialAdvance?.status_hospitality as AdvanceStatus) ?? 'not_started',
-    travel: (initialAdvance?.status_travel as AdvanceStatus) ?? 'not_started',
   })
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
@@ -66,12 +62,12 @@ export function AdvanceTracker({ showId, initialAdvance }: AdvanceTrackerProps) 
     <div className="space-y-1">
       {error && <p className="mb-4 text-sm text-destructive">{error}</p>}
 
-      {DEPARTMENTS.map(({ key, label }) => (
+      {DEPARTMENTS.map((key) => (
         <div
           key={key}
           className="flex items-center justify-between rounded-md px-2 py-2.5 hover:bg-muted/30"
         >
-          <span className="text-sm font-medium">{label}</span>
+          <span className="text-sm font-medium">{DEPARTMENT_LABELS[key]}</span>
 
           <div className="inline-flex divide-x overflow-hidden rounded-md border">
             {STATUSES.map(({ value, label: sLabel }) => {

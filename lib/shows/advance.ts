@@ -7,12 +7,7 @@ export type { Department, DocumentedDepartment } from '@/lib/shows/departments'
 export { DEPARTMENT_DOC_TYPE, DEPARTMENT_LABELS } from '@/lib/shows/departments'
 
 export type AdvanceStatus = 'not_started' | 'in_progress' | 'done'
-export type AdvanceColumn =
-  | 'status_audio'
-  | 'status_lighting'
-  | 'status_staging'
-  | 'status_hospitality'
-  | 'status_travel'
+export type AdvanceColumn = 'status_production' | 'status_lx' | 'status_hospitality'
 
 // Plain data shapes shared by the advance panel, the rider send panel and the
 // server action that feeds them. They live here rather than in a component
@@ -50,11 +45,9 @@ export type DepartmentShareData = {
 // Both the UI action and the document-share acknowledge path use this
 // function so the mapping never drifts between callers.
 const DEPARTMENT_COLUMN: Record<Department, AdvanceColumn> = {
-  audio: 'status_audio',
-  lighting: 'status_lighting',
-  staging: 'status_staging',
+  production: 'status_production',
+  lx: 'status_lx',
   hospitality: 'status_hospitality',
-  travel: 'status_travel',
 }
 
 // Returns an error string on failure, null on success.
