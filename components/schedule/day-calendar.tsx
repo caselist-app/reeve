@@ -62,6 +62,7 @@ import { fromGridInstant, toGridInstant } from '@/lib/schedule/day-window'
 import { slotToDayFormClocks } from '@/lib/schedule/day-form-prefill'
 import { buildDayCalendarView } from '@/lib/schedule/day-calendar-view'
 import { eventChipTimeLabel } from '@/lib/schedule/event-chip-label'
+import { gridInstantLabel, gridRangeLabel } from '@/lib/schedule/grid-time-label'
 import { nowMarker } from '@/lib/schedule/now-marker'
 import { assignOverlapDepths } from '@/lib/schedule/overlap-layout'
 import { fromDropOrResize, type CalendarEvent, type EventSource } from '@/lib/schedule/calendar-adapter'
@@ -376,12 +377,24 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
   // way the gutter would without the un-shift below (REE-195). Un-shift it here
   // too, so the live label a TM sees mid-drag matches the row it is being drawn
   // against instead of reading DAY_START_HOUR hours earlier.
+  // eventTimeRangeFormat (and its start/end-only siblings) build the block's
+  // native `title` tooltip. Left unset, RBC's luxon localizer falls back to its
+  // own `t`-token default, which formats through the ambient Intl locale of
+  // whichever environment is rendering: Node's on the server, the browser's on
+  // the client. Those can disagree on 12h vs 24h, which is a hydration mismatch
+  // (the DOM `title` attribute differs between the SSR pass and the client
+  // render), not just a display slip. Same fix as timeGutterFormat/
+  // selectRangeFormat below: a fixed-locale formatter, un-shifted back to the
+  // real instant.
   const formats = useMemo(
     () => ({
-      timeGutterFormat: (slot: Date) =>
-        localTimeInZone(fromGridInstant(slot.toISOString(), timezone), timezone),
+      timeGutterFormat: (slot: Date) => gridInstantLabel(slot, timezone),
       selectRangeFormat: ({ start, end }: { start: Date; end: Date }) =>
-        `${localTimeInZone(fromGridInstant(start.toISOString(), timezone), timezone)} – ${localTimeInZone(fromGridInstant(end.toISOString(), timezone), timezone)}`,
+        gridRangeLabel(start, end, timezone),
+      eventTimeRangeFormat: ({ start, end }: { start: Date; end: Date }) =>
+        gridRangeLabel(start, end, timezone),
+      eventTimeRangeStartFormat: ({ start }: { start: Date }) => `${gridInstantLabel(start, timezone)} – `,
+      eventTimeRangeEndFormat: ({ end }: { end: Date }) => ` – ${gridInstantLabel(end, timezone)}`,
     }),
     [timezone],
   )
