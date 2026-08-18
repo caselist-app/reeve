@@ -101,8 +101,10 @@ export function PlacesAddressInput({
   // here is stop the browser's implicit form submission. Without it, pressing
   // Enter to pick an address saved the whole form and closed the panel: on the
   // Add drive form that created the segment and reopening showed the edit view,
-  // which looks nothing like it (REE-126). Applied in the plain-input branch
-  // too, so the behaviour does not hinge on whether the Maps script has loaded.
+  // which looks nothing like it (REE-126). Applied on both the live Autocomplete
+  // branch and the plain-input fallback, so the behaviour does not hinge on
+  // whether the Maps script has loaded (REE-284: the live branch was missed the
+  // first time round, so Enter on a real suggestion still submitted the form).
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'Enter') e.preventDefault()
     onKeyDown?.(e)
@@ -211,7 +213,7 @@ export function PlacesAddressInput({
       name={name}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      onKeyDown={onKeyDown}
+      onKeyDown={handleKeyDown}
       onBlur={onBlur}
       placeholder={placeholder}
       className={className}
