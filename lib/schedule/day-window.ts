@@ -160,3 +160,34 @@ export function toGridInstant(realIso: string, timezone: string): string {
 export function fromGridInstant(gridIso: string, timezone: string): string {
   return shiftWallClock(gridIso, DAY_START_HOUR, timezone)
 }
+
+/**
+ * The calendar date a wall-clock `clock` ('HH:MM') seeds a departure onto when
+ * typed or clicked against broadcast day `viewedDate`. A clock before
+ * DAY_START_HOUR is the tail of that night, so it lands on the following
+ * calendar date, the same as a curfew or overnight drive: a 01:30 drive added
+ * while looking at a show's broadcast day is really 01:30 the morning after
+ * the show, not 01:30 the same calendar date (REE-280). The click-to-add path
+ * already resolves this correctly through fromGridInstant before it is thrown
+ * away to a bare clock string; this is what puts it back at the one place the
+ * drive and rail add forms turn a viewed day plus a clock into a real date.
+ */
+export function broadcastDateForClock(viewedDate: string, clock: string): string {
+  const hours = Number(clock.slice(0, 2))
+  return hours < DAY_START_HOUR ? addDays(viewedDate, 1) : viewedDate
+}
+
+/**
+ * The inverse of `broadcastDateForClock`: the broadcast day a `datetime-local`
+ * wall-clock value (`YYYY-MM-DDTHH:MM`) belongs to. Lets the drive and rail add
+ * forms tell whether an edited departure still lands on the broadcast day it
+ * was opened from, so DateMoveNotice only warns when the segment is genuinely
+ * landing somewhere else rather than firing on every ordinary after-midnight
+ * departure that broadcastDateForClock already seeded correctly.
+ */
+export function broadcastDateOfWallClock(local: string): string {
+  const [date, clock] = local.split('T')
+  if (!clock) return date
+  const hours = Number(clock.slice(0, 2))
+  return hours < DAY_START_HOUR ? addDays(date, -1) : date
+}

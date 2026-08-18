@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { PlacesAddressInput } from '@/components/shows/places-address-input'
 import { createTransportSegment } from '@/lib/actions/transport'
 import { fromDatetimeLocal } from '@/lib/schedule/datetime'
+import { broadcastDateForClock, broadcastDateOfWallClock } from '@/lib/schedule/day-window'
 import { readForm } from '@/lib/forms/read-form'
 import { DateMoveNotice } from '@/components/schedule/date-move-notice'
 import { PartyPickerFields } from '@/components/schedule/party-picker'
@@ -39,8 +40,12 @@ export function AddRailForm({ tourId, tourDateId, date, timezone, initialClock, 
   const router = useRouter()
   // The departure decides the day, and this field defaults to the current day and
   // then lets the TM edit it, so the segment can leave the day it was added from
-  // before it ever exists.
-  const departDefault = `${date}T${initialClock ?? '09:00'}`
+  // before it ever exists. A clock before DAY_START_HOUR is the tail of tonight,
+  // not the head of the viewed day, so it seeds a departure on the following
+  // calendar date (REE-280).
+  const departDefault = initialClock
+    ? `${broadcastDateForClock(date, initialClock)}T${initialClock}`
+    : `${date}T09:00`
   const [departLocal, setDepartLocal] = useState(departDefault)
   // Controlled so the Places widget can write the selected station back in.
   const [origin, setOrigin] = useState('')
@@ -136,7 +141,7 @@ export function AddRailForm({ tourId, tourDateId, date, timezone, initialClock, 
             onChange={(e) => setDepartLocal(e.target.value)}
             className="h-7 text-xs"
           />
-          <DateMoveNotice currentDate={date} value={departLocal} />
+          <DateMoveNotice currentDate={date} value={departLocal ? broadcastDateOfWallClock(departLocal) : departLocal} />
         </div>
         <div className="space-y-1">
           <Label className="text-xs">Arrives</Label>
