@@ -100,6 +100,28 @@ jobs:
     name: Integration tests
     runs-on: ubuntu-latest
 
+    # Real Redis for the claim-release test (REE-32, Brief 38 Part 3): claim,
+    # fail the send, assert the claim is released so a retry is not swallowed.
+    # tests/integration/setup.ts stubs @/lib/redis for every other integration
+    # test with a Proxy that always resolves null, which cannot represent a
+    # held claim at all. lib/redis.ts talks to Upstash's REST protocol rather
+    # than the Redis wire protocol, so a bare redis container is not reachable
+    # from @upstash/redis on its own: redis-http is Upstash's own
+    # local-development REST shim (serverless-redis-http) in front of a real
+    # Redis, giving UPSTASH_REDIS_REST_URL something that speaks the same
+    # protocol the app does. See tests/integration/inbound-claim-redis.test.ts.
+    services:
+      redis:
+        image: redis:7-alpine
+      redis-http:
+        image: hiett/serverless-redis-http:latest
+        env:
+          SRH_MODE: env
+          SRH_TOKEN: test-token
+          SRH_CONNECTION_STRING: redis://redis:6379
+        ports:
+          - 8079:8079
+
     steps:
       - name: Check out repo
         uses: actions/checkout@v4
@@ -174,6 +196,9 @@ jobs:
 
       - name: Integration tests
         run: pnpm test:integration
+        env:
+          UPSTASH_REDIS_REST_URL: http://localhost:8079
+          UPSTASH_REDIS_REST_TOKEN: test-token
 
   # End-to-end tests. The layer above the integration suite: a real browser
   # loading real pages out of a real production build against a real database.

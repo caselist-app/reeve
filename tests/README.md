@@ -127,6 +127,16 @@ Everything below that is real. The server action's own logic, PostgREST, SQL,
 constraints and migrations all run for real. When a test fails, the failure is
 about the product, not about a mock drifting from the thing it stands in for.
 
+`setup.ts` also stubs `@/lib/redis` with a Proxy that resolves every call to
+`null`, since none of the other integration tests need it and the singleton
+would otherwise warn on every import. That stub cannot represent a held claim,
+so `tests/integration/inbound-claim-redis.test.ts` (REE-32, Brief 38 Part 3)
+calls `vi.unmock('@/lib/redis')` to opt out of it. That one test needs a real
+Redis, so the integration job in `.github/workflows/ci.yml` runs one behind
+Upstash's local-development REST shim (`serverless-redis-http`), because
+`@upstash/redis` speaks Upstash's REST protocol rather than the Redis wire
+protocol and cannot reach a bare Redis container directly.
+
 ## Fixtures
 
 `tests/integration/fixture.ts` builds one account, one tour, one show day, one

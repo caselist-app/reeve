@@ -45,9 +45,11 @@ vi.mock('@/lib/supabase/admin', () => ({
 // real failure gets missed later.
 //
 // A Proxy rather than a list of methods, so adding a Redis call somewhere does
-// not break these tests for an unrelated reason. When the idempotency tests
-// arrive (claim, fail the send, assert the claim is released) this stub is not
-// enough: those need a real Redis or a fake that actually stores things.
+// not break these tests for an unrelated reason. It cannot represent a held
+// claim at all, which is why tests/integration/inbound-claim-redis.test.ts
+// (REE-32, Brief 38 Part 3: claim, fail the send, assert the claim is
+// released) calls vi.unmock('@/lib/redis') to opt out of this stub and run
+// against the real Redis CI's integration job starts for exactly that test.
 vi.mock('@/lib/redis', () => ({
   redis: new Proxy(
     {},

@@ -21,7 +21,7 @@ What is true about the running world, as opposed to the code. `CLAUDE.md` says h
 | Suite | Command | Where it can run |
 | --- | --- | --- |
 | unit | `pnpm test` | Anywhere |
-| integration | `pnpm test:integration` | CI only, needs real Postgres |
+| integration | `pnpm test:integration` | CI only, needs real Postgres and (for one claim-release test) a real Redis |
 | e2e | `pnpm test:e2e` | CI only, needs a real browser and a real build |
 
 **Integration and e2e are proved by pushing and reading the CI log, never by claiming they passed.** CI's three jobs are `Typecheck, lint, build`, `Integration tests` and `End-to-end tests`.
