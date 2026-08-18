@@ -35,7 +35,7 @@ describe('the documents page share log', () => {
       .from('documents')
       .insert({
         tour_id: fixture.tourId,
-        doc_type: 'tech_rider',
+        doc_type: 'production_rider',
         title,
         storage_path: `${fixture.tourId}/${title}.pdf`,
       })

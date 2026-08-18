@@ -18,7 +18,7 @@ import { fetchDocumentsPage } from '@/lib/documents/queries'
 // this change as the actual red/green proof, the same convention
 // documents-store.test.ts follows.
 
-const DOC_TYPE = 'tech_rider'
+const DOC_TYPE = 'production_rider'
 
 function pdfFile(name: string): File {
   return new File(['%PDF-1.4 test'], name, { type: 'application/pdf' })
