@@ -5,8 +5,11 @@
 // day-block renderers, so sending unescaped would fail with "can't parse
 // entities." Never call these synchronously from a webhook handler. Always
 // call from a Trigger.dev job after the idempotency check, same rule as
-// lib/comms/whatsapp.ts. Throws if Telegram rejects the call so job-level
-// retry handles it.
+// lib/comms/whatsapp.ts. The documented exceptions are the /start, gl: and
+// /stop/dc: interceptions in app/api/telegram/inbound/route.ts, which reply
+// synchronously before the route's normal enqueue path runs: REE-271 tracks
+// converting handleLinking (and the others) to enqueue instead. Throws if
+// Telegram rejects the call so job-level retry handles it.
 
 export type TelegramButton = {
   text: string
