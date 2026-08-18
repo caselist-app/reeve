@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { tasks } from '@trigger.dev/sdk/v3'
 import { redis } from '@/lib/redis'
 import { enqueueWithClaim } from '@/lib/comms/inbound-claim'
+import { recordReaction } from '@/lib/comms/record-reaction'
 
 // GET: Meta webhook verification handshake.
 // Meta sends this when you first register the webhook URL.
@@ -99,6 +100,24 @@ export async function POST(request: NextRequest) {
 
       for (const msg of messages) {
         const message = msg as Record<string, unknown>
+
+        // A reaction (emoji tap on a message Reeve sent) is a receipt, not a
+        // message: record it against the notification_log row it acknowledges
+        // and stop here, before body extraction, so it never reaches the
+        // router job or the AI path. A removed reaction arrives with no emoji
+        // field; recordReaction treats that as a no-op.
+        if (message.type === 'reaction') {
+          const reaction = message.reaction as Record<string, unknown> | undefined
+          const reactedMessageId = reaction?.message_id as string | undefined
+          if (reactedMessageId) {
+            await recordReaction(admin, {
+              providerMessageId: reactedMessageId,
+              emoji: (reaction?.emoji as string | undefined) ?? '',
+              channel: 'whatsapp',
+            })
+          }
+          continue
+        }
 
         // Extract body from text or interactive (quick-reply button tap) messages.
         // Button taps arrive as type 'interactive' with the reply title as the body.
