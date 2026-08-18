@@ -53,6 +53,10 @@ export interface DocumentsPageData {
   // Non-current documents, keyed by doc_type, newest first. A card looks up
   // its own doc_type here for the "{n} older versions" toggle.
   olderVersions: Record<string, OlderVersionRow[]>
+  // Current documents with archived_at set, newest-archived first. Kept out
+  // of `documents` entirely rather than filtered client-side, the same shape
+  // as `olderVersions`.
+  archivedDocuments: DocumentRow[]
   // A failed read must never render as an empty result (CLAUDE.md): "no
   // documents yet" and "the query broke" look identical from the outside, so
   // the page needs this to tell them apart rather than a confident, wrong
@@ -65,17 +69,21 @@ export interface DocumentsPageData {
   // Separate again: older versions can fail to load while the current
   // documents and their shares are fine.
   olderVersionsError: string | null
+  // Separate again: the archived list can fail while the active list is fine.
+  archivedDocumentsError: string | null
 }
 
-// All four fetches run in one Promise.all: the tour (header eyebrow and
+// All five fetches run in one Promise.all: the tour (header eyebrow and
 // ownership check), the current documents, every share ever sent for them,
-// and the non-current (older) documents. None depends on another's result.
+// the non-current (older) documents, and the archived documents. None
+// depends on another's result.
 export async function fetchDocumentsPage(
   supabase: Client,
   tourId: string,
   accountId: string
 ): Promise<DocumentsPageData> {
-  const [tourResult, documentsResult, sharesResult, olderVersionsResult] = await Promise.all([
+  const [tourResult, documentsResult, sharesResult, olderVersionsResult, archivedDocumentsResult] =
+    await Promise.all([
     supabase
       .from('tours')
       .select('id, name, artists(name)')
@@ -87,6 +95,7 @@ export async function fetchDocumentsPage(
       .select('id, title, doc_type, version, created_at')
       .eq('tour_id', tourId)
       .eq('is_current', true)
+      .is('archived_at', null)
       .order('created_at', { ascending: false }),
     // The recipient's name lives on contacts, not people: a two-hop embed.
     // people(name) does not exist (Brief 20 moved identity onto contacts) and
@@ -115,6 +124,16 @@ export async function fetchDocumentsPage(
       .eq('tour_id', tourId)
       .eq('is_current', false)
       .order('version', { ascending: false }),
+    // is_current = true and archived_at not null: the archived leg is the
+    // mirror image of the active leg's `.is('archived_at', null)` filter, so
+    // a document is in exactly one of the two lists, never both.
+    supabase
+      .from('documents')
+      .select('id, title, doc_type, version, created_at')
+      .eq('tour_id', tourId)
+      .eq('is_current', true)
+      .not('archived_at', 'is', null)
+      .order('archived_at', { ascending: false }),
   ])
 
   const tour = tourResult.data
@@ -131,9 +150,11 @@ export async function fetchDocumentsPage(
       documents: [],
       shares: {},
       olderVersions: {},
+      archivedDocuments: [],
       error: 'Could not load documents.',
       sharesError: null,
       olderVersionsError: null,
+      archivedDocumentsError: null,
     }
   }
 
@@ -185,13 +206,24 @@ export async function fetchDocumentsPage(
     }
   }
 
+  if (archivedDocumentsResult.error) {
+    console.error(
+      '[fetchDocumentsPage] archived documents read failed:',
+      archivedDocumentsResult.error.message
+    )
+  }
+
   return {
     tour,
     documents: documentsResult.data ?? [],
     shares,
     olderVersions,
+    archivedDocuments: archivedDocumentsResult.data ?? [],
     error: null,
     sharesError: sharesResult.error ? 'Could not load share activity.' : null,
     olderVersionsError: olderVersionsResult.error ? 'Could not load older versions.' : null,
+    archivedDocumentsError: archivedDocumentsResult.error
+      ? 'Could not load archived documents.'
+      : null,
   }
 }

@@ -16,8 +16,17 @@ export default async function DocumentsPage({
   const user = await requireUser()
   const supabase = await createClient()
 
-  const { tour, documents, shares, olderVersions, sharesError, olderVersionsError, error } =
-    await fetchDocumentsPage(supabase, id, user.id)
+  const {
+    tour,
+    documents,
+    shares,
+    olderVersions,
+    archivedDocuments,
+    sharesError,
+    olderVersionsError,
+    archivedDocumentsError,
+    error,
+  } = await fetchDocumentsPage(supabase, id, user.id)
 
   if (!tour) redirect('/')
 
@@ -35,8 +44,10 @@ export default async function DocumentsPage({
         documents={documents}
         shares={shares}
         olderVersions={olderVersions}
+        archivedDocuments={archivedDocuments}
         sharesError={sharesError}
         olderVersionsError={olderVersionsError}
+        archivedDocumentsError={archivedDocumentsError}
         error={error}
       />
     </PageLayout>

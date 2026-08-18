@@ -199,6 +199,61 @@ export async function resendShare(shareId: string): Promise<SendDocumentResult> 
   })
 }
 
+export type ArchiveDocumentResult = { error: string | null }
+
+// Sets archived_at on a document's current row. RLS scopes both the read and
+// the write to tours the caller owns (owns_tour(tour_id)), so there is no
+// separate ownership query: a documentId from another account's tour simply
+// is not found.
+export async function archiveDocument(documentId: string): Promise<ArchiveDocumentResult> {
+  await requireUser()
+  const supabase = await createClient()
+
+  const { data: doc } = await supabase
+    .from('documents')
+    .select('id, tour_id')
+    .eq('id', documentId)
+    .single()
+
+  if (!doc) return { error: 'Document not found.' }
+
+  const { error: updateError } = await supabase
+    .from('documents')
+    .update({ archived_at: new Date().toISOString() })
+    .eq('id', documentId)
+
+  if (updateError) return { error: updateError.message }
+
+  revalidatePath(`/tours/${doc.tour_id}/documents`)
+
+  return { error: null }
+}
+
+// Clears archived_at, restoring the document to the active list.
+export async function unarchiveDocument(documentId: string): Promise<ArchiveDocumentResult> {
+  await requireUser()
+  const supabase = await createClient()
+
+  const { data: doc } = await supabase
+    .from('documents')
+    .select('id, tour_id')
+    .eq('id', documentId)
+    .single()
+
+  if (!doc) return { error: 'Document not found.' }
+
+  const { error: updateError } = await supabase
+    .from('documents')
+    .update({ archived_at: null })
+    .eq('id', documentId)
+
+  if (updateError) return { error: updateError.message }
+
+  revalidatePath(`/tours/${doc.tour_id}/documents`)
+
+  return { error: null }
+}
+
 export type UploadDocumentState = { error: string | null }
 
 // Matches the documents bucket's allowed_mime_types
