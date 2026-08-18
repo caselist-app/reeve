@@ -605,6 +605,7 @@ export type Database = {
       }
       documents: {
         Row: {
+          archived_at: string | null
           created_at: string
           doc_type: string
           id: string
@@ -616,6 +617,7 @@ export type Database = {
           version: number
         }
         Insert: {
+          archived_at?: string | null
           created_at?: string
           doc_type: string
           id?: string
@@ -627,6 +629,7 @@ export type Database = {
           version?: number
         }
         Update: {
+          archived_at?: string | null
           created_at?: string
           doc_type?: string
           id?: string
