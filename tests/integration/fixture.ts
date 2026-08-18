@@ -172,6 +172,11 @@ export interface E2eSeed {
     // tests/e2e/access.spec.ts (REE-202): the only way to prove account B
     // cannot sign account A's document is a real row to try it against.
     identityDocumentId: string
+    // A documents row on account A's seeded tour, for
+    // tests/e2e/access.spec.ts (REE-302, "document view isolation"): the
+    // only way to prove account B cannot view account A's document is a
+    // real row to try it against.
+    documentId: string
   }
   // A second ACCOUNT, not a second tour. createSecondTour puts both tours on
   // one account, which is right for cross-tour id checks and proves nothing
@@ -292,6 +297,34 @@ export async function createE2eSeed(): Promise<E2eSeed> {
     throw new Error(`seed: could not create identity document: ${identityDocumentError?.message}`)
   }
 
+  // A real object, not just a row, for the same reason as identityDocumentPath
+  // above: tests/e2e/access.spec.ts (REE-302, "document view isolation")
+  // asserts account A can view its own document, and createSignedUrl errors
+  // against a path with nothing behind it.
+  const documentPath = `${a.tourId}/general/v1_seeded.pdf`
+  const { error: documentUploadError } = await testDb.storage
+    .from('documents')
+    .upload(documentPath, new TextEncoder().encode('%PDF-1.4 seeded'), {
+      contentType: 'application/pdf',
+    })
+  if (documentUploadError) {
+    throw new Error(`seed: could not upload document: ${documentUploadError.message}`)
+  }
+
+  const { data: document, error: documentError } = await testDb
+    .from('documents')
+    .insert({
+      tour_id: a.tourId,
+      doc_type: 'general',
+      title: 'Seeded Document',
+      storage_path: documentPath,
+    })
+    .select('id')
+    .single()
+  if (documentError || !document) {
+    throw new Error(`seed: could not create document: ${documentError?.message}`)
+  }
+
   // Same day as the show, so the stay sits on the day view the schedule specs
   // open. tour_date_id and check_in_date are a composite foreign key onto
   // tour_dates (id, date): writing one without the other is a 23503, not a
@@ -410,6 +443,7 @@ export async function createE2eSeed(): Promise<E2eSeed> {
       zonedDst,
       itemId: item.id,
       identityDocumentId: identityDocument.id,
+      documentId: document.id,
     },
     b,
   }
@@ -501,15 +535,17 @@ function zonedWallClockToUtc(local: string, tz: string): string {
 
 // Two deletes, and the cascade does the rest, same as destroyFixture.
 export async function destroyE2eSeed(seed: {
-  a: { userId: string; contactId: string }
+  a: { userId: string; contactId: string; tourId: string }
   b: { userId: string }
 }) {
-  // Deleting the auth user cascades the identity_documents row away, but not
-  // the object it points at: same gap destroyFixture has, and the same fix,
-  // done before the user delete so the path is still derivable from live ids.
+  // Deleting the auth user cascades the identity_documents and documents rows
+  // away, but not the objects they point at: same gap destroyFixture has, and
+  // the same fix, done before the user delete so the paths are still
+  // derivable from live ids.
   await testDb.storage
     .from('identity-documents')
     .remove([`${seed.a.userId}/${seed.a.contactId}/seeded.pdf`])
+  await testDb.storage.from('documents').remove([`${seed.a.tourId}/general/v1_seeded.pdf`])
 
   await testDb.auth.admin.deleteUser(seed.a.userId)
   await testDb.auth.admin.deleteUser(seed.b.userId)

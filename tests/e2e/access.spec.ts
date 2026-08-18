@@ -152,6 +152,70 @@ test.describe('identity document isolation', () => {
   })
 })
 
+// REE-302. getDocumentViewUrl is account-level via tour ownership, and the
+// same gap identity document isolation above describes applies here:
+// tests/integration/documents-view-url.test.ts mocks createClient to a
+// service-role client, so RLS is never enforced there and an isolation test
+// written in that suite would pass for reasons unrelated to RLS. This file
+// is the only place a second account exists.
+//
+// "View" has a real UI trigger (ViewDocumentButton on every document card),
+// but driving that through a browser click would need a signed-in account B
+// to load a Documents page it has no document on, so this spec calls the
+// action the same way as identity document isolation above: through
+// app/api/dev/e2e-view-document, a dev-only route with the same two guards
+// as e2e-login.
+test.describe('document view isolation', () => {
+  test('account B cannot view account A\'s document', async () => {
+    const seed = readSeed()
+    const secret = process.env.E2E_LOGIN_SECRET
+    if (!secret) {
+      throw new Error('E2E_LOGIN_SECRET is not set, so account B cannot sign in.')
+    }
+
+    const accountB = await playwrightRequest.newContext({ baseURL: BASE_URL })
+    try {
+      const loginResponse = await accountB.post('/api/dev/e2e-login', {
+        headers: { 'x-e2e-secret': secret },
+        data: { email: seed.b.email },
+      })
+      expect(loginResponse.status()).toBe(200)
+
+      const viewResponse = await accountB.post('/api/dev/e2e-view-document', {
+        headers: { 'x-e2e-secret': secret },
+        data: { documentId: seed.a.documentId },
+      })
+
+      expect(viewResponse.status()).toBe(200)
+      const body = await viewResponse.json()
+      expect(body.error).not.toBeNull()
+      expect(body.url).toBeNull()
+    } finally {
+      await accountB.dispose()
+    }
+  })
+
+  // Not passing on a broken action: the same document id, called by the
+  // account that actually owns it, must resolve to a signed URL.
+  test('account A can view its own document', async ({ request }) => {
+    const seed = readSeed()
+    const secret = process.env.E2E_LOGIN_SECRET
+    if (!secret) {
+      throw new Error('E2E_LOGIN_SECRET is not set.')
+    }
+
+    const viewResponse = await request.post('/api/dev/e2e-view-document', {
+      headers: { 'x-e2e-secret': secret },
+      data: { documentId: seed.a.documentId },
+    })
+
+    expect(viewResponse.status()).toBe(200)
+    const body = await viewResponse.json()
+    expect(body.error).toBeNull()
+    expect(body.url).not.toBeNull()
+  })
+})
+
 // REE-233 / Brief 29 step 1. contact_artists has no reading page or writing
 // action yet (the roster filter and the contact-sheet artist picker are later
 // steps of the same brief), so tests/integration/contact-artists.test.ts
