@@ -45,7 +45,10 @@ describe('enqueueWithClaim against a real Redis', () => {
 
     expect(enqueued).toBe(true)
     expect(enqueue).toHaveBeenCalledTimes(1)
-    expect(await redis.get(key)).toBe('1')
+    // Not .toBe('1'): @upstash/redis's get() auto-JSON-parses the stored
+    // value, and '1' is valid JSON, so it comes back as the number 1. The
+    // claim only cares that the key is held, not the SDK's parsed type.
+    expect(await redis.get(key)).not.toBeNull()
   })
 
   it('rejects a duplicate claim on the same key without enqueueing again', async () => {
