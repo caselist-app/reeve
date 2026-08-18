@@ -42,11 +42,9 @@ export type TourContext = {
     // sheet's load_in and curfew, so the model was handed two answers to the same
     // question with no rule for which one won.
     advance: {
-      status_audio: string
-      status_lighting: string
-      status_staging: string
+      status_production: string
+      status_lx: string
       status_hospitality: string
-      status_travel: string
     } | null
     // Brief 42: an array of what is actually on the day, in running order,
     // rather than a wide object of mostly-null columns. Three things follow.
@@ -149,7 +147,7 @@ export async function assembleTourContext(tour_id: string): Promise<TourContext>
         // Vercel and reached a crew member. Items are fetched below instead.
         .select(`
           id, date, venue_name, address, venue_type,
-          show_advance ( status_audio, status_lighting, status_staging, status_hospitality, status_travel )
+          show_advance ( status_production, status_lx, status_hospitality )
         `)
         .eq('tour_id', tour_id)
         .order('date', { ascending: true }),
