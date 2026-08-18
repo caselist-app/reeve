@@ -1,7 +1,6 @@
 'use client'
 
 import { useRouter } from 'next/navigation'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
 import { PeopleTable } from '@/components/people/people-table'
 import { removePerson } from '@/lib/actions/people'
@@ -13,7 +12,7 @@ export type PersonWithContact = Tables<'people'> & { contacts: Tables<'contacts'
 
 type PersonType = 'artist' | 'crew' | 'management' | 'support'
 
-const TABS: { value: PersonType; label: string; singular: string }[] = [
+const SECTIONS: { value: PersonType; label: string; singular: string }[] = [
   { value: 'artist', label: 'Artists', singular: 'Artist' },
   { value: 'crew', label: 'Crew', singular: 'Crew' },
   { value: 'management', label: 'Management', singular: 'Management' },
@@ -74,54 +73,43 @@ export function PeopleView({ tourId, people, crewDetails }: Props) {
     people.filter((p) => p.person_type === type)
 
   return (
-    <>
-      <Tabs defaultValue="crew">
-        <div className="overflow-x-auto">
-        <TabsList>
-          {TABS.map((tab) => {
-            const count = byType(tab.value).length
-            return (
-              <TabsTrigger key={tab.value} value={tab.value}>
-                {tab.label}
-                {count > 0 && (
-                  <span className="ml-1.5 tabular-nums opacity-60 text-xs">{count}</span>
+    <div className="space-y-8">
+      {SECTIONS.map((section) => {
+        const sectionPeople = byType(section.value)
+        return (
+          <div key={section.value}>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+                {section.label}
+                {sectionPeople.length > 0 && (
+                  <span className="ml-1.5 tabular-nums opacity-60">{sectionPeople.length}</span>
                 )}
-              </TabsTrigger>
-            )
-          })}
-        </TabsList>
-        </div>
-
-        {TABS.map((tab) => {
-          const tabPeople = byType(tab.value)
-          return (
-            <TabsContent key={tab.value} value={tab.value} className="mt-4">
-              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                <span className="text-sm text-muted-foreground">
-                  {tabPeople.length === 0 ? 'No one added yet.' : ''}
-                </span>
-                <div className="flex gap-2">
-                  {tab.value === 'crew' && (
-                    <Button size="sm" variant="outline" onClick={handleBulkAdd}>
-                      Bulk add
-                    </Button>
-                  )}
-                  <Button size="sm" onClick={() => handleAdd(tab.value)}>
-                    Add {tab.singular}
+              </p>
+              <div className="flex gap-2">
+                {section.value === 'crew' && (
+                  <Button size="sm" variant="outline" onClick={handleBulkAdd}>
+                    Bulk add
                   </Button>
-                </div>
+                )}
+                <Button size="sm" onClick={() => handleAdd(section.value)}>
+                  Add {section.singular}
+                </Button>
               </div>
+            </div>
 
+            {sectionPeople.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No one added yet.</p>
+            ) : (
               <PeopleTable
-                people={tabPeople}
+                people={sectionPeople}
                 crewDetails={crewDetails}
                 onEdit={handleEdit}
                 onRemove={handleRemove}
               />
-            </TabsContent>
-          )
-        })}
-      </Tabs>
-    </>
+            )}
+          </div>
+        )
+      })}
+    </div>
   )
 }
