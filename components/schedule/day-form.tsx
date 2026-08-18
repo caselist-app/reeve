@@ -227,7 +227,7 @@ export function DayForm({
             value={startClock}
             onChange={(event) => setStartClock(event.target.value)}
             onKeyDown={onClockKeyDown}
-            className="h-9 w-[120px] shrink-0 text-sm"
+            className="h-9 w-[88px] shrink-0 text-sm [&::-webkit-calendar-picker-indicator]:hidden"
           />
           <span className="shrink-0 text-xs text-muted-foreground">to</span>
           <Input
@@ -236,7 +236,7 @@ export function DayForm({
             value={endClock}
             onChange={(event) => setEndClock(event.target.value)}
             onKeyDown={onClockKeyDown}
-            className="h-9 w-[120px] shrink-0 text-sm"
+            className="h-9 w-[88px] shrink-0 text-sm [&::-webkit-calendar-picker-indicator]:hidden"
           />
         </div>
 
