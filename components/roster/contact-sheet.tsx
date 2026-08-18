@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/button'
 import { SectionHeader } from '@/components/ui/section-header'
 import { Input } from '@/components/ui/input'
 import { PlacesAddressInput } from '@/components/shows/places-address-input'
+import { TelegramLinkGenerator } from '@/components/roster/telegram-link-generator'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
@@ -84,6 +85,10 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
   )
   const [emailEnabled, setEmailEnabled] = useState(contact?.email_enabled ?? false)
   const canUseTelegram = !!contact?.telegram_chat_id
+  // REE-305: selecting Telegram before it's connected opens this inline card
+  // instead of setting operationalChannel, since there's nothing to switch
+  // to yet, connecting only finishes once the crew member taps the deep link.
+  const [showTelegramConnect, setShowTelegramConnect] = useState(false)
   const [personType, setPersonType] = useState<PersonType>(initialPersonType)
   const [perDiemCurrency, setPerDiemCurrency] = useState(initialPerDiemCurrency)
   const [wageCurrency, setWageCurrency] = useState(initialWageCurrency)
@@ -422,13 +427,24 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
             <Label>Operational channel</Label>
             <Select
               value={operationalChannel}
-              onValueChange={(v) => setOperationalChannel(v as OperationalChannel)}
+              onValueChange={(v) => {
+                // Telegram isn't connected yet: there's nothing to switch the
+                // channel to, so this opens the connect card below instead of
+                // setting state (REE-305). Connecting finishes asynchronously
+                // once the crew member taps the deep link, so the select stays
+                // on its current value until a later visit sees it connected.
+                if (v === 'telegram' && !canUseTelegram) {
+                  setShowTelegramConnect(true)
+                  return
+                }
+                setOperationalChannel(v as OperationalChannel)
+              }}
             >
               <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                <SelectItem value="telegram" disabled={!canUseTelegram}>
-                  Telegram{!canUseTelegram ? ' (connect first)' : ''}
+                <SelectItem value="telegram" disabled={!isEditing}>
+                  Telegram{!isEditing ? ' (save first)' : ''}
                 </SelectItem>
               </SelectContent>
             </Select>
@@ -461,6 +477,15 @@ export function ContactSheet({ contact, tourContext, onSuccess }: Props) {
             />
           </div>
         </div>
+
+        {showTelegramConnect && contact && !canUseTelegram && (
+          <div className="rounded-lg border px-4 py-3">
+            <TelegramLinkGenerator
+              contactId={contact.id}
+              onDone={() => setShowTelegramConnect(false)}
+            />
+          </div>
+        )}
 
         <div className="flex items-center justify-between gap-4 rounded-lg border px-4 py-3">
           <div className="space-y-0.5">
