@@ -46,27 +46,29 @@ describe('the advance panel gets real data', () => {
   }
 
   describe('the documents', () => {
-    it('files each rider under the department that sends it', async () => {
-      const techRiderId = await addRider('tech_rider', 'Tech Rider v3')
+    it('files a production_rider under production (REE-294)', async () => {
+      // Per REE-292/REE-294, audio and staging merged into a single PRODUCTION
+      // department, so the production_rider doc_type (REE-295) files under
+      // exactly one department again.
+      const productionRiderId = await addRider('production_rider', 'Production Rider v3')
       await addRider('hospitality_rider', 'Hospitality Rider')
 
       const { data, error } = await getShowAdvance(fixture.tourId, fixture.showId)
       if (error) throw new Error(`could not load the advance: ${error}`)
 
-      const audio = data?.departments.find((d) => d.department === 'audio')
-      expect(audio?.documents.map((doc) => doc.id)).toEqual([techRiderId])
+      const production = data?.departments.find((d) => d.department === 'production')
+      expect(production?.documents.map((doc) => doc.id)).toEqual([productionRiderId])
 
       // Every documented department is present whether or not it has a rider,
       // so the panel can show a TM which ones have nothing to send.
       expect(data?.departments.map((d) => d.department).sort()).toEqual([
-        'audio',
         'hospitality',
-        'lighting',
-        'staging',
+        'lx',
+        'production',
       ])
 
-      const lighting = data?.departments.find((d) => d.department === 'lighting')
-      expect(lighting?.documents).toEqual([])
+      const lx = data?.departments.find((d) => d.department === 'lx')
+      expect(lx?.documents).toEqual([])
     })
 
     it('leaves out a document that is not a rider', async () => {
@@ -87,7 +89,7 @@ describe('the advance panel gets real data', () => {
     // show_advance holds one row per show with tour_id denormalised onto it, so
     // acknowledging a single rider marked the department advanced on every show
     // on the tour, including shows that had had no rider sent at all. Seed two
-    // shows, acknowledge a tech rider against one, and prove the other is
+    // shows, acknowledge a production rider against one, and prove the other is
     // untouched. The second assertion is the one that fails red against the
     // tour_id-scoped update.
 
@@ -123,14 +125,14 @@ describe('the advance panel gets real data', () => {
       if (error) throw new Error(`could not seed show_advance for ${showId}: ${error.message}`)
     }
 
-    async function statusAudio(showId: string) {
+    async function statusProduction(showId: string) {
       const { data, error } = await testDb
         .from('show_advance')
-        .select('status_audio')
+        .select('status_production')
         .eq('show_id', showId)
         .single()
       if (error || !data) throw new Error(`could not read show_advance for ${showId}: ${error?.message}`)
-      return data.status_audio
+      return data.status_production
     }
 
     it('advances only the show the rider was sent against', async () => {
@@ -138,7 +140,7 @@ describe('the advance panel gets real data', () => {
       await seedAdvance(fixture.showId)
       await seedAdvance(showBId)
 
-      const riderId = await addRider('tech_rider', 'Tech Rider')
+      const riderId = await addRider('production_rider', 'Production Rider')
 
       const shareToken = `ree8-ack-${Date.now()}`
       const { error: shareError } = await testDb.from('document_shares').insert({
@@ -155,9 +157,9 @@ describe('the advance panel gets real data', () => {
       await nudgeAdvanceFromShareClick(testDb, shareToken)
 
       // The show the rider went to is nudged.
-      expect(await statusAudio(fixture.showId)).toBe('in_progress')
-      // Show B never received a rider, so its audio advance must be unchanged.
-      expect(await statusAudio(showBId)).toBe('not_started')
+      expect(await statusProduction(fixture.showId)).toBe('in_progress')
+      // Show B never received a rider, so its production advance must be unchanged.
+      expect(await statusProduction(showBId)).toBe('not_started')
     })
   })
 

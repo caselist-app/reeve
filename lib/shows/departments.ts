@@ -9,24 +9,25 @@
 // disagree about which rider belonged to which department and nothing would
 // have said so.
 
-export type Department = 'audio' | 'lighting' | 'staging' | 'hospitality' | 'travel'
+export type Department = 'production' | 'lx' | 'hospitality'
 
-// The four departments that advance through a document, and the doc_type each
-// one sends. `travel` is the fifth department on show_advance and has no rider,
-// so a TM moves it by hand and it never appears in the document list.
+// The three departments that advance through a document, and the doc_type
+// each one sends. Per REE-292's decision: PRODUCTION absorbs the old audio and
+// staging departments (both fed by the single production_rider doc_type, per
+// REE-295), LX is a straight rename of lighting (lx_rider), and HOSPITALITY is
+// unchanged. Travel drops out of the advance vocabulary entirely rather than
+// folding into PRODUCTION: it has no rider and is moved by hand, so it never
+// belonged in a doc_type map.
 export const DEPARTMENT_DOC_TYPE = {
-  audio: 'tech_rider',
-  lighting: 'lighting_rider',
-  staging: 'staging_rider',
+  production: 'production_rider',
+  lx: 'lx_rider',
   hospitality: 'hospitality_rider',
 } as const
 
 export type DocumentedDepartment = keyof typeof DEPARTMENT_DOC_TYPE
 
 export const DEPARTMENT_LABELS: Record<Department, string> = {
-  audio: 'Audio',
-  lighting: 'Lighting',
-  staging: 'Staging',
-  hospitality: 'Hospitality',
-  travel: 'Travel',
+  production: 'PRODUCTION',
+  lx: 'LX',
+  hospitality: 'HOSPITALITY',
 }

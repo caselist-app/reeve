@@ -28,11 +28,11 @@ const STATUS_STYLES: Record<AdvanceStatus, string> = {
   done: 'bg-green-100 text-green-800',
 }
 
-// Departments in DEPARTMENT_LABELS' own order (audio, lighting, staging,
-// hospitality, travel), read from the object rather than restated as a list.
+// Departments in DEPARTMENT_LABELS' own order (production, lx, hospitality),
+// read from the object rather than restated as a list.
 const DEPARTMENTS = Object.keys(DEPARTMENT_LABELS) as Department[]
 
-// The Advance block in day info: five read-only status chips, matching the
+// The Advance block in day info: three read-only status chips, matching the
 // mini-panel shape REE-48 defines (a label, a short body of derived facts, at
 // most one action, no card token of its own, read-only). Editing still only
 // happens in the advance panel. REE-257.
@@ -64,11 +64,9 @@ export function AdvanceBlock({ tourId, showId, venueName, summary }: AdvanceBloc
   }, [
     showId,
     summary.error,
-    summary.statuses.audio,
-    summary.statuses.lighting,
-    summary.statuses.staging,
+    summary.statuses.production,
+    summary.statuses.lx,
     summary.statuses.hospitality,
-    summary.statuses.travel,
     clear,
   ])
 
@@ -84,7 +82,7 @@ export function AdvanceBlock({ tourId, showId, venueName, summary }: AdvanceBloc
       >
         <span className="min-w-0 flex-1">
           {statuses === null ? (
-            // A failed read says so rather than rendering five "not started"
+            // A failed read says so rather than rendering three "not started"
             // chips, the confident, plausible, wrong answer a failed query must
             // never be.
             <span className="block text-sm font-semibold text-destructive">

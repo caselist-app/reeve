@@ -12,7 +12,7 @@ import { fetchDocumentsPage } from '@/lib/documents/queries'
 // written to catch; see the note at the bottom of this file for how that was
 // proved before the fix landed.
 
-const DOC_TYPE = 'tech_rider'
+const DOC_TYPE = 'production_rider'
 
 function pdfFile(name: string): File {
   return new File(['%PDF-1.4 test'], name, { type: 'application/pdf' })
