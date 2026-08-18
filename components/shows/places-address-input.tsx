@@ -64,6 +64,14 @@ interface PlacesAddressInputProps {
   includeGeometry?: boolean
 }
 
+// Enter in an address field selects the highlighted Places suggestion, not the
+// form. Exported as a pure predicate so the contract can be pinned by a unit
+// test without rendering the component (no jsdom in this repo, see
+// tests/unit/confirm-dialog-state.test.ts for the same pattern).
+export function shouldPreventEnterSubmit(key: string): boolean {
+  return key === 'Enter'
+}
+
 // Loads the Google Maps Places API script once per page and attaches an
 // Autocomplete widget to the input. Falls back to a plain controlled Input
 // if NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is not set.
@@ -101,10 +109,13 @@ export function PlacesAddressInput({
   // here is stop the browser's implicit form submission. Without it, pressing
   // Enter to pick an address saved the whole form and closed the panel: on the
   // Add drive form that created the segment and reopening showed the edit view,
-  // which looks nothing like it (REE-126). Applied in the plain-input branch
-  // too, so the behaviour does not hinge on whether the Maps script has loaded.
+  // which looks nothing like it (REE-126). Wired into both render branches
+  // below, not only the plain-input one: REE-285 found the apiKey branch
+  // (the one actually used whenever the Maps script has loaded, i.e. always in
+  // production) still passed the raw onKeyDown prop through unguarded, so Enter
+  // could submit the destination field before its address had settled.
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Enter') e.preventDefault()
+    if (shouldPreventEnterSubmit(e.key)) e.preventDefault()
     onKeyDown?.(e)
   }
 
@@ -211,7 +222,7 @@ export function PlacesAddressInput({
       name={name}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      onKeyDown={onKeyDown}
+      onKeyDown={handleKeyDown}
       onBlur={onBlur}
       placeholder={placeholder}
       className={className}
