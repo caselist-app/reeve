@@ -37,23 +37,25 @@ export function RehearsalBlock({ rehearsal, timezone }: RehearsalBlockProps) {
   const locationName = override ?? rehearsal.location_name
 
   return (
-    <button
-      type="button"
-      onClick={() =>
-        open({
-          type: 'rehearsal',
-          rehearsalId: rehearsal.id,
-          locationName,
-          tourTimezone: timezone,
-        })
-      }
-      className="group -mx-2 flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted/50"
-    >
-      <span className="min-w-0 flex-1 text-sm font-semibold">{locationName}</span>
-      <span className="mt-0.5 flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground transition-colors group-hover:text-foreground">
-        view
-        <ChevronRight className="h-3.5 w-3.5" />
-      </span>
-    </button>
+    <div className="-mx-2">
+      <button
+        type="button"
+        onClick={() =>
+          open({
+            type: 'rehearsal',
+            rehearsalId: rehearsal.id,
+            locationName,
+            tourTimezone: timezone,
+          })
+        }
+        className="group flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted/50"
+      >
+        <span className="min-w-0 flex-1 text-sm font-semibold">{locationName}</span>
+        <span className="mt-0.5 flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground transition-colors group-hover:text-foreground">
+          view
+          <ChevronRight className="h-3.5 w-3.5" />
+        </span>
+      </button>
+    </div>
   )
 }

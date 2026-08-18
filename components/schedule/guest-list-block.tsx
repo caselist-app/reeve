@@ -49,34 +49,36 @@ export function GuestListBlock({ tourId, showId, venueName, summary }: GuestList
   const count = override ?? (summary.error ? null : { total: summary.total, waiting: summary.waiting })
 
   return (
-    <button
-      type="button"
-      aria-label="Guest list"
-      onClick={() => open({ type: 'guest-list', tourId, showId, venueName })}
-      className="group -mx-2 flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted/50"
-    >
-      <span className="min-w-0 flex-1">
-        {count === null ? (
-          // A failed read says so rather than rendering "Guest list, 0", which is
-          // the confident, plausible, wrong answer a failed query must never be.
-          <span className="block text-sm font-semibold text-destructive">
-            Could not load the guest list
-          </span>
-        ) : (
-          <>
-            <span className="block text-sm font-semibold">{guestCountPhrase(count.total)}</span>
-            {count.waiting > 0 && (
-              <span className="mt-0.5 block text-xs text-muted-foreground">
-                {waitingPhrase(count.waiting)}
-              </span>
-            )}
-          </>
-        )}
-      </span>
-      <span className="mt-0.5 flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground transition-colors group-hover:text-foreground">
-        view
-        <ChevronRight className="h-3.5 w-3.5" />
-      </span>
-    </button>
+    <div className="-mx-2">
+      <button
+        type="button"
+        aria-label="Guest list"
+        onClick={() => open({ type: 'guest-list', tourId, showId, venueName })}
+        className="group flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted/50"
+      >
+        <span className="min-w-0 flex-1">
+          {count === null ? (
+            // A failed read says so rather than rendering "Guest list, 0", which is
+            // the confident, plausible, wrong answer a failed query must never be.
+            <span className="block text-sm font-semibold text-destructive">
+              Could not load the guest list
+            </span>
+          ) : (
+            <>
+              <span className="block text-sm font-semibold">{guestCountPhrase(count.total)}</span>
+              {count.waiting > 0 && (
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  {waitingPhrase(count.waiting)}
+                </span>
+              )}
+            </>
+          )}
+        </span>
+        <span className="mt-0.5 flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground transition-colors group-hover:text-foreground">
+          view
+          <ChevronRight className="h-3.5 w-3.5" />
+        </span>
+      </button>
+    </div>
   )
 }

@@ -75,40 +75,42 @@ export function AdvanceBlock({ tourId, showId, venueName, summary }: AdvanceBloc
   const statuses = override ?? (summary.error ? null : summary.statuses)
 
   return (
-    <button
-      type="button"
-      aria-label="Advance"
-      onClick={() => open({ type: 'advance', tourId, showId, venueName })}
-      className="group -mx-2 flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted/50"
-    >
-      <span className="min-w-0 flex-1">
-        {statuses === null ? (
-          // A failed read says so rather than rendering five "not started"
-          // chips, the confident, plausible, wrong answer a failed query must
-          // never be.
-          <span className="block text-sm font-semibold text-destructive">
-            Could not load the advance
-          </span>
-        ) : (
-          <span className="flex flex-wrap gap-1.5">
-            {DEPARTMENTS.map((department) => (
-              <span
-                key={department}
-                className={cn(
-                  'rounded-full px-2 py-0.5 text-xs font-medium',
-                  STATUS_STYLES[statuses[department]]
-                )}
-              >
-                {DEPARTMENT_LABELS[department]}
-              </span>
-            ))}
-          </span>
-        )}
-      </span>
-      <span className="mt-0.5 flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground transition-colors group-hover:text-foreground">
-        view
-        <ChevronRight className="h-3.5 w-3.5" />
-      </span>
-    </button>
+    <div className="-mx-2">
+      <button
+        type="button"
+        aria-label="Advance"
+        onClick={() => open({ type: 'advance', tourId, showId, venueName })}
+        className="group flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-muted/50"
+      >
+        <span className="min-w-0 flex-1">
+          {statuses === null ? (
+            // A failed read says so rather than rendering five "not started"
+            // chips, the confident, plausible, wrong answer a failed query must
+            // never be.
+            <span className="block text-sm font-semibold text-destructive">
+              Could not load the advance
+            </span>
+          ) : (
+            <span className="flex flex-wrap gap-1.5">
+              {DEPARTMENTS.map((department) => (
+                <span
+                  key={department}
+                  className={cn(
+                    'rounded-full px-2 py-0.5 text-xs font-medium',
+                    STATUS_STYLES[statuses[department]]
+                  )}
+                >
+                  {DEPARTMENT_LABELS[department]}
+                </span>
+              ))}
+            </span>
+          )}
+        </span>
+        <span className="mt-0.5 flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground transition-colors group-hover:text-foreground">
+          view
+          <ChevronRight className="h-3.5 w-3.5" />
+        </span>
+      </button>
+    </div>
   )
 }
