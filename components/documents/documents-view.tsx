@@ -6,8 +6,12 @@ interface Props {
   documents: DocumentRow[]
   shares: Record<string, DocumentShareRow[]>
   olderVersions: Record<string, OlderVersionRow[]>
+  // Not yet rendered: no archive UI exists on this view yet. Carried through
+  // the props so the data is available once that UI lands.
+  archivedDocuments: DocumentRow[]
   sharesError: string | null
   olderVersionsError: string | null
+  archivedDocumentsError: string | null
   error: string | null
 }
 
