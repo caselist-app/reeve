@@ -19,8 +19,6 @@
     "revalidate-schedule|lib/actions/hotels.ts|confirmHotelBooking": "accepted: writes confirmation_number and status, neither of which is in HOTEL_SELECT, so the schedule cannot render them. It revalidates /hotels, which is the surface that does.",
     "revalidate-schedule|lib/actions/boarding-pass-upload.ts|uploadBoardingPassAction": "accepted: writes boarding_pass_document_id on transport_assignments, which the schedule does not render. The uploader tracks its own state.",
     "revalidate-schedule|lib/actions/contacts.ts|createContact": "accepted: a newly created contact is not yet on any tour, so nothing on the schedule can be showing it.",
-    "revalidate-schedule|lib/actions/contacts.ts|deleteContact": "accepted: people.contact_id is ON DELETE RESTRICT, so this delete can only succeed for a contact who is on no tour. The day roster reads people joined to contacts, so a contact with no membership row is on no day of any schedule. A contact who is on a tour gets a 23503 and an error message instead, having written nothing. Was listed as debt until 2026-08-04; the constraint is what makes the check wrong about it.",
-
-    "requireUser-first|lib/actions/boarding-pass-upload.ts|uploadBoardingPassAction": "debt: requireUser() is the third statement, after a Zod parse. Brief 39 Part 3. Two line reorder."
+    "revalidate-schedule|lib/actions/contacts.ts|deleteContact": "accepted: people.contact_id is ON DELETE RESTRICT, so this delete can only succeed for a contact who is on no tour. The day roster reads people joined to contacts, so a contact with no membership row is on no day of any schedule. A contact who is on a tour gets a 23503 and an error message instead, having written nothing. Was listed as debt until 2026-08-04; the constraint is what makes the check wrong about it."
   }
 }
