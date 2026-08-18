@@ -64,6 +64,14 @@ interface PlacesAddressInputProps {
   includeGeometry?: boolean
 }
 
+// Enter in an address field selects the highlighted Places suggestion, not the
+// form. Exported as a pure predicate so the contract can be pinned by a unit
+// test without rendering the component (no jsdom in this repo, see
+// tests/unit/confirm-dialog-state.test.ts for the same pattern).
+export function shouldPreventEnterSubmit(key: string): boolean {
+  return key === 'Enter'
+}
+
 // Loads the Google Maps Places API script once per page and attaches an
 // Autocomplete widget to the input. Falls back to a plain controlled Input
 // if NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is not set.
@@ -106,7 +114,7 @@ export function PlacesAddressInput({
   // whether the Maps script has loaded (REE-284: the live branch was missed the
   // first time round, so Enter on a real suggestion still submitted the form).
   function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'Enter') e.preventDefault()
+    if (shouldPreventEnterSubmit(e.key)) e.preventDefault()
     onKeyDown?.(e)
   }
 
