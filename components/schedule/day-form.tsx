@@ -209,7 +209,7 @@ export function DayForm({
   let flatIndex = 0
 
   return (
-    <PanelShell title="Add to day" description="Type what is happening. Enter adds it.">
+    <PanelShell title="Add to day">
       <form onSubmit={submit} className="space-y-3">
         <div className="flex items-center gap-2">
           <Input
