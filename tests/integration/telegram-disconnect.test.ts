@@ -270,3 +270,175 @@ describe('telegram dc: confirm/cancel (REE-308)', () => {
     })
   })
 })
+
+describe('telegram disconnect Inbox alert and TM notification (REE-309)', () => {
+  let fixture: Fixture
+  const originalSecret = process.env.TELEGRAM_WEBHOOK_SECRET
+  const TM_CHAT_ID = 424242424
+
+  beforeEach(async () => {
+    fixture = await createFixture()
+    process.env.TELEGRAM_WEBHOOK_SECRET = WEBHOOK_SECRET
+    mockTrigger.mockClear()
+    mockSend.mockClear()
+
+    await testDb
+      .from('contacts')
+      .update({
+        telegram_chat_id: 777,
+        telegram_username: 'crewmember',
+        operational_channel: 'telegram',
+      })
+      .eq('id', fixture.contactId)
+
+    // The TM's own Telegram, without which notifyAccount has no channel and
+    // never claims a notification_log row.
+    await testDb.from('accounts').update({ telegram_chat_id: TM_CHAT_ID }).eq('id', fixture.userId)
+  })
+
+  afterEach(async () => {
+    process.env.TELEGRAM_WEBHOOK_SECRET = originalSecret
+    await destroyFixture(fixture)
+  })
+
+  async function openDisconnectAlert(contactId: string) {
+    const { data } = await testDb
+      .from('attention_items')
+      .select('id, tour_id, kind, related_table, related_id, resolved_at')
+      .eq('kind', 'telegram_disconnect')
+      .eq('related_table', 'contacts')
+      .eq('related_id', contactId)
+      .is('resolved_at', null)
+      .maybeSingle()
+    return data
+  }
+
+  it('files an Inbox alert and DMs the TM on a confirmed disconnect', async () => {
+    const res = await postUpdate(callbackUpdate(777, `dc:y:${fixture.contactId}`))
+    expect(res.status).toBe(200)
+
+    const alert = await openDisconnectAlert(fixture.contactId)
+    expect(alert).toMatchObject({
+      tour_id: fixture.tourId,
+      kind: 'telegram_disconnect',
+      related_table: 'contacts',
+      related_id: fixture.contactId,
+      resolved_at: null,
+    })
+
+    const { data: logRows } = await testDb
+      .from('notification_log')
+      .select('notification_type, channel, account_id')
+      .eq('tour_id', fixture.tourId)
+      .eq('notification_type', 'telegram_disconnect')
+    expect(logRows).toHaveLength(1)
+    expect(logRows![0]).toMatchObject({
+      notification_type: 'telegram_disconnect',
+      channel: 'telegram',
+      account_id: fixture.userId,
+    })
+
+    expect(mockSend).toHaveBeenCalledWith({
+      chatId: TM_CHAT_ID,
+      text: expect.stringContaining('Test Crew'),
+    })
+  })
+
+  it('multi-tour tie-break: files the alert against the planning tour, not the completed one', async () => {
+    const { data: artist } = await testDb
+      .from('artists')
+      .insert({ account_id: fixture.userId, name: 'Second Artist' })
+      .select('id')
+      .single()
+    if (!artist) throw new Error('could not create second artist')
+
+    const { data: completedTour } = await testDb
+      .from('tours')
+      .insert({
+        account_id: fixture.userId,
+        artist_id: artist.id,
+        name: 'Completed Tour',
+        status: 'completed',
+      })
+      .select('id')
+      .single()
+    if (!completedTour) throw new Error('could not create second tour')
+
+    // fixture.tourId is 'planning' by default (the schema default), so this
+    // is the tie the alert has to break correctly.
+    const { error: peopleError } = await testDb
+      .from('people')
+      .insert({ tour_id: completedTour.id, contact_id: fixture.contactId, person_type: 'crew' })
+    if (peopleError) throw new Error(`could not crew the second tour: ${peopleError.message}`)
+
+    const res = await postUpdate(callbackUpdate(777, `dc:y:${fixture.contactId}`))
+    expect(res.status).toBe(200)
+
+    const alert = await openDisconnectAlert(fixture.contactId)
+    expect(alert?.tour_id).toBe(fixture.tourId)
+  })
+
+  it('a contact with no roster membership on any tour: own fields still clear, nothing filed, nothing throws', async () => {
+    const { data: orphanContact } = await testDb
+      .from('contacts')
+      .insert({
+        account_id: fixture.userId,
+        name: 'Orphan Crew',
+        telegram_chat_id: 999,
+        telegram_username: 'orphan',
+        operational_channel: 'telegram',
+      })
+      .select('id')
+      .single()
+    if (!orphanContact) throw new Error('could not create orphan contact')
+
+    const res = await postUpdate(callbackUpdate(999, `dc:y:${orphanContact.id}`))
+    expect(res.status).toBe(200)
+
+    expect(mockSend).toHaveBeenCalledWith({ chatId: 999, text: DISCONNECT_DONE_TEXT })
+
+    const after = await contactRow(orphanContact.id)
+    expect(after).toEqual({
+      telegram_chat_id: null,
+      telegram_username: null,
+      operational_channel: null,
+    })
+
+    const alert = await openDisconnectAlert(orphanContact.id)
+    expect(alert).toBeNull()
+
+    const { data: logRows } = await testDb
+      .from('notification_log')
+      .select('id')
+      .eq('account_id', fixture.userId)
+      .eq('notification_type', 'telegram_disconnect')
+    expect(logRows).toHaveLength(0)
+  })
+
+  it('reconnecting resolves the open disconnect alert', async () => {
+    const disconnectRes = await postUpdate(callbackUpdate(777, `dc:y:${fixture.contactId}`))
+    expect(disconnectRes.status).toBe(200)
+
+    const openBefore = await openDisconnectAlert(fixture.contactId)
+    expect(openBefore).not.toBeNull()
+
+    mockSend.mockClear()
+
+    const { data: token } = await testDb
+      .from('telegram_link_tokens')
+      .insert({ contact_id: fixture.contactId, account_id: fixture.userId })
+      .select('token')
+      .single()
+    if (!token) throw new Error('could not create link token')
+
+    const reconnectRes = await postUpdate(messageUpdate(777, `/start ${token.token}`))
+    expect(reconnectRes.status).toBe(200)
+
+    const { data: resolved } = await testDb
+      .from('attention_items')
+      .select('resolved_at')
+      .eq('id', openBefore!.id)
+      .single()
+    expect(resolved?.resolved_at).not.toBeNull()
+  })
+})
