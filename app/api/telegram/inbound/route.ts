@@ -10,6 +10,11 @@ import { decideGuestEntry, type GuestDecision, type DecideOutcome } from '@/lib/
 
 const LINK_EXPIRED_MESSAGE = 'This link has expired, ask your tour manager to send a new one.'
 
+const STOP_NOT_CONNECTED_MESSAGE = "You're not connected to Reeve, so there's nothing to disconnect."
+
+const STOP_CONFIRM_MESSAGE =
+  "Disconnect your Telegram from Reeve?\n\nYou'll stop getting schedule updates here. Ask your tour manager for a new link to reconnect."
+
 // POST: inbound messages and button taps from Telegram users.
 // Rule: verify secret token, dedupe, resolve identity (or handle /start
 // linking), enqueue, return 200. Nothing else happens in this handler.
@@ -113,6 +118,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: 'ok' })
   }
 
+  // /stop interception, crew-only (brief 63). Resolved by contacts.telegram_chat_id
+  // alone, never accounts: /stop needs no (tour_id, person_id) pair, so it is
+  // handled here rather than added to lib/comms/router.ts's SLASH_COMMANDS, which
+  // is hard-scoped to one. Same "handled and returned before the webhook's
+  // existing body-extraction and enqueue logic runs" precedent as /start and
+  // gl: above. No database write happens in this step: it only sends the
+  // confirm/cancel prompt (or the "not connected" reply), never disconnects.
+  if (isStopCommand(body)) {
+    await handleStopCommand(admin, chatId)
+    return NextResponse.json({ status: 'ok' })
+  }
+
   // Map the chat id to a person across the TM's active tours. Same join shape
   // and STATUS_ORDER tie-break as app/api/whatsapp/inbound/route.ts, column
   // swapped: a contact can be crew on more than one tour at once.
@@ -174,6 +191,44 @@ export async function POST(request: NextRequest) {
 
   // Always return 200 fast. Telegram retries on anything else.
   return NextResponse.json({ status: 'ok' })
+}
+
+// Same trim-and-lowercase tolerance parseSlashCommand gives every other
+// command in lib/comms/router.ts: "/stop" or "/stop " followed by anything.
+function isStopCommand(text: string): boolean {
+  const trimmed = text.trim().toLowerCase()
+  return trimmed === '/stop' || trimmed.startsWith('/stop ')
+}
+
+// Resolves a /stop by contacts.telegram_chat_id only, nothing else. /stop is
+// crew-only, so a TM's own chat linked via accounts.telegram_chat_id gets the
+// same "not connected" reply here unless that chat is also separately linked
+// as a crew contact. Sends the confirm/cancel prompt, carrying the contact id
+// on the confirm button (dc:y:<contactId>) so a later stale tap can be told
+// apart from a fresh one; writes nothing.
+async function handleStopCommand(
+  admin: ReturnType<typeof createAdminClient>,
+  chatId: number
+): Promise<void> {
+  const { data: contact } = await admin
+    .from('contacts')
+    .select('id')
+    .eq('telegram_chat_id', chatId)
+    .maybeSingle()
+
+  if (!contact) {
+    await sendTelegramMessage({ chatId, text: STOP_NOT_CONNECTED_MESSAGE })
+    return
+  }
+
+  await sendTelegramMessage({
+    chatId,
+    text: STOP_CONFIRM_MESSAGE,
+    buttons: [
+      { text: 'Yes, disconnect', callback_data: `dc:y:${contact.id}` },
+      { text: 'Cancel', callback_data: 'dc:n' },
+    ],
+  })
 }
 
 // Resolves a /start <token> deep link: looks up the token, checks it is not
