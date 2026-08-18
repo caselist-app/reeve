@@ -1,6 +1,5 @@
 import { renderMorningMessageEmail } from '@/lib/comms/templates/morning-message-email'
 import { renderBoardingPassMessage, renderBoardingPassEmail } from '@/lib/comms/templates/boarding-pass'
-import { buildChangeMessage } from '@/lib/comms/templates/change-alert'
 import {
   openerTemplateName, openerBodyParams, openerTelegram,
   showInfoTemplateName, showInfoBodyParams, showInfoTelegram,

@@ -6,7 +6,6 @@
 // rather than living in the plain .ts helpers module.
 
 import type { ReactNode } from 'react'
-import { AirlineLogo } from '@/components/schedule/airline-logo'
 import { Input } from '@/components/ui/input'
 
 export function highlightMatch(text: string, query: string): ReactNode {

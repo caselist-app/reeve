@@ -1,9 +1,10 @@
 'use client'
 
 import { ChevronRight } from 'lucide-react'
+import Image from 'next/image'
 import { useSidePanel } from '@/stores/side-panel-store'
 import type { DayHotel } from '@/lib/schedule/day-hotel'
-import { staticMapUrl, googleMapsUrl } from '@/lib/schedule/venue-map'
+import { staticMapUrl, googleMapsUrl, STATIC_MAP_WIDTH, STATIC_MAP_HEIGHT } from '@/lib/schedule/venue-map'
 
 interface HotelBlockProps {
   tourId: string
@@ -46,9 +47,11 @@ export function HotelBlock({ tourId, hotel }: HotelBlockProps) {
           rel="noopener noreferrer"
           className="block overflow-hidden rounded-lg px-2"
         >
-          <img
+          <Image
             src={staticMapUrl(hotel.lat as number, hotel.lng as number)}
             alt={`Map of ${hotel.name ?? 'Hotel'}`}
+            width={STATIC_MAP_WIDTH}
+            height={STATIC_MAP_HEIGHT}
             className="h-auto w-full rounded-lg"
           />
         </a>
