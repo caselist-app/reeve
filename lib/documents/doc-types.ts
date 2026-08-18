@@ -20,8 +20,15 @@ const RIDER_SECTIONS: DocSection[] = RIDER_DEPARTMENTS.map((department) => ({
 
 export const OTHER_SECTION: DocSection = { docType: 'other', label: 'Other' }
 
-// Order is load bearing: the four riders first, Other always last.
-export const DOC_SECTIONS: readonly DocSection[] = [...RIDER_SECTIONS, OTHER_SECTION]
+// Per REE-295, multiple departments can map to the same doc_type (e.g. audio and
+// staging both map to production_rider). Deduplicate by docType, keeping the
+// first occurrence of each.
+const deduplicatedRiderSections = Array.from(
+  new Map(RIDER_SECTIONS.map((s) => [s.docType, s])).values()
+)
+
+// Order is load bearing: the riders first (deduplicated), Other always last.
+export const DOC_SECTIONS: readonly DocSection[] = [...deduplicatedRiderSections, OTHER_SECTION]
 
 const SECTION_BY_DOC_TYPE = new Map(DOC_SECTIONS.map((s) => [s.docType, s]))
 

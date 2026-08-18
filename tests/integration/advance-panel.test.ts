@@ -46,15 +46,21 @@ describe('the advance panel gets real data', () => {
   }
 
   describe('the documents', () => {
-    it('files each rider under the department that sends it', async () => {
-      const techRiderId = await addRider('tech_rider', 'Tech Rider v3')
+    it('files a production_rider under both audio and staging (REE-295)', async () => {
+      // Per REE-292/REE-295, tech_rider and staging_rider merged into a single
+      // production_rider doc_type, so one uploaded document now files under
+      // both departments, not just one.
+      const productionRiderId = await addRider('production_rider', 'Production Rider v3')
       await addRider('hospitality_rider', 'Hospitality Rider')
 
       const { data, error } = await getShowAdvance(fixture.tourId, fixture.showId)
       if (error) throw new Error(`could not load the advance: ${error}`)
 
       const audio = data?.departments.find((d) => d.department === 'audio')
-      expect(audio?.documents.map((doc) => doc.id)).toEqual([techRiderId])
+      expect(audio?.documents.map((doc) => doc.id)).toEqual([productionRiderId])
+
+      const staging = data?.departments.find((d) => d.department === 'staging')
+      expect(staging?.documents.map((doc) => doc.id)).toEqual([productionRiderId])
 
       // Every documented department is present whether or not it has a rider,
       // so the panel can show a TM which ones have nothing to send.
@@ -87,7 +93,7 @@ describe('the advance panel gets real data', () => {
     // show_advance holds one row per show with tour_id denormalised onto it, so
     // acknowledging a single rider marked the department advanced on every show
     // on the tour, including shows that had had no rider sent at all. Seed two
-    // shows, acknowledge a tech rider against one, and prove the other is
+    // shows, acknowledge a production rider against one, and prove the other is
     // untouched. The second assertion is the one that fails red against the
     // tour_id-scoped update.
 
@@ -138,7 +144,7 @@ describe('the advance panel gets real data', () => {
       await seedAdvance(fixture.showId)
       await seedAdvance(showBId)
 
-      const riderId = await addRider('tech_rider', 'Tech Rider')
+      const riderId = await addRider('production_rider', 'Production Rider')
 
       const shareToken = `ree8-ack-${Date.now()}`
       const { error: shareError } = await testDb.from('document_shares').insert({

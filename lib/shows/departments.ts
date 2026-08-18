@@ -12,12 +12,15 @@
 export type Department = 'audio' | 'lighting' | 'staging' | 'hospitality' | 'travel'
 
 // The four departments that advance through a document, and the doc_type each
-// one sends. `travel` is the fifth department on show_advance and has no rider,
-// so a TM moves it by hand and it never appears in the document list.
+// one sends. Per REE-292, tech_rider and staging_rider merge into production_rider,
+// lighting_rider becomes lx_rider, and travel has no rider (will be dropped in REE-294).
+//
+// Note: only the doc_type values change here. The Department type itself and
+// DEPARTMENT_LABELS stay at five values until REE-294 consolidates the departments.
 export const DEPARTMENT_DOC_TYPE = {
-  audio: 'tech_rider',
-  lighting: 'lighting_rider',
-  staging: 'staging_rider',
+  audio: 'production_rider',
+  lighting: 'lx_rider',
+  staging: 'production_rider',
   hospitality: 'hospitality_rider',
 } as const
 

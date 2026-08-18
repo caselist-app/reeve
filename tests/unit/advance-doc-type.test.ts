@@ -15,21 +15,31 @@ import { docTypeToAdvanceColumn } from '@/lib/shows/advance'
 // loosely instead of skipping the write. This pins the doc_type to
 // show_advance column mapping so the map cannot drift without a test
 // noticing, and pins the specific stray value from REE-8 to null.
+//
+// REE-295: tech_rider and staging_rider are consolidated into production_rider,
+// and lighting_rider becomes lx_rider. The old doc_type values no longer exist
+// in the database (migrated by the consolidation migration).
 describe('docTypeToAdvanceColumn', () => {
-  it('maps tech_rider to status_audio', () => {
-    expect(docTypeToAdvanceColumn('tech_rider')).toBe('status_audio')
+  it('returns null for production_rider (ambiguous: maps to both audio and staging)', () => {
+    // Per REE-295, both audio and staging map to production_rider. Since the
+    // function can only return one column, it returns null and callers should
+    // use docTypeToAllDepartments instead.
+    expect(docTypeToAdvanceColumn('production_rider')).toBeNull()
   })
 
-  it('maps lighting_rider to status_lighting', () => {
-    expect(docTypeToAdvanceColumn('lighting_rider')).toBe('status_lighting')
-  })
-
-  it('maps staging_rider to status_staging', () => {
-    expect(docTypeToAdvanceColumn('staging_rider')).toBe('status_staging')
+  it('maps lx_rider (formerly lighting_rider) to status_lighting', () => {
+    expect(docTypeToAdvanceColumn('lx_rider')).toBe('status_lighting')
   })
 
   it('maps hospitality_rider to status_hospitality', () => {
     expect(docTypeToAdvanceColumn('hospitality_rider')).toBe('status_hospitality')
+  })
+
+  it('returns null for old doc_types (tech_rider, staging_rider) that no longer exist (REE-295 migration)', () => {
+    // These old doc_types were migrated to production_rider. Since individual
+    // instances no longer exist in the database, they should return null.
+    expect(docTypeToAdvanceColumn('tech_rider')).toBeNull()
+    expect(docTypeToAdvanceColumn('staging_rider')).toBeNull()
   })
 
   it('returns null for travel_brief, the exact stray doc_type from REE-8', () => {

@@ -82,6 +82,9 @@ export async function setAdvanceStatus(
 // Reads the share_token to find the share row, maps doc_type to the advance
 // department, then promotes that department to 'done' on the linked show.
 // Uses the admin client: this runs outside a user session (public route).
+//
+// Per REE-295, production_rider can come from either audio or staging documents.
+// Advance both departments to 'done' when acknowledging a production_rider.
 export async function updateAdvanceStatusFromShare(shareToken: string): Promise<void> {
   const admin = createAdminClient()
 
@@ -99,26 +102,29 @@ export async function updateAdvanceStatusFromShare(shareToken: string): Promise<
   const doc = share.documents as { doc_type: string } | null
   if (!doc) return
 
-  const department = docTypeToDepartment(doc.doc_type)
-  if (!department) return
+  const departments = docTypeToAllDepartments(doc.doc_type)
+  if (departments.length === 0) return
 
-  await setAdvanceStatus(share.show_id, department, 'done', admin)
+  for (const dept of departments) {
+    await setAdvanceStatus(share.show_id, dept, 'done', admin)
+  }
 }
 
-// Maps a document doc_type to the show_advance column it controls, or null for
-// a doc_type with no department behind it. The one source of truth for both
-// acknowledgement paths (the button and the Resend webhook), built from
-// DEPARTMENT_DOC_TYPE so a new rider type cannot advance the wrong column, or a
-// nonexistent one: the webhook used to keep its own copy of this map, which had
-// drifted to include a `travel_brief` doc_type nothing ever writes.
+// Maps a document doc_type to a show_advance column, or null if no single column
+// can be determined. Used by the acknowledge paths.
+//
+// Per REE-295, production_rider can come from either audio or staging department,
+// so it returns null. Callers should use docTypeToAllDepartments instead to
+// advance all applicable departments.
 export function docTypeToAdvanceColumn(docType: string): AdvanceColumn | null {
-  const department = docTypeToDepartment(docType)
-  return department ? DEPARTMENT_COLUMN[department] : null
+  const departments = docTypeToAllDepartments(docType)
+  if (departments.length !== 1) return null
+  return DEPARTMENT_COLUMN[departments[0]]
 }
 
 // Called by the Resend webhook when a recipient clicks the tracked acknowledge
 // link in a shared document email. Marks the share acknowledged and nudges the
-// relevant department from not_started to in_progress on the one show the share
+// relevant departments from not_started to in_progress on the one show the share
 // belongs to.
 //
 // Deliberately distinct from updateAdvanceStatusFromShare, the button path,
@@ -126,6 +132,9 @@ export function docTypeToAdvanceColumn(docType: string): AdvanceColumn | null {
 // than the recipient landing on the acknowledge page and confirming, and both
 // fire for the same click, so the webhook only nudges and the page POST
 // finishes the job.
+//
+// Per REE-295, production_rider can come from multiple departments (audio and
+// staging). Nudge all applicable departments.
 //
 // Scoped by show_id, never tour_id: show_advance holds one row per show with
 // tour_id denormalised on it, so filtering by tour_id marked every show on the
@@ -149,23 +158,28 @@ export async function nudgeAdvanceFromShareClick(
   const doc = share.documents as { doc_type: string } | null
   if (!doc) return
 
-  const column = docTypeToAdvanceColumn(doc.doc_type)
-  if (!column) return
+  const departments = docTypeToAllDepartments(doc.doc_type)
+  if (departments.length === 0) return
 
-  await admin
-    .from('show_advance')
-    .update({ [column]: 'in_progress' } as TablesUpdate<'show_advance'>)
-    .eq('show_id', share.show_id)
-    .eq(column, 'not_started')
+  for (const dept of departments) {
+    const column = DEPARTMENT_COLUMN[dept]
+    await admin
+      .from('show_advance')
+      .update({ [column]: 'in_progress' } as TablesUpdate<'show_advance'>)
+      .eq('show_id', share.show_id)
+      .eq(column, 'not_started')
+  }
 }
 
-// Maps a document doc_type to the advance department it controls, by inverting
-// DEPARTMENT_DOC_TYPE rather than restating it.
+// Maps a document doc_type to all advance departments it controls, by inverting
+// DEPARTMENT_DOC_TYPE. Per REE-295, production_rider may come from multiple
+// departments (audio and staging), so this returns an array.
 //
-// Unknown doc types are silently ignored: the share is acknowledged but no
+// Unknown doc types return an empty array: the share is acknowledged but no
 // advance status changes, which is correct for a generic document with no
 // department behind it.
-function docTypeToDepartment(docType: string): Department | null {
-  const entry = Object.entries(DEPARTMENT_DOC_TYPE).find(([, type]) => type === docType)
-  return entry ? (entry[0] as Department) : null
+function docTypeToAllDepartments(docType: string): Department[] {
+  return Object.entries(DEPARTMENT_DOC_TYPE)
+    .filter(([, type]) => type === docType)
+    .map(([dept]) => dept as Department)
 }
