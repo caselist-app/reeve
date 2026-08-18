@@ -11,7 +11,6 @@ import {
   DEPARTMENT_LABELS,
   type DocumentedDepartment,
   type DepartmentShareData,
-  type ContactablePerson,
   type ShareRow,
 } from '@/lib/shows/advance'
 import { resolveHubJob } from '@/trigger/jobs/resolve-hub'
@@ -508,14 +507,13 @@ export async function retryHubResolution(showId: string): Promise<{ error: strin
 export type ShowAdvanceDetail = {
   advance: Tables<'show_advance'> | null
   departments: DepartmentShareData[]
-  people: ContactablePerson[]
 }
 
-// Everything the advance panel needs: the per-department statuses, the riders
-// for each department with what has been sent and read, and who can be sent to.
+// Everything the advance panel needs: the per-department statuses and the
+// riders for each department with what has been sent and read.
 //
-// Four queries, so it runs when the panel opens rather than on every day view.
-// Same reasoning and same shape as getShowVenueDetail above.
+// Three queries, so it runs when the panel opens rather than on every day
+// view. Same reasoning and same shape as getShowVenueDetail above.
 export async function getShowAdvance(
   tourId: string,
   showId: string,
@@ -540,7 +538,6 @@ export async function getShowAdvance(
     { data: advance, error: advanceError },
     { data: documents, error: documentsError },
     { data: shares, error: sharesError },
-    { data: people, error: peopleError },
   ] = await Promise.all([
     supabase.from('show_advance').select('*').eq('show_id', showId).maybeSingle(),
 
@@ -555,25 +552,21 @@ export async function getShowAdvance(
       .eq('tour_id', tourId)
       .eq('is_current', true),
 
+    // recipient_email covers a freeform recipient (REE-283); people(contacts)
+    // covers the historical rows sent to a roster person before the picker
+    // was replaced.
     supabase
       .from('document_shares')
-      .select('id, document_id, sent_at, opened_at, acknowledged_at, documents(title, doc_type), people(contacts(name))')
+      .select(
+        'id, document_id, sent_at, opened_at, acknowledged_at, recipient_email, documents(title, doc_type), people(contacts(name))'
+      )
       .eq('show_id', showId)
       .order('created_at', { ascending: true }),
-
-    // Every person on the tour, contact_email or not: the send panel lists
-    // everyone and greys out anyone without an email rather than hiding them,
-    // so a TM can see who they still need an address for.
-    supabase
-      .from('people')
-      .select('id, contacts(name, contact_email)')
-      .eq('tour_id', tourId),
   ])
 
   // A failed read must not render as an empty result. An empty document list
-  // reads as "this tour has no riders" and an empty recipient list reads as
-  // "nobody to send to", and both are confident, plausible and wrong.
-  const failure = advanceError ?? documentsError ?? sharesError ?? peopleError
+  // reads as "this tour has no riders", which is confident, plausible and wrong.
+  const failure = advanceError ?? documentsError ?? sharesError
   if (failure) {
     console.error('[getShowAdvance] read failed:', failure.message)
     return { data: null, error: 'Could not load the advance for this show.' }
@@ -587,7 +580,7 @@ export async function getShowAdvance(
       document_id: s.document_id,
       document_title: doc?.title ?? '',
       doc_type: doc?.doc_type ?? '',
-      recipient_name: person?.name ?? 'Unknown',
+      recipient_name: person?.name ?? s.recipient_email ?? 'Unknown',
       sent_at: s.sent_at,
       opened_at: s.opened_at,
       acknowledged_at: s.acknowledged_at,
@@ -604,13 +597,8 @@ export async function getShowAdvance(
     }),
   )
 
-  const sendablePeople: ContactablePerson[] = (people ?? []).map((p) => {
-    const c = p.contacts as { name: string; contact_email: string | null } | null
-    return { id: p.id, name: c?.name ?? '', contact_email: c?.contact_email ?? null }
-  })
-
   return {
-    data: { advance: advance ?? null, departments, people: sendablePeople },
+    data: { advance: advance ?? null, departments },
     error: null,
   }
 }
