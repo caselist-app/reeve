@@ -119,4 +119,53 @@ describe('archiving and unarchiving a document', () => {
     expect(pageAfterUnarchive.documents.some((d) => d.id === documentId)).toBe(true)
     expect(pageAfterUnarchive.archivedDocuments.some((d) => d.id === documentId)).toBe(false)
   })
+
+  // REE-254. uploadDocument's insert never carries the prior current row's
+  // archived_at forward, so re-uploading a version of an archived doc_type
+  // makes it active again with no separate unarchive step. Proved red by
+  // temporarily setting the insert's archived_at to `latest?.archived_at ??
+  // null`: this assertion then fails because the new row inherits the old
+  // one's archived_at instead of defaulting to null.
+  it('a new version is current and unarchived, even when the row it replaces was archived', async () => {
+    const first = new FormData()
+    first.set('doc_type', DOC_TYPE)
+    first.set('title', 'Tech Rider')
+    first.set('file', pdfFile('rider.pdf'))
+    const firstResult = await uploadDocument(fixture.tourId, first)
+    expect(firstResult.error).toBeNull()
+
+    const { data: firstCurrent } = await testDb
+      .from('documents')
+      .select('id')
+      .eq('tour_id', fixture.tourId)
+      .eq('doc_type', DOC_TYPE)
+      .eq('is_current', true)
+      .single()
+    if (!firstCurrent) throw new Error('expected a current document row after upload')
+
+    const archiveResult = await archiveDocument(firstCurrent.id)
+    expect(archiveResult.error).toBeNull()
+
+    const second = new FormData()
+    second.set('doc_type', DOC_TYPE)
+    second.set('title', 'Tech Rider v2')
+    second.set('file', pdfFile('rider-v2.pdf'))
+    const secondResult = await uploadDocument(fixture.tourId, second)
+    expect(secondResult.error).toBeNull()
+
+    const { data: secondCurrent } = await testDb
+      .from('documents')
+      .select('id, archived_at')
+      .eq('tour_id', fixture.tourId)
+      .eq('doc_type', DOC_TYPE)
+      .eq('is_current', true)
+      .single()
+    if (!secondCurrent) throw new Error('expected a current document row after re-upload')
+    expect(secondCurrent.archived_at).toBeNull()
+
+    const page = await fetchDocumentsPage(testDb, fixture.tourId, fixture.userId)
+    expect(page.error).toBeNull()
+    expect(page.documents.some((d) => d.id === secondCurrent.id)).toBe(true)
+    expect(page.archivedDocuments.some((d) => d.id === secondCurrent.id)).toBe(false)
+  })
 })
