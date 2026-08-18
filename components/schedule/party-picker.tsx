@@ -78,7 +78,7 @@ export function PartyPickerFields({ people, initialPreset, onSave }: PartyPicker
           {people.length === 0 ? (
             <p className="text-xs text-muted-foreground">No one on this tour yet.</p>
           ) : (
-            <div className="max-h-64 overflow-y-auto rounded-md border border-input divide-y divide-border">
+            <div className="rounded-md border border-input divide-y divide-border">
               {people.map((person) => (
                 <label
                   key={person.id}
