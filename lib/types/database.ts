@@ -1287,39 +1287,27 @@ export type Database = {
         Row: {
           created_at: string
           show_id: string
-          status_audio: string
           status_hospitality: string
-          status_lighting: string
           status_lx: string
           status_production: string
-          status_staging: string
-          status_travel: string
           tour_id: string
           updated_at: string
         }
         Insert: {
           created_at?: string
           show_id: string
-          status_audio?: string
           status_hospitality?: string
-          status_lighting?: string
           status_lx?: string
           status_production?: string
-          status_staging?: string
-          status_travel?: string
           tour_id: string
           updated_at?: string
         }
         Update: {
           created_at?: string
           show_id?: string
-          status_audio?: string
           status_hospitality?: string
-          status_lighting?: string
           status_lx?: string
           status_production?: string
-          status_staging?: string
-          status_travel?: string
           tour_id?: string
           updated_at?: string
         }
