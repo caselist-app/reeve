@@ -102,7 +102,6 @@ export function ActivePanel() {
           shows={panel.shows}
           departmentLabel={panel.departmentLabel}
           documents={panel.documents}
-          people={panel.people}
           onSent={panel.onSent}
         />
       )

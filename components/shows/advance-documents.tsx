@@ -6,13 +6,12 @@ import { cn } from '@/lib/utils'
 import { useSidePanel } from '@/stores/side-panel-store'
 // Shapes live in lib/shows/advance.ts so the server action that builds them can
 // import them without reaching into a 'use client' file.
-import type { ContactablePerson, DepartmentShareData, ShareRow } from '@/lib/shows/advance'
+import type { DepartmentShareData, ShareRow } from '@/lib/shows/advance'
 
 interface AdvanceDocumentsProps {
   tourId: string
   showId: string
   departments: DepartmentShareData[]
-  people: ContactablePerson[]
 }
 
 // Formats a timestamp as a relative human-readable string.
@@ -77,7 +76,6 @@ export function AdvanceDocuments({
   tourId,
   showId,
   departments,
-  people,
 }: AdvanceDocumentsProps) {
   const { open } = useSidePanel()
   const [sharesByDept, setSharesByDept] = useState<Record<string, ShareRow[]>>(
@@ -114,14 +112,12 @@ export function AdvanceDocuments({
         showId,
         departmentLabel: dept.label,
         documents: dept.documents,
-        people,
         onSent: () => {
           if (firstDoc) handleSent(dept.department, dept.docType, firstDoc.id, firstDoc.title)
         },
       })
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [open, tourId, showId, people]
+    [open, tourId, showId]
   )
 
   const handleResend = useCallback(

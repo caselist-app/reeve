@@ -7,10 +7,9 @@ import type { ExtractionProposal } from '@/lib/ai/extract'
 // Inline types to avoid circular imports with component files.
 type PersonType = 'artist' | 'crew' | 'management' | 'support'
 
-// Mirrors SendableDocument, ContactablePerson and SendableShow from
+// Mirrors SendableDocument and SendableShow from
 // components/shows/send-document-sheet.tsx
 type SendableDocument = { id: string; title: string; doc_type: string }
-type ContactablePerson = { id: string; name: string; contact_email: string | null }
 type SendableShow = { id: string; label: string }
 
 // ShowDaySheet is gone. Brief 42: a show's times are day_items rows and are
@@ -128,7 +127,6 @@ export type PanelDescriptor =
       shows?: SendableShow[]
       departmentLabel: string
       documents: SendableDocument[]
-      people: ContactablePerson[]
       onSent: () => void
     }
   | {
