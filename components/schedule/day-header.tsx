@@ -1,7 +1,4 @@
 import {
-  Users,
-  ArrowDownToLine,
-  Moon,
   Clock,
   BedDouble,
   Sun,
@@ -17,7 +14,6 @@ import { createClient } from '@/lib/supabase/server'
 import { cn } from '@/lib/utils'
 import { parseLocation, parseCity } from '@/lib/schedule/format'
 import { EditableDayTitle } from '@/components/schedule/editable-day-title'
-import { fetchDayItems, firstItemOfKind } from '@/lib/schedule/day-items'
 import { resolveShowWeather, type ShowWeather } from '@/lib/schedule/venue-weather'
 import { wmoToIcon } from '@/lib/weather/wmo-codes'
 
@@ -105,38 +101,21 @@ async function derive(props: DayHeaderProps): Promise<Derived> {
 
   switch (dayType) {
     case 'show': {
-      // Brief 42: the two times in this header are day_items rows. Read through
-      // the day rather than the show, so a load-in on a show day with no show
-      // row (which the day type allows) still reaches the header.
-      //
-      // This query and the timeline immediately below it used to read two
-      // different tables. From this commit they read one, which is the point:
-      // the header saying 10:00 while the timeline says 11:00, on the same
-      // screen, was the shape this brief exists to remove.
-      const [{ data: show }, dayItems] = await Promise.all([
-        supabase
-          .from('shows')
-          .select('venue_name, address, capacity')
-          .eq('tour_id', tourId)
-          .eq('tour_date_id', tourDateId)
-          .maybeSingle(),
-        fetchDayItems(supabase, { tourId, tourDateId }),
-      ])
-
-      // The earliest of each, because the header has room for one and crew are
-      // called for the first load-in.
-      const loadIn = formatTime(firstItemOfKind(dayItems.items, 'load_in')?.starts_at ?? null, timezone)
-      const curfew = formatTime(firstItemOfKind(dayItems.items, 'curfew')?.starts_at ?? null, timezone)
-
-      const meta: MetaItem[] = []
-      if (show?.capacity != null) meta.push({ icon: Users, text: `Cap ${show.capacity.toLocaleString('en-GB')}` })
-      if (loadIn) meta.push({ icon: ArrowDownToLine, text: `Load-in ${loadIn}` })
-      if (curfew) meta.push({ icon: Moon, text: `Curfew ${curfew}` })
+      // REE-289: capacity, load-in and curfew used to repeat here as chips,
+      // duplicating the day-info panel and the timeline below on the same
+      // screen. The venue is still the title; nothing else from the show
+      // belongs in the header.
+      const { data: show } = await supabase
+        .from('shows')
+        .select('venue_name')
+        .eq('tour_id', tourId)
+        .eq('tour_date_id', tourDateId)
+        .maybeSingle()
 
       return {
         title: show?.venue_name ?? 'Show',
-        subtitle: parseLocation(show?.address ?? null),
-        meta,
+        subtitle: '',
+        meta: [],
       }
     }
 
