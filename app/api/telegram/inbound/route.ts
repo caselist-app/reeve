@@ -7,6 +7,7 @@ import { enqueueWithClaim } from '@/lib/comms/inbound-claim'
 import { sendTelegramMessage, answerTelegramCallbackQuery } from '@/lib/comms/telegram'
 import { parseGuestCallback } from '@/lib/comms/guest-callback'
 import { decideGuestEntry, type GuestDecision, type DecideOutcome } from '@/lib/guest-list/decide'
+import { parseDisconnectCallback } from '@/lib/comms/disconnect-callback'
 
 const LINK_EXPIRED_MESSAGE = 'This link has expired, ask your tour manager to send a new one.'
 
@@ -14,6 +15,13 @@ const STOP_NOT_CONNECTED_MESSAGE = "You're not connected to Reeve, so there's no
 
 const STOP_CONFIRM_MESSAGE =
   "Disconnect your Telegram from Reeve?\n\nYou'll stop getting schedule updates here. Ask your tour manager for a new link to reconnect."
+
+const DISCONNECT_CANCELLED_MESSAGE = "Okay, you're still connected."
+
+const DISCONNECT_DONE_MESSAGE =
+  "You're disconnected. Ask your tour manager for a new link if you want to reconnect."
+
+const DISCONNECT_ALREADY_MESSAGE = "You're already disconnected."
 
 // POST: inbound messages and button taps from Telegram users.
 // Rule: verify secret token, dedupe, resolve identity (or handle /start
@@ -130,6 +138,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ status: 'ok' })
   }
 
+  // dc: is the confirm/cancel tap from the prompt handleStopCommand just sent,
+  // crew-only for the same reason /stop is: resolved by contacts.telegram_chat_id
+  // alone, never accounts. Same "handled and returned before identity
+  // resolution" precedent as every prefix above.
+  if (body.startsWith('dc:')) {
+    await handleDisconnectCallback(admin, chatId, body)
+    return NextResponse.json({ status: 'ok' })
+  }
+
   // Map the chat id to a person across the TM's active tours. Same join shape
   // and STATUS_ORDER tie-break as app/api/whatsapp/inbound/route.ts, column
   // swapped: a contact can be crew on more than one tour at once.
@@ -229,6 +246,52 @@ async function handleStopCommand(
       { text: 'Cancel', callback_data: 'dc:n' },
     ],
   })
+}
+
+// Resolves a dc: tap. dc:n cancels with no write. dc:y:<contactId> re-fetches
+// the contact by the id carried on the button and writes the disconnect only
+// if its stored telegram_chat_id still equals the tapping chat id: a sent
+// keyboard has no expiry Telegram enforces, so the same confirm button tapped
+// twice, or tapped after the contact reconnected under this chat id, has to be
+// told apart from a fresh confirm here rather than assumed away. When it does
+// not match, the contact is already disconnected (or never was this one), so
+// the reply says so and nothing is written. operational_channel is cleared
+// only when it was 'telegram': a contact who chose WhatsApp as primary with
+// Telegram merely linked alongside it keeps that choice.
+async function handleDisconnectCallback(
+  admin: ReturnType<typeof createAdminClient>,
+  chatId: number,
+  data: string
+): Promise<void> {
+  const parsed = parseDisconnectCallback(data)
+  if (!parsed) return // Malformed or unrecognised dc: payload: nothing to do.
+
+  if (parsed.action === 'cancel') {
+    await sendTelegramMessage({ chatId, text: DISCONNECT_CANCELLED_MESSAGE })
+    return
+  }
+
+  const { data: contact } = await admin
+    .from('contacts')
+    .select('id, telegram_chat_id, operational_channel')
+    .eq('id', parsed.contactId)
+    .maybeSingle()
+
+  if (!contact || contact.telegram_chat_id !== chatId) {
+    await sendTelegramMessage({ chatId, text: DISCONNECT_ALREADY_MESSAGE })
+    return
+  }
+
+  await admin
+    .from('contacts')
+    .update({
+      telegram_chat_id: null,
+      telegram_username: null,
+      ...(contact.operational_channel === 'telegram' ? { operational_channel: null } : {}),
+    })
+    .eq('id', contact.id)
+
+  await sendTelegramMessage({ chatId, text: DISCONNECT_DONE_MESSAGE })
 }
 
 // Resolves a /start <token> deep link: looks up the token, checks it is not

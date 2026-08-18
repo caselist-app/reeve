@@ -3,15 +3,15 @@ import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { testDb } from './test-db'
 import { createFixture, destroyFixture, type Fixture } from './fixture'
 
-// Brief 63, step 2 (REE-307). Exercises app/api/telegram/inbound/route.ts's
+// Brief 63, steps 2 and 3 (REE-307, REE-308). Exercises app/api/telegram/inbound/route.ts's
 // POST handler directly, the same way tests/integration/guest-request-flow.test.ts
 // exercises its own flow against a real Postgres: only the Telegram send and
 // the Trigger.dev dispatcher are stubbed, everything else (the secret-token
 // check, the contact lookup, the response shape) is the real route.
 //
-// This step only intercepts /stop and sends the confirm/cancel prompt, or the
-// "not connected" reply. No database write happens here: handleDisconnectCallback
-// (the dc: confirm/cancel write) is a later step of the same brief.
+// Step 2 (/stop) only sends the confirm/cancel prompt, or the "not connected"
+// reply, and writes nothing. Step 3 (handleDisconnectCallback, below) is the
+// dc: confirm/cancel write itself.
 
 vi.mock('@trigger.dev/sdk/v3', () => ({ tasks: { trigger: vi.fn() } }))
 vi.mock('@/lib/comms/telegram', () => ({
@@ -31,6 +31,10 @@ const WEBHOOK_SECRET = 'test-telegram-webhook-secret'
 const STOP_CONFIRM_TEXT =
   "Disconnect your Telegram from Reeve?\n\nYou'll stop getting schedule updates here. Ask your tour manager for a new link to reconnect."
 const STOP_NOT_CONNECTED_TEXT = "You're not connected to Reeve, so there's nothing to disconnect."
+const DISCONNECT_CANCELLED_TEXT = "Okay, you're still connected."
+const DISCONNECT_DONE_TEXT =
+  "You're disconnected. Ask your tour manager for a new link if you want to reconnect."
+const DISCONNECT_ALREADY_TEXT = "You're already disconnected."
 
 function postUpdate(update: Record<string, unknown>) {
   const request = new NextRequest('http://localhost/api/telegram/inbound', {
@@ -145,5 +149,124 @@ describe('telegram /stop interception', () => {
     // so it never reaches the router enqueue either.
     await postUpdate(callbackUpdate(424242, `dc:y:${fixture.contactId}`))
     expect(mockTrigger).not.toHaveBeenCalled()
+  })
+})
+
+describe('telegram dc: confirm/cancel (REE-308)', () => {
+  let fixture: Fixture
+  const originalSecret = process.env.TELEGRAM_WEBHOOK_SECRET
+
+  beforeEach(async () => {
+    fixture = await createFixture()
+    process.env.TELEGRAM_WEBHOOK_SECRET = WEBHOOK_SECRET
+    mockTrigger.mockClear()
+    mockSend.mockClear()
+  })
+
+  afterEach(async () => {
+    process.env.TELEGRAM_WEBHOOK_SECRET = originalSecret
+    await destroyFixture(fixture)
+  })
+
+  it('confirming disconnects a contact whose operational_channel is telegram', async () => {
+    await testDb
+      .from('contacts')
+      .update({
+        telegram_chat_id: 777,
+        telegram_username: 'crewmember',
+        operational_channel: 'telegram',
+      })
+      .eq('id', fixture.contactId)
+
+    const res = await postUpdate(callbackUpdate(777, `dc:y:${fixture.contactId}`))
+    expect(res.status).toBe(200)
+
+    expect(mockSend).toHaveBeenCalledWith({ chatId: 777, text: DISCONNECT_DONE_TEXT })
+
+    const after = await contactRow(fixture.contactId)
+    expect(after).toEqual({
+      telegram_chat_id: null,
+      telegram_username: null,
+      operational_channel: null,
+    })
+  })
+
+  it('confirming a contact whose operational_channel is whatsapp leaves it unchanged', async () => {
+    const { data: contact } = await testDb
+      .from('contacts')
+      .insert({ account_id: fixture.userId, name: 'Second Crew' })
+      .select('id')
+      .single()
+    if (!contact) throw new Error('could not create second contact')
+
+    await testDb
+      .from('contacts')
+      .update({
+        telegram_chat_id: 888,
+        telegram_username: 'secondcrew',
+        operational_channel: 'whatsapp',
+      })
+      .eq('id', contact.id)
+
+    const res = await postUpdate(callbackUpdate(888, `dc:y:${contact.id}`))
+    expect(res.status).toBe(200)
+
+    expect(mockSend).toHaveBeenCalledWith({ chatId: 888, text: DISCONNECT_DONE_TEXT })
+
+    const after = await contactRow(contact.id)
+    expect(after).toEqual({
+      telegram_chat_id: null,
+      telegram_username: null,
+      operational_channel: 'whatsapp',
+    })
+  })
+
+  it('cancelling leaves the contact unchanged', async () => {
+    await testDb
+      .from('contacts')
+      .update({
+        telegram_chat_id: 777,
+        telegram_username: 'crewmember',
+        operational_channel: 'telegram',
+      })
+      .eq('id', fixture.contactId)
+
+    const before = await contactRow(fixture.contactId)
+
+    const res = await postUpdate(callbackUpdate(777, 'dc:n'))
+    expect(res.status).toBe(200)
+
+    expect(mockSend).toHaveBeenCalledWith({ chatId: 777, text: DISCONNECT_CANCELLED_TEXT })
+
+    const after = await contactRow(fixture.contactId)
+    expect(after).toEqual(before)
+  })
+
+  it('a stale tap (already-disconnected contact) replies "already disconnected" and writes nothing', async () => {
+    await testDb
+      .from('contacts')
+      .update({
+        telegram_chat_id: 777,
+        telegram_username: 'crewmember',
+        operational_channel: 'telegram',
+      })
+      .eq('id', fixture.contactId)
+
+    const firstRes = await postUpdate(callbackUpdate(777, `dc:y:${fixture.contactId}`))
+    expect(firstRes.status).toBe(200)
+    expect(mockSend).toHaveBeenCalledWith({ chatId: 777, text: DISCONNECT_DONE_TEXT })
+
+    mockSend.mockClear()
+
+    const secondRes = await postUpdate(callbackUpdate(777, `dc:y:${fixture.contactId}`))
+    expect(secondRes.status).toBe(200)
+    expect(mockSend).toHaveBeenCalledWith({ chatId: 777, text: DISCONNECT_ALREADY_TEXT })
+
+    const after = await contactRow(fixture.contactId)
+    expect(after).toEqual({
+      telegram_chat_id: null,
+      telegram_username: null,
+      operational_channel: null,
+    })
   })
 })
