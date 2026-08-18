@@ -5,7 +5,9 @@ import { readSeed } from './seed'
 // all open the one typed day-form now; the category popover and its mobile sheet
 // are gone. This proves the surviving door reaches both kinds of thing the form
 // offers: a TIMES row it commits straight onto the grid (load-in), and a BOOK row
-// that opens its own add form (hotel).
+// that opens its own add form (hotel). REE-282 split the door into a type field
+// plus dedicated Starts/Ends time inputs, so a timed row is built from both
+// rather than from one string with the clock typed into it.
 //
 // It runs against the seeded rehearsal day, not the show day, on purpose. The
 // show day carries the 16:00 load-in that revalidate.spec.ts reads with a
@@ -33,17 +35,18 @@ test('the one door adds a timed item and opens a book form', async ({ page }) =>
   // has hydrated so the '/' listener is attached before we press it.
   await expect(page.getByRole('button', { name: 'Add to day' })).toBeVisible()
 
-  const input = page.getByPlaceholder('Try "load in 2pm" or "flight"')
+  const input = page.getByPlaceholder('Start typing...')
 
-  // '/' opens the typed day-form and autofocuses its input on desktop.
+  // '/' opens the typed day-form and autofocuses its type field on desktop.
   await page.keyboard.press('/')
   await expect(input).toBeVisible()
 
-  // A TIMES row: typing a load-in with a time commits a day_items row on Enter,
-  // no detour into another form. The preview confirms the load-in is highlighted
-  // before we commit it.
-  await input.fill('load in 10am')
-  await expect(page.getByText(/Load-in.*Enter adds it/)).toBeVisible()
+  // A TIMES row: typing a load-in and setting the Starts field commits a
+  // day_items row on Enter, no detour into another form. The preview confirms
+  // the load-in is highlighted, with the set time, before we commit it.
+  await input.fill('load in')
+  await page.getByLabel('Starts').fill('10:00')
+  await expect(page.getByText(/Load-in.*10:00.*Enter adds it/)).toBeVisible()
   await page.keyboard.press('Enter')
 
   // The load-in lands on the grid. Scoped to the calendar block (.rbc-event) so
@@ -79,7 +82,7 @@ test('a rail item with no time set opens its detail panel', async ({ page }) => 
 
   await page.goto(`/tours/${seed.a.tourId}/schedule?date=${seed.a.rehearsalDate}`)
 
-  const input = page.getByPlaceholder('Try "load in 2pm" or "flight"')
+  const input = page.getByPlaceholder('Start typing...')
   await page.keyboard.press('/')
   await expect(input).toBeVisible()
 

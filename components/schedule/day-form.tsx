@@ -12,19 +12,24 @@ import { useEntityForm } from '@/hooks/use-entity-form'
 import { createDayItem } from '@/lib/actions/day-items'
 import { getCustomDayItemTitles } from '@/lib/actions/day-item-titles'
 import { buildAddOptions, addOptionPreview, type AddOption } from '@/lib/schedule/add-options'
-import { parseDayItem } from '@/lib/schedule/parse-day-item'
 
 interface DayFormProps {
   tourId: string
   tourDateId: string
   date: string
   timezone: string
-  // Pre-filled line, set when the form opens from a click on empty grid space
-  // (REE-56): the snapped wall-clock time. The TM types the label after it. Also
-  // carried back across a detour into a book form (REE-88), so the typed line is
-  // still there when the picker returns. The parser reads it exactly as if it had
-  // been typed, so nothing special happens downstream; this only seeds the input.
+  // Pre-filled type text. Empty when the form opens from a click on empty grid
+  // space (REE-56, REE-282): the clicked time goes straight into
+  // initialStartClock/initialEndClock below rather than into this field, so the
+  // TM types the kind into an empty box instead of typing around a value already
+  // sitting there. Carried back across a detour into a book form (REE-88), so
+  // what was typed is still there when the picker returns.
   initialInput?: string
+  // Pre-filled Starts/Ends, 'HH:MM' in the tour zone. Set from a click or drag on
+  // empty grid space (REE-56, REE-69) and carried back across the REE-88 book
+  // form detour the same way initialInput is.
+  initialStartClock?: string
+  initialEndClock?: string
 }
 
 // The single interpreted time shown on a commit row. addOptionPreview owns the
@@ -34,21 +39,38 @@ function rowTime(option: Extract<AddOption, { action: 'commit' }>): string {
   return option.endClock ? `${option.startClock}–${option.endClock}` : option.startClock
 }
 
-// Brief 46, "one door into a day" (REE-88). The typed panel is the only add
-// surface: a single text input over buildAddOptions, offering two groups. BOOK
-// rows (flight, drive, rail, hotel) have structure beyond a time and open their
-// own form; TIMES rows (load-in, soundcheck, a custom block) commit a day_items
-// row here and now. A preview row says exactly what Enter will do.
+// Brief 46, "one door into a day" (REE-88, REE-282). The typed panel is the only
+// add surface: a type field over buildAddOptions, plus dedicated Starts/Ends
+// time fields, offering two groups. BOOK rows (flight, drive, rail, hotel) have
+// structure beyond a time and open their own form; TIMES rows (load-in,
+// soundcheck, a custom block) commit a day_items row here and now. A preview row
+// says exactly what Enter will do.
+//
+// Before REE-282 there was one free-text field: a click on the grid pre-filled
+// its clock straight into it as text ('2:00pm'), so the TM had to type the kind
+// after a value that was already sitting in the box, which read as broken. The
+// clock now lives in its own pair of type="time" inputs the TM reads and edits
+// directly; the type field only ever names the kind.
 //
 // The ranking, the parsing and the preview wording all live in lib/schedule so a
 // test can reach them (this repo has no way to render-test a component: no jsdom,
 // no testing-library). This component is a thin combo box over that.
-export function DayForm({ tourId, tourDateId, date, timezone, initialInput }: DayFormProps) {
+export function DayForm({
+  tourId,
+  tourDateId,
+  date,
+  timezone,
+  initialInput,
+  initialStartClock,
+  initialEndClock,
+}: DayFormProps) {
   const { open: openSidePanel, close } = useSidePanel()
   const isMobile = useIsMobile()
   const inputRef = useRef<HTMLInputElement>(null)
 
   const [input, setInput] = useState(initialInput ?? '')
+  const [startClock, setStartClock] = useState(initialStartClock ?? '')
+  const [endClock, setEndClock] = useState(initialEndClock ?? '')
   const [selected, setSelected] = useState(0)
   const [customTitles, setCustomTitles] = useState<string[]>([])
   const [, startLoad] = useTransition()
@@ -76,11 +98,11 @@ export function DayForm({ tourId, tourDateId, date, timezone, initialInput }: Da
   // gives the panel its two sections. The flat order the selection walks is BOOK
   // then TIMES, matching what is rendered.
   const { bookOptions, timeOptions, ordered } = useMemo(() => {
-    const options = buildAddOptions(input, customTitles)
+    const options = buildAddOptions(input, startClock || null, endClock || null, customTitles)
     const book = options.filter((option): option is Extract<AddOption, { action: 'open' }> => option.action === 'open')
     const time = options.filter((option): option is Extract<AddOption, { action: 'commit' }> => option.action === 'commit')
     return { bookOptions: book, timeOptions: time, ordered: [...book, ...time] }
-  }, [input, customTitles])
+  }, [input, startClock, endClock, customTitles])
 
   const clamped = ordered.length > 0 ? Math.min(selected, ordered.length - 1) : 0
   const active = ordered[clamped] ?? null
@@ -100,7 +122,7 @@ export function DayForm({ tourId, tourDateId, date, timezone, initialInput }: Da
     action: async () => {
       const option = commitRef.current
       if (!option || option.action !== 'commit') {
-        return { error: 'Type what is happening, for example load in 2pm.' }
+        return { error: 'Type what is happening, for example load in.' }
       }
       return createDayItem({
         tour_id: tourId,
@@ -114,15 +136,13 @@ export function DayForm({ tourId, tourDateId, date, timezone, initialInput }: Da
   })
 
   // A BOOK row leaves this panel for the category's own add form. Back reopens
-  // this form with the typed line intact, so the detour into the flight form
-  // does not lose what the TM had started typing (REE-88).
+  // this form with the type text and clocks intact, so the detour into the
+  // flight form does not lose what the TM had started (REE-88).
   function openBook(option: Extract<AddOption, { action: 'open' }>) {
-    // Carry the time off the typed or click-seeded line into the book form, so a
-    // drive added after clicking 2pm departs at 2pm rather than the form's old
-    // hardcoded 9am (REE-140). The parser reads the same 'HH:MM' start a commit
-    // row shows; the category word only lands in the residual title, which the
-    // book form ignores, so 'drive 2pm' and a click-seeded '2:00pm' both give 14:00.
-    const initialClock = parseDayItem(input).best.startClock ?? undefined
+    // Carry the Starts field into the book form, so a drive added after clicking
+    // 2pm departs at 2pm rather than the form's old hardcoded 9am (REE-140,
+    // REE-282). Both fields are already the same 'HH:MM' shape the book form's
+    // initialClock expects.
     openSidePanel({
       type: 'add-to-day',
       tourId,
@@ -130,10 +150,19 @@ export function DayForm({ tourId, tourDateId, date, timezone, initialInput }: Da
       date,
       timezone,
       category: option.category,
-      initialClock,
+      initialClock: startClock || undefined,
       initialQuery: option.initialQuery,
       onBack: () =>
-        openSidePanel({ type: 'day-form', tourId, tourDateId, date, timezone, initialInput: input }),
+        openSidePanel({
+          type: 'day-form',
+          tourId,
+          tourDateId,
+          date,
+          timezone,
+          initialInput: input,
+          initialStartClock: startClock || undefined,
+          initialEndClock: endClock || undefined,
+        }),
     })
   }
 
@@ -166,20 +195,50 @@ export function DayForm({ tourId, tourDateId, date, timezone, initialInput }: Da
     }
   }
 
+  // The Starts/Ends fields don't walk the row list (their own keyboard, up/down,
+  // changes the hour or minute segment, not the highlighted row), but Enter from
+  // either should still commit the highlighted row, the same as it does from the
+  // type field.
+  function onClockKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      if (active) activate(active, clamped)
+    }
+  }
+
   let flatIndex = 0
 
   return (
     <PanelShell title="Add to day" description="Type what is happening. Enter adds it.">
       <form onSubmit={submit} className="space-y-3">
-        <Input
-          ref={inputRef}
-          value={input}
-          onChange={(event) => { setInput(event.target.value); setSelected(0) }}
-          onKeyDown={onInputKeyDown}
-          placeholder={'Try "load in 2pm" or "flight"'}
-          className="h-9 text-sm"
-          autoComplete="off"
-        />
+        <div className="flex items-center gap-2">
+          <Input
+            ref={inputRef}
+            value={input}
+            onChange={(event) => { setInput(event.target.value); setSelected(0) }}
+            onKeyDown={onInputKeyDown}
+            placeholder="Start typing..."
+            className="h-9 flex-1 text-sm"
+            autoComplete="off"
+          />
+          <Input
+            type="time"
+            aria-label="Starts"
+            value={startClock}
+            onChange={(event) => setStartClock(event.target.value)}
+            onKeyDown={onClockKeyDown}
+            className="h-9 w-[120px] shrink-0 text-sm"
+          />
+          <span className="shrink-0 text-xs text-muted-foreground">to</span>
+          <Input
+            type="time"
+            aria-label="Ends (optional)"
+            value={endClock}
+            onChange={(event) => setEndClock(event.target.value)}
+            onKeyDown={onClockKeyDown}
+            className="h-9 w-[120px] shrink-0 text-sm"
+          />
+        </div>
 
         {/* Preview: exactly what Enter will do to the highlighted option. */}
         {active && (

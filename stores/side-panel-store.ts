@@ -206,10 +206,10 @@ export type PanelDescriptor =
       timezone: string
       category: ScheduleAddCategory
       // The wall-clock time the TM selected on the day, 'HH:MM' in the tour zone,
-      // carried from the day form's typed or click-seeded line (REE-140). Seeds
+      // carried from the day form's Starts field (REE-140, REE-282). Seeds
       // the book form's departure/check-in default so a drive added after
-      // clicking 2pm departs at 2pm, not the old hardcoded 9am. Absent when the
-      // line carried no time, where the form keeps its own default.
+      // clicking 2pm departs at 2pm, not the old hardcoded 9am. Absent when no
+      // start time was set, where the form keeps its own default.
       initialClock?: string
       // A bare flight code detected in the day form's typed line ('CX150',
       // REE-99), carried through as the flight form's starting search query so
@@ -231,13 +231,18 @@ export type PanelDescriptor =
       tourDateId: string
       date: string
       timezone: string
-      // Pre-filled input, set when the form is opened by clicking empty grid
-      // space (REE-56): the snapped wall-clock time, which the TM types the rest
-      // of the line after. Also carried across the open-a-form-and-come-back trip
-      // (REE-88), so the typed line survives a detour into the flight form.
+      // Pre-filled type text, carried across the open-a-form-and-come-back trip
+      // (REE-88) so what the TM typed survives a detour into the flight form.
       // Absent when opened from the '+' picker or the '/' shortcut, where the
-      // input starts empty.
+      // field starts empty.
       initialInput?: string
+      // Pre-filled Starts/Ends, 'HH:MM' in the tour zone (REE-282). Set when the
+      // form is opened by clicking or dragging on empty grid space (REE-56,
+      // REE-69): the snapped wall-clock time lands directly in these fields
+      // rather than in the type text, which used to force the TM to type the
+      // rest of the line around it. Also carried across the REE-88 back trip.
+      initialStartClock?: string
+      initialEndClock?: string
     }
   // REE-154: the extraction detail view's row review panel. Carries the full
   // proposal as a snapshot, the same shape as 'day-item'/'transport'/'hotel'
