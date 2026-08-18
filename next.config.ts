@@ -1,6 +1,18 @@
 import type { NextConfig } from 'next'
 
 const nextConfig: NextConfig = {
+  images: {
+    // Hotel and venue day-info blocks render a Google Static Maps image
+    // (lib/schedule/venue-map.ts) through next/image, so the host needs
+    // explicit allow-listing.
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'maps.googleapis.com',
+        pathname: '/maps/api/staticmap',
+      },
+    ],
+  },
   experimental: {
     // Per-icon tree-shaking for lucide-react (imported in ~40 files) so a named
     // icon import does not pull the whole icon set into the bundle.

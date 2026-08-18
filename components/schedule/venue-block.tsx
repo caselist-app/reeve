@@ -1,9 +1,10 @@
 'use client'
 
 import { ChevronRight } from 'lucide-react'
+import Image from 'next/image'
 import { useSidePanel } from '@/stores/side-panel-store'
 import type { DayShow } from '@/lib/schedule/day-records'
-import { staticMapUrl, googleMapsUrl } from '@/lib/schedule/venue-map'
+import { staticMapUrl, googleMapsUrl, STATIC_MAP_WIDTH, STATIC_MAP_HEIGHT } from '@/lib/schedule/venue-map'
 
 interface VenueBlockProps {
   tourId: string
@@ -52,9 +53,11 @@ export function VenueBlock({ tourId, show }: VenueBlockProps) {
           rel="noopener noreferrer"
           className="block overflow-hidden rounded-lg px-2"
         >
-          <img
+          <Image
             src={staticMapUrl(show.venue_lat as number, show.venue_lng as number)}
             alt={`Map of ${show.venue_name}`}
+            width={STATIC_MAP_WIDTH}
+            height={STATIC_MAP_HEIGHT}
             className="h-auto w-full rounded-lg"
           />
         </a>

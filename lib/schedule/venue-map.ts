@@ -3,14 +3,15 @@
 // glances at before tapping through. REE-178.
 
 const STATIC_MAP_ZOOM = 15
-const STATIC_MAP_SIZE = '600x300'
+export const STATIC_MAP_WIDTH = 600
+export const STATIC_MAP_HEIGHT = 300
 
 export function staticMapUrl(lat: number, lng: number): string {
   const center = `${lat},${lng}`
   const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? ''
   return (
     `https://maps.googleapis.com/maps/api/staticmap?center=${center}` +
-    `&zoom=${STATIC_MAP_ZOOM}&size=${STATIC_MAP_SIZE}` +
+    `&zoom=${STATIC_MAP_ZOOM}&size=${STATIC_MAP_WIDTH}x${STATIC_MAP_HEIGHT}` +
     `&markers=color:red%7C${center}&key=${key}`
   )
 }
