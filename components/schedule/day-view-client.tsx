@@ -176,12 +176,25 @@ export function DayViewClient({ timeline, dayInfoPanel, dateStrip, dayInfoDock, 
 
   return (
     <>
-      <div className="flex flex-col lg:flex-row flex-1 min-w-0 min-h-0">
+      <div className="flex flex-col lg:flex-row flex-1 min-w-0 min-h-0 lg:overflow-x-auto">
         {/* Timeline: flex-1. min-h-0 so this column can shrink below its content
             and hand a bounded height down to the calendar's own scroll area,
             rather than growing to the full grid height (REE-125). Inert on
-            desktop, where the parent row stretches this column's height anyway. */}
-        <div className="relative flex flex-col flex-1 min-w-0 min-h-0">
+            desktop, where the parent row stretches this column's height anyway.
+            lg:min-w below, plus lg:overflow-x-auto on the row above, stop the
+            calendar being squeezed to nothing: with the Dates sidebar, the
+            320px Day info
+            column and a 480px side panel all open at once, their fixed widths
+            alone can exceed a real, common desktop viewport, and flex-1 alone
+            would happily shrink this column to 0 to make room rather than ever
+            touch Day info's shrink-0 width. A 0-width calendar is not just
+            unreadable, it is unclickable: the panel-toggle e2e spec (REE-192)
+            caught this because it is the first test to click the grid again
+            once the panel is already open. Below the min, lg:overflow-x-auto on
+            the row scrolls instead of clipping, and since this column comes
+            first in source order, the calendar (the primary working surface)
+            is what stays in view at the default scroll position, not Day info. */}
+        <div className="relative flex flex-col flex-1 min-w-0 lg:min-w-[280px] min-h-0">
           {dateStrip}
           <div className="flex-1 overflow-y-auto">
             {timeline}
