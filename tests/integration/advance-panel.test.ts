@@ -5,19 +5,15 @@ import { getShowAdvance } from '@/lib/actions/shows'
 import { nudgeAdvanceFromShareClick } from '@/lib/shows/advance'
 
 // Brief 36 step 6 moved the advance off the show page and into a panel, and
-// moving it turned up a bug that had been live since the feature was written.
-//
-// The page filtered the recipient list with `.not('contact_email', 'is', null)`
-// against `people`, which has no such column: the email is on `contacts`.
-// PostgREST rejected the query, the destructure took `data` as null, `?? []`
-// turned that into an empty list, and "Send to venue" rendered a picker with
-// nobody in it. No error surfaced anywhere. A TM could open the advance, pick a
-// rider, and find there was no one to send it to, on a tour full of crew.
-//
-// The fix is the rule already in CLAUDE.md: a filter on an embedded table needs
-// !inner, and it goes on the embedded column. This file is here because that is
-// invisible to tsc (it is a PostgREST string) and invisible in review (it looks
-// like a filter, and it is a filter, just on the wrong table).
+// moving it turned up a bug that had been live since the feature was written:
+// the page filtered a roster recipient list with `.not('contact_email', 'is',
+// null)` against `people`, which has no such column, so the query silently
+// returned nobody to send to. REE-283 later removed that roster-based
+// recipient list from getShowAdvance entirely (a send recipient is now a
+// freeform email, not a people row), which retired the regression test this
+// comment used to describe. What remains below still exercises getShowAdvance
+// against real data for the department/document/tour-scoping behaviour that
+// REE-283 did not touch.
 
 const DATE = '2030-06-14'
 
@@ -31,14 +27,6 @@ describe('the advance panel gets real data', () => {
   afterEach(async () => {
     await destroyFixture(fixture)
   })
-
-  async function giveCrewAnEmail(email = 'crew@example.test') {
-    const { error } = await testDb
-      .from('contacts')
-      .update({ contact_email: email })
-      .eq('id', fixture.contactId)
-    if (error) throw new Error(`could not set the contact email: ${error.message}`)
-  }
 
   async function addRider(docType: string, title: string) {
     const { data, error } = await testDb
@@ -56,40 +44,6 @@ describe('the advance panel gets real data', () => {
     if (error || !data) throw new Error(`could not add the rider: ${error?.message}`)
     return data.id
   }
-
-  describe('the recipient list', () => {
-    it('includes a crew member who has an email address', async () => {
-      // The regression. This returned an empty array for the entire life of the
-      // show page.
-      await giveCrewAnEmail()
-
-      const { data, error } = await getShowAdvance(fixture.tourId, fixture.showId)
-      if (error) throw new Error(`could not load the advance: ${error}`)
-
-      expect(data?.people).toHaveLength(1)
-      expect(data?.people[0]).toMatchObject({
-        id: fixture.personId,
-        name: 'Test Crew',
-        contact_email: 'crew@example.test',
-      })
-    })
-
-    it('includes a crew member with no email address, with a null contact_email', async () => {
-      // REE-6: the send panel lists every tour person and greys out anyone
-      // without an email rather than hiding them, so a TM can see who still
-      // needs an address before they can be sent to. Filtering them out here
-      // would put that decision back in the query, invisibly.
-      const { data, error } = await getShowAdvance(fixture.tourId, fixture.showId)
-      if (error) throw new Error(`could not load the advance: ${error}`)
-
-      expect(data?.people).toHaveLength(1)
-      expect(data?.people[0]).toMatchObject({
-        id: fixture.personId,
-        name: 'Test Crew',
-        contact_email: null,
-      })
-    })
-  })
 
   describe('the documents', () => {
     it('files each rider under the department that sends it', async () => {

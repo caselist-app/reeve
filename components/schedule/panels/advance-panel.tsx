@@ -74,7 +74,6 @@ export function AdvancePanel({ tourId, showId, venueName }: AdvancePanelProps) {
               tourId={tourId}
               showId={showId}
               departments={detail.departments}
-              people={detail.people}
             />
           </section>
         </div>

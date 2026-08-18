@@ -100,7 +100,8 @@ export async function fetchDocumentsPage(
     // The recipient's name lives on contacts, not people: a two-hop embed.
     // people(name) does not exist (Brief 20 moved identity onto contacts) and
     // PostgREST rejects the select outright, which used to be the exact bug
-    // this page would have shipped.
+    // this page would have shipped. recipient_email covers a freeform
+    // recipient (REE-283), which has no people row at all.
     //
     // Scoped by document_id, not doc_type: every version, current or not,
     // has its own document row, so a share is only ever attached to the one
@@ -110,7 +111,7 @@ export async function fetchDocumentsPage(
     supabase
       .from('document_shares')
       .select(
-        'id, document_id, show_id, sent_at, opened_at, acknowledged_at, reminder_count, people(role, contacts(name, contact_email)), shows(venue_name)'
+        'id, document_id, show_id, sent_at, opened_at, acknowledged_at, reminder_count, recipient_email, people(role, contacts(name, contact_email)), shows(venue_name)'
       )
       .eq('tour_id', tourId)
       .order('created_at', { ascending: true }),
@@ -172,9 +173,9 @@ export async function fetchDocumentsPage(
       bucket.push({
         id: row.id,
         document_id: row.document_id,
-        recipient_name: person?.contacts?.name ?? 'Unknown',
+        recipient_name: person?.contacts?.name ?? row.recipient_email ?? 'Unknown',
         recipient_role: person?.role ?? null,
-        recipient_email: person?.contacts?.contact_email ?? null,
+        recipient_email: person?.contacts?.contact_email ?? row.recipient_email ?? null,
         show_id: row.show_id,
         show_label: show?.venue_name ?? null,
         sent_at: row.sent_at,

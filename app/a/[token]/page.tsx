@@ -24,6 +24,7 @@ export default async function SharePage({
       acknowledged_at,
       documents ( title, doc_type, storage_path ),
       people ( contacts ( name ) ),
+      recipient_email,
       tours ( name, artists ( name ) )
     `)
     .eq('share_token', token)
@@ -33,6 +34,7 @@ export default async function SharePage({
 
   const doc = share.documents as { title: string; doc_type: string; storage_path: string } | null
   const person = (share.people as { contacts: { name: string } | null } | null)?.contacts ?? null
+  const recipientLabel = person?.name ?? share.recipient_email ?? null
   const tour = share.tours
 
   if (!doc) notFound()
@@ -65,9 +67,9 @@ export default async function SharePage({
             {artistName}
           </p>
           <h1 className="text-2xl font-bold text-gray-900">{doc.title}</h1>
-          {person && (
+          {recipientLabel && (
             <p className="mt-1 text-sm text-gray-500">
-              Sent to {person.name}
+              Sent to {recipientLabel}
             </p>
           )}
         </div>

@@ -7,14 +7,16 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { generateShareToken } from '@/lib/comms/email'
 import { sendRiderEmailJob } from '@/trigger/jobs/send-rider-email'
 import { advanceReminderJob } from '@/trigger/jobs/advance-reminder'
-import { uploadDocumentSchema } from '@/lib/validators/documents'
+import { sendDocumentRecipientsSchema, uploadDocumentSchema } from '@/lib/validators/documents'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://tourwithreeve.com'
 
 export type SendDocumentParams = {
   tourId: string
   documentId: string
-  recipientPersonIds: string[]
+  // REE-283: freeform email addresses, not roster people. A venue or
+  // promoter contact receiving a rider is rarely crew.
+  recipientEmails: string[]
   // Reminders only fire when a show is attached: a tour-level informational
   // send (e.g. a routing sheet to management) has no advance to chase.
   showId?: string | null
@@ -38,7 +40,7 @@ export type SendDocumentResult = {
 // the other ids in the payload belong to it.
 export async function sendDocument(params: SendDocumentParams): Promise<SendDocumentResult> {
   const user = await requireUser()
-  const { tourId, documentId, recipientPersonIds, showId, note } = params
+  const { tourId, documentId, recipientEmails, showId, note } = params
 
   const supabase = await createClient()
 
@@ -74,37 +76,11 @@ export async function sendDocument(params: SendDocumentParams): Promise<SendDocu
     if (!show) return { error: 'Show not found.' }
   }
 
-  // Guard the empty array: an empty .in() is a round trip that can only
-  // return nothing.
-  if (recipientPersonIds.length === 0) return { error: 'Select at least one recipient.' }
-
-  // Fetch every recipient in one query, scoped to this tour, then assert the
-  // returned count equals the requested count so a person from another tour
-  // is caught rather than silently dropped from the send.
-  const { data: peopleRows } = await supabase
-    .from('people')
-    .select('id, contacts(name, contact_email)')
-    .eq('tour_id', tourId)
-    .in('id', recipientPersonIds)
-
-  const distinctIds = new Set(recipientPersonIds)
-  if ((peopleRows?.length ?? 0) !== distinctIds.size) {
-    return { error: 'One or more recipients are not on this tour.' }
-  }
-
-  // Identity (name, email) lives on the contact.
-  const people = (peopleRows ?? []).map((row) => ({
-    id: row.id,
-    ...((row.contacts as { name: string; contact_email: string | null } | null) ?? {
-      name: '',
-      contact_email: null,
-    }),
-  }))
-
-  const missingEmail = people.find((person) => !person.contact_email)
-  if (missingEmail) {
-    return { error: `${missingEmail.name} does not have an email address on file.` }
-  }
+  // Re-validate server-side with the same schema the panel validates against
+  // as the TM types, and dedupe: trim/lowercase/format-check every entry.
+  const parsed = sendDocumentRecipientsSchema.safeParse(recipientEmails)
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? 'Invalid recipient.' }
+  const emails = [...new Set(parsed.data)]
 
   // Insert one share row per recipient, each with its own token, before
   // enqueuing so the job can write sent_at to it. show_id is stored so the
@@ -112,35 +88,32 @@ export async function sendDocument(params: SendDocumentParams): Promise<SendDocu
   const { data: newShares, error: insertError } = await supabase
     .from('document_shares')
     .insert(
-      people.map((person) => ({
+      emails.map((email) => ({
         tour_id: tourId,
         show_id: showId ?? null,
         document_id: documentId,
-        recipient_person_id: person.id,
+        recipient_email: email,
         channel: 'email',
         share_token: generateShareToken(),
       }))
     )
-    .select('id, recipient_person_id, share_token')
+    .select('id, recipient_email, share_token')
 
-  if (insertError || !newShares || newShares.length !== people.length) {
+  if (insertError || !newShares || newShares.length !== emails.length) {
     return { error: insertError?.message ?? 'Failed to create shares.' }
   }
-
-  const peopleById = new Map(people.map((person) => [person.id, person]))
 
   // Enqueue the Trigger.dev job for each recipient and return immediately.
   // The job writes sent_at to its share row after Resend confirms delivery.
   await Promise.all(
     newShares.map((share) => {
-      const person = peopleById.get(share.recipient_person_id)
-      if (!person?.contact_email) return Promise.resolve()
+      if (!share.recipient_email) return Promise.resolve()
 
       const shareUrl = `${APP_URL}/a/${share.share_token}`
 
       return sendRiderEmailJob.trigger({
-        to: person.contact_email,
-        recipient_name: person.name,
+        to: share.recipient_email,
+        recipient_name: share.recipient_email,
         artist_name: tour.artists?.name ?? tour.name,
         artist_slug: tour.artists?.slug ?? null,
         document_title: doc.title,
@@ -184,18 +157,24 @@ export async function resendShare(shareId: string): Promise<SendDocumentResult> 
   // RLS scopes this to the caller's own tour, so no separate ownership check.
   const { data: share } = await supabase
     .from('document_shares')
-    .select('tour_id, show_id, document_id, recipient_person_id')
+    .select('tour_id, show_id, document_id, recipient_person_id, recipient_email, people(contacts(contact_email))')
     .eq('id', shareId)
     .single()
 
   if (!share) return { error: 'Share not found.' }
   if (!share.show_id) return { error: 'This document was not sent for a show.' }
 
+  const personEmail =
+    (share.people as { contacts: { contact_email: string | null } | null } | null)?.contacts
+      ?.contact_email ?? null
+  const email = share.recipient_email ?? personEmail
+  if (!email) return { error: 'This recipient has no email address to resend to.' }
+
   return sendDocument({
     tourId: share.tour_id,
     showId: share.show_id,
     documentId: share.document_id,
-    recipientPersonIds: [share.recipient_person_id],
+    recipientEmails: [email],
   })
 }
 

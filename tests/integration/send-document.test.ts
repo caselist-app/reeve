@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { testDb } from './test-db'
-import { createFixture, createSecondTour, destroyFixture, type Fixture } from './fixture'
+import { createFixture, destroyFixture, type Fixture } from './fixture'
 
 // send-rider-email and advance-reminder are Trigger.dev tasks. sendDocument
 // awaits their .trigger() calls, which need TRIGGER_SECRET_KEY and a running
@@ -18,27 +18,8 @@ import { sendDocument } from '@/lib/actions/documents'
 import { sendRiderEmailJob } from '@/trigger/jobs/send-rider-email'
 import { advanceReminderJob } from '@/trigger/jobs/advance-reminder'
 
-// Every recipient needs a contact_email, since sendDocument rejects a
-// recipient with none before it inserts anything. contacts seeded by
-// createFixture / createSecondTour have no email, so every recipient used
-// here is created directly with one.
-async function createEmailPerson(tourId: string, accountId: string, name: string, email: string) {
-  const { data: contact, error: contactError } = await testDb
-    .from('contacts')
-    .insert({ account_id: accountId, name, contact_email: email })
-    .select('id')
-    .single()
-  if (contactError || !contact) throw new Error(`could not create contact: ${contactError?.message}`)
-
-  const { data: person, error: personError } = await testDb
-    .from('people')
-    .insert({ tour_id: tourId, contact_id: contact.id, person_type: 'crew' })
-    .select('id')
-    .single()
-  if (personError || !person) throw new Error(`could not create person: ${personError?.message}`)
-
-  return person.id as string
-}
+// REE-283: recipients are freeform email addresses, not roster people, so
+// these tests never need to seed a person or contact for a recipient.
 
 async function createDocument(tourId: string, title = 'Stage Plot') {
   const { data: doc, error } = await testDb
@@ -74,7 +55,7 @@ describe('sendDocument', () => {
     const result = await sendDocument({
       tourId: fixture.tourId,
       documentId,
-      recipientPersonIds: [],
+      recipientEmails: [],
       showId: fixture.showId,
     })
 
@@ -87,25 +68,11 @@ describe('sendDocument', () => {
     expect(data ?? []).toHaveLength(0)
   })
 
-  it('rejects a recipient from another tour', async () => {
-    const other = await createSecondTour(fixture)
-    const otherPersonId = await createEmailPerson(
-      other.tourId,
-      fixture.userId,
-      'Other Crew',
-      'other-crew@example.test'
-    )
-    const validPersonId = await createEmailPerson(
-      fixture.tourId,
-      fixture.userId,
-      'Valid Crew',
-      'valid-crew@example.test'
-    )
-
+  it('rejects a malformed email and inserts nothing', async () => {
     const result = await sendDocument({
       tourId: fixture.tourId,
       documentId,
-      recipientPersonIds: [validPersonId, otherPersonId],
+      recipientEmails: ['valid-crew@example.test', 'not-an-email'],
       showId: fixture.showId,
     })
 
@@ -119,16 +86,12 @@ describe('sendDocument', () => {
   })
 
   it('sends to three recipients with three distinct tokens', async () => {
-    const personIds = await Promise.all([
-      createEmailPerson(fixture.tourId, fixture.userId, 'Crew One', 'crew-one@example.test'),
-      createEmailPerson(fixture.tourId, fixture.userId, 'Crew Two', 'crew-two@example.test'),
-      createEmailPerson(fixture.tourId, fixture.userId, 'Crew Three', 'crew-three@example.test'),
-    ])
+    const emails = ['crew-one@example.test', 'crew-two@example.test', 'crew-three@example.test']
 
     const result = await sendDocument({
       tourId: fixture.tourId,
       documentId,
-      recipientPersonIds: personIds,
+      recipientEmails: emails,
       showId: fixture.showId,
     })
 
@@ -136,29 +99,41 @@ describe('sendDocument', () => {
 
     const { data } = await testDb
       .from('document_shares')
-      .select('id, recipient_person_id, share_token, show_id')
+      .select('id, recipient_email, recipient_person_id, share_token, show_id')
       .eq('tour_id', fixture.tourId)
 
     expect(data ?? []).toHaveLength(3)
     expect(new Set((data ?? []).map((row) => row.share_token)).size).toBe(3)
-    expect(new Set((data ?? []).map((row) => row.recipient_person_id))).toEqual(new Set(personIds))
+    expect(new Set((data ?? []).map((row) => row.recipient_email))).toEqual(new Set(emails))
+    expect((data ?? []).every((row) => row.recipient_person_id === null)).toBe(true)
     expect(sendRiderEmailJob.trigger).toHaveBeenCalledTimes(3)
     // showId was set, so reminders are scheduled for every recipient.
     expect(advanceReminderJob.trigger).toHaveBeenCalledTimes(6)
   })
 
-  it('inserts a null show_id and schedules no reminders when no show is given', async () => {
-    const personId = await createEmailPerson(
-      fixture.tourId,
-      fixture.userId,
-      'Crew One',
-      'crew-one@example.test'
-    )
-
+  it('dedupes a repeated recipient into a single share', async () => {
     const result = await sendDocument({
       tourId: fixture.tourId,
       documentId,
-      recipientPersonIds: [personId],
+      recipientEmails: ['crew@example.test', 'Crew@example.test', ' crew@example.test '],
+      showId: fixture.showId,
+    })
+
+    expect(result.error).toBeNull()
+
+    const { data } = await testDb
+      .from('document_shares')
+      .select('id')
+      .eq('tour_id', fixture.tourId)
+    expect(data ?? []).toHaveLength(1)
+    expect(sendRiderEmailJob.trigger).toHaveBeenCalledTimes(1)
+  })
+
+  it('inserts a null show_id and schedules no reminders when no show is given', async () => {
+    const result = await sendDocument({
+      tourId: fixture.tourId,
+      documentId,
+      recipientEmails: ['crew-one@example.test'],
     })
 
     expect(result.error).toBeNull()

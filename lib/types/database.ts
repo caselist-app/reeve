@@ -537,7 +537,8 @@ export type Database = {
           document_id: string
           id: string
           opened_at: string | null
-          recipient_person_id: string
+          recipient_email: string | null
+          recipient_person_id: string | null
           reminder_count: number
           sent_at: string | null
           share_token: string
@@ -551,7 +552,8 @@ export type Database = {
           document_id: string
           id?: string
           opened_at?: string | null
-          recipient_person_id: string
+          recipient_email?: string | null
+          recipient_person_id?: string | null
           reminder_count?: number
           sent_at?: string | null
           share_token: string
@@ -565,7 +567,8 @@ export type Database = {
           document_id?: string
           id?: string
           opened_at?: string | null
-          recipient_person_id?: string
+          recipient_email?: string | null
+          recipient_person_id?: string | null
           reminder_count?: number
           sent_at?: string | null
           share_token?: string
@@ -1038,6 +1041,7 @@ export type Database = {
           person_id: string | null
           provider_message_id: string | null
           read_at: string | null
+          recipient_email: string | null
           sent_at: string | null
           status: string
           tour_id: string
@@ -1055,6 +1059,7 @@ export type Database = {
           person_id?: string | null
           provider_message_id?: string | null
           read_at?: string | null
+          recipient_email?: string | null
           sent_at?: string | null
           status?: string
           tour_id: string
@@ -1072,6 +1077,7 @@ export type Database = {
           person_id?: string | null
           provider_message_id?: string | null
           read_at?: string | null
+          recipient_email?: string | null
           sent_at?: string | null
           status?: string
           tour_id?: string
