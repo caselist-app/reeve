@@ -106,6 +106,15 @@ async function notificationLog(tourId: string, dedupDimension: string) {
 
 describe('sendDayMessage', () => {
   let fixture: Fixture
+  // Each real provider send returns its own unique message id; notify()
+  // writes it into notification_log.provider_message_id, now under a unique
+  // index (REE-274). A fixed mock value across every call in a test, which
+  // sends several blocks and several people per run, made that write collide
+  // with itself and silently fail (the update's error goes unchecked), so
+  // these mirror the real per-send uniqueness instead.
+  let whatsappSeq = 0
+  let emailSeq = 0
+  let telegramSeq = 0
 
   beforeEach(async () => {
     fixture = await createFixture({ date: DATE, timezone: TIMEZONE })
@@ -113,9 +122,12 @@ describe('sendDayMessage', () => {
     mockWhatsApp.mockReset()
     mockEmail.mockReset()
     mockTelegram.mockReset()
-    mockWhatsApp.mockResolvedValue({ providerMessageId: 'wamid-1' })
-    mockEmail.mockResolvedValue({ providerMessageId: 'resend-1' })
-    mockTelegram.mockResolvedValue({ providerMessageId: 'tg-1' })
+    whatsappSeq = 0
+    emailSeq = 0
+    telegramSeq = 0
+    mockWhatsApp.mockImplementation(async () => ({ providerMessageId: `wamid-${++whatsappSeq}` }))
+    mockEmail.mockImplementation(async () => ({ providerMessageId: `resend-${++emailSeq}` }))
+    mockTelegram.mockImplementation(async () => ({ providerMessageId: `tg-${++telegramSeq}` }))
   })
 
   afterEach(async () => {
