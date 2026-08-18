@@ -121,9 +121,12 @@ function BookingReferenceField({ segment }: { segment: Segment }) {
 
   return (
     <div className="space-y-1">
-      <Label className="text-xs">Booking reference</Label>
+      <Label htmlFor="transport-booking_reference" className="text-xs">
+        Booking reference
+      </Label>
       <div className="flex gap-2">
         <Input
+          id="transport-booking_reference"
           value={value}
           onChange={(e) => { setValue(e.target.value); setSaved(false); setError(null) }}
           placeholder="ABC123"
@@ -275,8 +278,11 @@ function EditableSegmentForm({ segment, timezone }: { segment: Segment; timezone
     <form onSubmit={submit} className="space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
-          <Label className="text-xs">From</Label>
+          <Label htmlFor="segment-origin" className="text-xs">
+            From
+          </Label>
           <PlacesAddressInput
+            id="segment-origin"
             name="origin"
             value={origin}
             onChange={setOrigin}
@@ -284,8 +290,11 @@ function EditableSegmentForm({ segment, timezone }: { segment: Segment; timezone
           />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">To</Label>
+          <Label htmlFor="segment-destination" className="text-xs">
+            To
+          </Label>
           <PlacesAddressInput
+            id="segment-destination"
             name="destination"
             value={destination}
             onChange={setDestination}
@@ -296,8 +305,11 @@ function EditableSegmentForm({ segment, timezone }: { segment: Segment; timezone
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
-          <Label className="text-xs">Departs</Label>
+          <Label htmlFor="segment-depart_at" className="text-xs">
+            Departs
+          </Label>
           <Input
+            id="segment-depart_at"
             name="depart_at"
             type="datetime-local"
             defaultValue={toDatetimeLocal(segment.depart_at, timezone)}
@@ -310,8 +322,11 @@ function EditableSegmentForm({ segment, timezone }: { segment: Segment; timezone
           <DateMoveNotice currentDate={currentLocalDate} value={departLocal} />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Arrives</Label>
+          <Label htmlFor="segment-arrive_at" className="text-xs">
+            Arrives
+          </Label>
           <Input
+            id="segment-arrive_at"
             name="arrive_at"
             type="datetime-local"
             defaultValue={toDatetimeLocal(segment.arrive_at, timezone)}
@@ -322,18 +337,39 @@ function EditableSegmentForm({ segment, timezone }: { segment: Segment; timezone
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
-          <Label className="text-xs">Carrier</Label>
-          <Input name="carrier_operator" defaultValue={segment.carrier_operator ?? ''} className="h-7 text-xs" />
+          <Label htmlFor="segment-carrier_operator" className="text-xs">
+            Carrier
+          </Label>
+          <Input
+            id="segment-carrier_operator"
+            name="carrier_operator"
+            defaultValue={segment.carrier_operator ?? ''}
+            className="h-7 text-xs"
+          />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Flight / ref</Label>
-          <Input name="vehicle_or_flight_no" defaultValue={segment.vehicle_or_flight_no ?? ''} className="h-7 text-xs" />
+          <Label htmlFor="segment-vehicle_or_flight_no" className="text-xs">
+            Flight / ref
+          </Label>
+          <Input
+            id="segment-vehicle_or_flight_no"
+            name="vehicle_or_flight_no"
+            defaultValue={segment.vehicle_or_flight_no ?? ''}
+            className="h-7 text-xs"
+          />
         </div>
       </div>
 
       <div className="space-y-1">
-        <Label className="text-xs">Booking reference</Label>
-        <Input name="booking_reference" defaultValue={segment.booking_reference ?? ''} className="h-7 text-xs" />
+        <Label htmlFor="segment-booking_reference" className="text-xs">
+          Booking reference
+        </Label>
+        <Input
+          id="segment-booking_reference"
+          name="booking_reference"
+          defaultValue={segment.booking_reference ?? ''}
+          className="h-7 text-xs"
+        />
       </div>
 
       <div className="space-y-1">

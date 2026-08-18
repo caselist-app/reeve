@@ -423,8 +423,11 @@ export function AddFlightForm({ tourId, tourDateId, date, timezone, people, init
     return (
       <div className="space-y-3">
         <div className="space-y-1">
-          <Label className="text-xs">Airline, code, or flight number</Label>
+          <Label htmlFor="add-flight-query" className="text-xs">
+            Airline, code, or flight number
+          </Label>
           <Input
+            id="add-flight-query"
             autoFocus
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -501,7 +504,9 @@ export function AddFlightForm({ tourId, tourDateId, date, timezone, people, init
         </p>
 
         <div className="space-y-1">
-          <Label className="text-xs">Airline</Label>
+          <Label htmlFor="add-flight-route-airline" className="text-xs">
+            Airline
+          </Label>
           {routeAirline ? (
             <button
               type="button"
@@ -517,6 +522,7 @@ export function AddFlightForm({ tourId, tourDateId, date, timezone, people, init
           ) : (
             <>
               <Input
+                id="add-flight-route-airline"
                 value={routeAirlineQuery}
                 onChange={(e) => setRouteAirlineQuery(e.target.value)}
                 placeholder="Cathay Pacific or CX"
@@ -554,7 +560,9 @@ export function AddFlightForm({ tourId, tourDateId, date, timezone, people, init
 
         <div className="grid grid-cols-2 gap-2">
           <div className="space-y-1">
-            <Label className="text-xs">From</Label>
+            <Label htmlFor="add-flight-route-from" className="text-xs">
+              From
+            </Label>
             {routeFrom ? (
               <button
                 type="button"
@@ -569,6 +577,7 @@ export function AddFlightForm({ tourId, tourDateId, date, timezone, people, init
             ) : (
               <>
                 <Input
+                  id="add-flight-route-from"
                   value={routeFromQuery}
                   onChange={(e) => setRouteFromQuery(e.target.value)}
                   placeholder="London or LHR"
@@ -601,7 +610,9 @@ export function AddFlightForm({ tourId, tourDateId, date, timezone, people, init
             )}
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">To</Label>
+            <Label htmlFor="add-flight-route-to" className="text-xs">
+              To
+            </Label>
             {routeTo ? (
               <button
                 type="button"
@@ -616,6 +627,7 @@ export function AddFlightForm({ tourId, tourDateId, date, timezone, people, init
             ) : (
               <>
                 <Input
+                  id="add-flight-route-to"
                   value={routeToQuery}
                   onChange={(e) => setRouteToQuery(e.target.value)}
                   placeholder="Las Vegas or LAS"
@@ -693,8 +705,11 @@ export function AddFlightForm({ tourId, tourDateId, date, timezone, people, init
           </p>
 
           <div className="space-y-1">
-            <Label className="text-xs">Date</Label>
+            <Label htmlFor="add-flight-timetable-date" className="text-xs">
+              Date
+            </Label>
             <Input
+              id="add-flight-timetable-date"
               value={timetableDateInput}
               onChange={(e) => handleTimetableDateInputChange(e.target.value)}
               placeholder="3 aug, monday, 2026-08-31"
@@ -786,8 +801,11 @@ export function AddFlightForm({ tourId, tourDateId, date, timezone, people, init
         />
 
         <div className="space-y-1">
-          <Label className="text-xs">Date</Label>
+          <Label htmlFor="add-flight-date" className="text-xs">
+            Date
+          </Label>
           <Input
+            id="add-flight-date"
             autoFocus
             value={dateInput}
             onChange={(e) => handleDateInputChange(e.target.value)}
@@ -825,6 +843,7 @@ export function AddFlightForm({ tourId, tourDateId, date, timezone, people, init
             <PopoverContent className="w-auto p-2">
               <Input
                 type="date"
+                aria-label="Date"
                 className="h-7 text-xs"
                 onChange={(e) => {
                   if (!e.target.value) return
@@ -911,8 +930,11 @@ export function AddFlightForm({ tourId, tourDateId, date, timezone, people, init
           Flight added. Add the booking reference once you&apos;ve booked (optional for now).
         </p>
         <div className="space-y-1">
-          <Label className="text-xs">Booking reference</Label>
+          <Label htmlFor="add-flight-booking_reference" className="text-xs">
+            Booking reference
+          </Label>
           <Input
+            id="add-flight-booking_reference"
             value={bookingRef}
             onChange={(e) => setBookingRef(e.target.value)}
             placeholder="ABC123"

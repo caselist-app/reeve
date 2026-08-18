@@ -129,8 +129,11 @@ export function DayItemPanel({ item, tourId, timezone, dayShowId }: DayItemPanel
     >
       <form onSubmit={submit} className="space-y-3">
         <div className="space-y-1">
-          <Label className="text-xs">{isCustom ? 'Name' : 'Name (optional)'}</Label>
+          <Label htmlFor="day-item-title" className="text-xs">
+            {isCustom ? 'Name' : 'Name (optional)'}
+          </Label>
           <Input
+            id="day-item-title"
             name="title"
             defaultValue={item.title ?? ''}
             required={isCustom}
@@ -144,8 +147,11 @@ export function DayItemPanel({ item, tourId, timezone, dayShowId }: DayItemPanel
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1">
-            <Label className="text-xs">Starts</Label>
+            <Label htmlFor="day-item-start_clock" className="text-xs">
+              Starts
+            </Label>
             <Input
+              id="day-item-start_clock"
               name="start_clock"
               type="time"
               defaultValue={toClock(item.starts_at, timezone)}
@@ -153,8 +159,11 @@ export function DayItemPanel({ item, tourId, timezone, dayShowId }: DayItemPanel
             />
           </div>
           <div className="space-y-1">
-            <Label className="text-xs">Ends (optional)</Label>
+            <Label htmlFor="day-item-end_clock" className="text-xs">
+              Ends (optional)
+            </Label>
             <Input
+              id="day-item-end_clock"
               name="end_clock"
               type="time"
               defaultValue={toClock(item.ends_at, timezone)}
@@ -164,8 +173,11 @@ export function DayItemPanel({ item, tourId, timezone, dayShowId }: DayItemPanel
         </div>
 
         <div className="space-y-1">
-          <Label className="text-xs">Location</Label>
+          <Label htmlFor="day-item-location" className="text-xs">
+            Location
+          </Label>
           <PlacesAddressInput
+            id="day-item-location"
             name="location"
             value={location}
             onChange={setLocation}
@@ -175,8 +187,16 @@ export function DayItemPanel({ item, tourId, timezone, dayShowId }: DayItemPanel
         </div>
 
         <div className="space-y-1">
-          <Label className="text-xs">Notes</Label>
-          <Textarea name="notes" defaultValue={item.notes ?? ''} rows={3} className="text-xs" />
+          <Label htmlFor="day-item-notes" className="text-xs">
+            Notes
+          </Label>
+          <Textarea
+            id="day-item-notes"
+            name="notes"
+            defaultValue={item.notes ?? ''}
+            rows={3}
+            className="text-xs"
+          />
         </div>
 
         {error && <p className="text-xs text-destructive">{error}</p>}

@@ -111,8 +111,11 @@ export function AddRailForm({ tourId, tourDateId, date, timezone, initialClock, 
     <form onSubmit={(e) => { e.preventDefault(); handleFieldsSubmit(new FormData(e.currentTarget)) }} className="space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
-          <Label className="text-xs">From station</Label>
+          <Label htmlFor="add-rail-origin" className="text-xs">
+            From station
+          </Label>
           <PlacesAddressInput
+            id="add-rail-origin"
             name="origin"
             value={origin}
             onChange={setOrigin}
@@ -121,8 +124,11 @@ export function AddRailForm({ tourId, tourDateId, date, timezone, initialClock, 
           />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">To station</Label>
+          <Label htmlFor="add-rail-destination" className="text-xs">
+            To station
+          </Label>
           <PlacesAddressInput
+            id="add-rail-destination"
             name="destination"
             value={destination}
             onChange={setDestination}
@@ -133,8 +139,11 @@ export function AddRailForm({ tourId, tourDateId, date, timezone, initialClock, 
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
-          <Label className="text-xs">Departs</Label>
+          <Label htmlFor="add-rail-depart_at" className="text-xs">
+            Departs
+          </Label>
           <Input
+            id="add-rail-depart_at"
             name="depart_at"
             type="datetime-local"
             defaultValue={departDefault}
@@ -144,18 +153,24 @@ export function AddRailForm({ tourId, tourDateId, date, timezone, initialClock, 
           <DateMoveNotice currentDate={date} value={departLocal ? broadcastDateOfWallClock(departLocal) : departLocal} />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Arrives</Label>
-          <Input name="arrive_at" type="datetime-local" className="h-7 text-xs" />
+          <Label htmlFor="add-rail-arrive_at" className="text-xs">
+            Arrives
+          </Label>
+          <Input id="add-rail-arrive_at" name="arrive_at" type="datetime-local" className="h-7 text-xs" />
         </div>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
-          <Label className="text-xs">Operator</Label>
-          <Input name="carrier_operator" placeholder="Eurostar" className="h-7 text-xs" />
+          <Label htmlFor="add-rail-carrier_operator" className="text-xs">
+            Operator
+          </Label>
+          <Input id="add-rail-carrier_operator" name="carrier_operator" placeholder="Eurostar" className="h-7 text-xs" />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Reference</Label>
-          <Input name="booking_reference" placeholder="ABC123" className="h-7 text-xs" />
+          <Label htmlFor="add-rail-booking_reference" className="text-xs">
+            Reference
+          </Label>
+          <Input id="add-rail-booking_reference" name="booking_reference" placeholder="ABC123" className="h-7 text-xs" />
         </div>
       </div>
       {error && <p className="text-xs text-destructive">{error}</p>}

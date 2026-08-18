@@ -592,9 +592,12 @@ function GuestListSettings({
   return (
     <section className="space-y-3 border-t border-border pt-4">
       <div className="space-y-1">
-        <Label className="text-xs">Cutoff</Label>
+        <Label htmlFor="guest-list-cutoff" className="text-xs">
+          Cutoff
+        </Label>
         <div className="flex gap-2">
           <Input
+            id="guest-list-cutoff"
             type="datetime-local"
             value={cutoff}
             onChange={(e) => {

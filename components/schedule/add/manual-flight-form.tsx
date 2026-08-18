@@ -110,28 +110,44 @@ export function ManualFlightForm({ tourId, tourDateId, date, timezone, people, o
     <form onSubmit={(e) => { e.preventDefault(); handleFieldsSubmit(new FormData(e.currentTarget)) }} className="space-y-3">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
-          <Label className="text-xs">Airline</Label>
-          <Input name="carrier_operator" placeholder="BA" className="h-7 text-xs" />
+          <Label htmlFor="manual-flight-carrier_operator" className="text-xs">
+            Airline
+          </Label>
+          <Input id="manual-flight-carrier_operator" name="carrier_operator" placeholder="BA" className="h-7 text-xs" />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Flight number</Label>
-          <Input name="vehicle_or_flight_no" placeholder="BA0123" className="h-7 text-xs" />
-        </div>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label className="text-xs">From</Label>
-          <Input name="origin" placeholder="LHR" className="h-7 text-xs" />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs">To</Label>
-          <Input name="destination" placeholder="CDG" className="h-7 text-xs" />
-        </div>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        <div className="space-y-1">
-          <Label className="text-xs">Departs</Label>
+          <Label htmlFor="manual-flight-vehicle_or_flight_no" className="text-xs">
+            Flight number
+          </Label>
           <Input
+            id="manual-flight-vehicle_or_flight_no"
+            name="vehicle_or_flight_no"
+            placeholder="BA0123"
+            className="h-7 text-xs"
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label htmlFor="manual-flight-origin" className="text-xs">
+            From
+          </Label>
+          <Input id="manual-flight-origin" name="origin" placeholder="LHR" className="h-7 text-xs" />
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor="manual-flight-destination" className="text-xs">
+            To
+          </Label>
+          <Input id="manual-flight-destination" name="destination" placeholder="CDG" className="h-7 text-xs" />
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label htmlFor="manual-flight-depart_at" className="text-xs">
+            Departs
+          </Label>
+          <Input
+            id="manual-flight-depart_at"
             name="depart_at"
             type="datetime-local"
             defaultValue={`${date}T07:00`}
@@ -141,13 +157,17 @@ export function ManualFlightForm({ tourId, tourDateId, date, timezone, people, o
           <DateMoveNotice currentDate={date} value={departLocal} />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs">Arrives</Label>
-          <Input name="arrive_at" type="datetime-local" className="h-7 text-xs" />
+          <Label htmlFor="manual-flight-arrive_at" className="text-xs">
+            Arrives
+          </Label>
+          <Input id="manual-flight-arrive_at" name="arrive_at" type="datetime-local" className="h-7 text-xs" />
         </div>
       </div>
       <div className="space-y-1">
-        <Label className="text-xs">Booking reference</Label>
-        <Input name="booking_reference" placeholder="ABC123" className="h-7 text-xs" />
+        <Label htmlFor="manual-flight-booking_reference" className="text-xs">
+          Booking reference
+        </Label>
+        <Input id="manual-flight-booking_reference" name="booking_reference" placeholder="ABC123" className="h-7 text-xs" />
       </div>
       {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="flex gap-2">
