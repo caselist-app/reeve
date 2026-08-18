@@ -29,7 +29,7 @@ interface Props {
   shows?: SendableShow[]
   departmentLabel: string
   documents: SendableDocument[]
-  onSent: () => void
+  onSent: (documentId: string, documentTitle: string) => void
 }
 
 // REE-283: recipients are freeform email addresses, not roster picks. A venue
@@ -130,12 +130,13 @@ export function SendDocumentSheet({
       if (result.error) {
         setError(result.error)
       } else {
+        const sentTitle = documents.find((doc) => doc.id === documentId)?.title ?? ''
         setNote('')
         setEmails([])
         setEmailInput('')
         setSelectedShowId('')
         close()
-        onSent()
+        onSent(documentId, sentTitle)
       }
     })
   }

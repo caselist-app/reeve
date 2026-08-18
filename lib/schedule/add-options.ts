@@ -82,34 +82,6 @@ export type AddOption =
       initialQuery?: string
     }
 
-// The interpreted time for a commit row: a range when both ends are known, a
-// single clock when only the start is, and the pending phrase when neither is,
-// because a day item with no time is a real thing (day_items.starts_at is
-// nullable) rather than an error.
-function commitTime(option: Extract<AddOption, { action: 'commit' }>): string {
-  if (!option.startClock) return 'no time yet'
-  return option.endClock ? `${option.startClock}–${option.endClock}` : option.startClock
-}
-
-/**
- * The preview line for a highlighted row: what Enter will do if it is committed
- * from here. Exhaustive over AddOption so the merged panel can render it with no
- * fallback (REE-88): a commit row states what it stores and that Enter adds it,
- * an open row states which form Enter opens. The exact wording is the acceptance
- * criteria and is pinned in tests/unit/add-options.test.ts, which is why this
- * lives beside buildAddOptions where a test can reach it rather than inside the
- * uninstrumentable component.
- */
-export function addOptionPreview(option: AddOption): string {
-  if (option.action === 'commit') {
-    return `${option.title ?? option.label} · ${commitTime(option)} · Enter adds it`
-  }
-  if (option.initialQuery) {
-    return `${option.initialQuery.toUpperCase()} · Enter looks up the flight`
-  }
-  return `${option.label} · Enter opens the ${option.label.toLowerCase()} form`
-}
-
 // A prefix match, so a TM part way through typing 'dr' still surfaces Drive
 // while it has stopped surfacing Doors. An exact match outranks a prefix so a
 // fully typed word wins its own row, and a remembered title sits below both but

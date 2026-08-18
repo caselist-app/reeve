@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { DOC_SECTIONS, UPLOADABLE_DOC_TYPES, sectionForDocType } from '@/lib/documents/doc-types'
+import {
+  DOC_SECTIONS,
+  MULTI_CURRENT_DOC_TYPES,
+  UPLOADABLE_DOC_TYPES,
+  sectionForDocType,
+} from '@/lib/documents/doc-types'
 
 // REE-1. The one list of what a document's doc_type can mean on the Documents
 // page. Riders come from DEPARTMENT_DOC_TYPE (lib/shows/advance.ts) rather than
@@ -8,7 +13,7 @@ import { DOC_SECTIONS, UPLOADABLE_DOC_TYPES, sectionForDocType } from '@/lib/doc
 // to). Everything this page knows about a doc_type funnels through here.
 
 describe('DOC_SECTIONS', () => {
-  it('puts the three unique rider doc_types first and Other last (REE-295)', () => {
+  it('puts the three unique rider doc_types first, then general, marketing, and Other last (REE-300)', () => {
     const docTypes = DOC_SECTIONS.map((s) => s.docType)
 
     // Per REE-295, audio and staging both map to production_rider, so there are
@@ -16,7 +21,7 @@ describe('DOC_SECTIONS', () => {
     expect(docTypes.slice(0, 3).sort()).toEqual(
       ['production_rider', 'lx_rider', 'hospitality_rider'].sort()
     )
-    expect(docTypes[docTypes.length - 1]).toBe('other')
+    expect(docTypes.slice(3)).toEqual(['general', 'marketing', 'other'])
   })
 
   it('has no duplicate sections by docType', () => {
@@ -42,6 +47,14 @@ describe('sectionForDocType', () => {
   it('maps hospitality_rider to its own section', () => {
     expect(sectionForDocType('hospitality_rider').docType).toBe('hospitality_rider')
   })
+
+  it('maps general to its own section (REE-300)', () => {
+    expect(sectionForDocType('general').label).toBe('General')
+  })
+
+  it('maps marketing to its own section (REE-300)', () => {
+    expect(sectionForDocType('marketing').label).toBe('Marketing')
+  })
 })
 
 describe('UPLOADABLE_DOC_TYPES', () => {
@@ -50,5 +63,16 @@ describe('UPLOADABLE_DOC_TYPES', () => {
     // TM records a boarding pass against a transport assignment. A TM never
     // picks it from a manual upload form.
     expect(UPLOADABLE_DOC_TYPES).not.toContain('boarding_pass')
+  })
+
+  it('includes general and marketing (REE-300)', () => {
+    expect(UPLOADABLE_DOC_TYPES).toContain('general')
+    expect(UPLOADABLE_DOC_TYPES).toContain('marketing')
+  })
+})
+
+describe('MULTI_CURRENT_DOC_TYPES', () => {
+  it('is exactly general and marketing (REE-300)', () => {
+    expect(MULTI_CURRENT_DOC_TYPES).toEqual(['general', 'marketing'])
   })
 })

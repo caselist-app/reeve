@@ -285,15 +285,15 @@ function safeFilename(name: string): string {
   return cleaned || 'file'
 }
 
-// Uploads a new version of a tour document. Flow: verify ownership, validate
-// the file, flip every existing row for this tour_id/doc_type to
-// is_current = false, upload to Storage, then insert the new row as current.
+// Uploads a new tour document. Flow: verify ownership, validate the file,
+// upload to Storage, then insert the new row as current.
 //
-// The is_current flip runs BEFORE the insert, never after: with it after, a
-// window exists where two rows for the same doc_type both read is_current,
-// which is the exact "which one is current" ambiguity the flag exists to
-// prevent. tests/integration/documents-store.test.ts is red against the
-// reversed order.
+// REE-299: a doc_type can now have more than one current row at once, on
+// purpose. A TM advancing a UK leg and a Europe leg needs both hospitality
+// riders live at the same time, told apart only by their free-text title.
+// uploadDocument therefore never retires an existing current row; it only
+// adds. archiveDocument is the TM's manual retirement step for a document
+// that genuinely is superseded, not a new one uploadDocument infers.
 //
 // No upsert on the Storage write: the documents bucket has no UPDATE policy
 // (that is a later brief's work), and it does not need one, because the path
@@ -347,16 +347,6 @@ export async function uploadDocument(
   // The tour id must be the first path segment: the bucket policy is
   // owns_tour((storage.foldername(name))[1]::uuid).
   const storagePath = `${tourId}/${docType}/v${version}_${safeFilename(file.name)}`
-
-  // Flip the old rows to not-current before anything about the new one exists,
-  // so there is never a moment with two current rows for this doc_type.
-  const { error: flipError } = await admin
-    .from('documents')
-    .update({ is_current: false, updated_at: new Date().toISOString() })
-    .eq('tour_id', tourId)
-    .eq('doc_type', docType)
-    .eq('is_current', true)
-  if (flipError) return { error: flipError.message }
 
   const bytes = await file.arrayBuffer()
   const { error: uploadError } = await admin.storage

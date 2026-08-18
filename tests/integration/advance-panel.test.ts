@@ -82,6 +82,49 @@ describe('the advance panel gets real data', () => {
       const everyDocument = (data?.departments ?? []).flatMap((d) => d.documents)
       expect(everyDocument).toEqual([])
     })
+
+    // REE-299. A department can have more than one current rider live at
+    // once (a UK leg and a Europe leg), told apart by title, not by a second
+    // schema field. This is the assertion that fails red if the query narrows
+    // to one row per doc_type instead of returning every current one.
+    it('returns every current rider for a department, not just one', async () => {
+      const ukRiderId = await addRider('hospitality_rider', 'Hospitality Rider - UK')
+      const europeRiderId = await addRider('hospitality_rider', 'Hospitality Rider - Europe')
+
+      const { data, error } = await getShowAdvance(fixture.tourId, fixture.showId)
+      if (error) throw new Error(`could not load the advance: ${error}`)
+
+      const hospitality = data?.departments.find((d) => d.department === 'hospitality')
+      expect(hospitality?.documents.map((doc) => doc.id).sort()).toEqual(
+        [ukRiderId, europeRiderId].sort()
+      )
+    })
+
+    // REE-299. Archiving is the TM's manual retirement step now that upload
+    // never retires automatically, so an archived rider must not still show
+    // up as sendable from the advance panel.
+    it('leaves out a document that has been archived', async () => {
+      const { data: archived, error: archivedError } = await testDb
+        .from('documents')
+        .insert({
+          tour_id: fixture.tourId,
+          doc_type: 'hospitality_rider',
+          title: 'Old Hospitality Rider',
+          storage_path: `${fixture.tourId}/Old Hospitality Rider.pdf`,
+          archived_at: new Date().toISOString(),
+        })
+        .select('id')
+        .single()
+      if (archivedError || !archived) throw new Error(`could not seed the archived rider: ${archivedError?.message}`)
+
+      const currentId = await addRider('hospitality_rider', 'Hospitality Rider')
+
+      const { data, error } = await getShowAdvance(fixture.tourId, fixture.showId)
+      if (error) throw new Error(`could not load the advance: ${error}`)
+
+      const hospitality = data?.departments.find((d) => d.department === 'hospitality')
+      expect(hospitality?.documents.map((doc) => doc.id)).toEqual([currentId])
+    })
   })
 
   describe('acknowledging one show does not advance the others', () => {
