@@ -254,6 +254,41 @@ export async function unarchiveDocument(documentId: string): Promise<ArchiveDocu
   return { error: null }
 }
 
+export type RenameDocumentResult = { error: string | null }
+
+// Trims and writes title on a document's current row. A single controlled
+// value, not a form, so it validates inline rather than through a Zod schema
+// in lib/validators/documents.ts, matching updateDayTitle's precedent. RLS
+// scopes both the read and the write to tours the caller owns, same as
+// archiveDocument.
+export async function renameDocument(documentId: string, title: string): Promise<RenameDocumentResult> {
+  await requireUser()
+
+  const trimmed = title.trim()
+  if (!trimmed) return { error: 'Title is required.' }
+
+  const supabase = await createClient()
+
+  const { data: doc } = await supabase
+    .from('documents')
+    .select('id, tour_id')
+    .eq('id', documentId)
+    .single()
+
+  if (!doc) return { error: 'Document not found.' }
+
+  const { error: updateError } = await supabase
+    .from('documents')
+    .update({ title: trimmed })
+    .eq('id', documentId)
+
+  if (updateError) return { error: updateError.message }
+
+  revalidatePath(`/tours/${doc.tour_id}/documents`)
+
+  return { error: null }
+}
+
 export type UploadDocumentState = { error: string | null }
 
 // Matches the documents bucket's allowed_mime_types
