@@ -71,6 +71,53 @@ describe('uploading a document adds rather than replaces', () => {
   })
 })
 
+// REE-301. General and Marketing (MULTI_CURRENT_DOC_TYPES) are unrelated
+// documents that happen to share a doc_type, not versions of one another, so
+// they must never collide their storage paths even when the source filename
+// is identical. Nothing flips them to not-current: since REE-299, nothing
+// in uploadDocument flips any doc_type any more (see the describe block
+// above), so this suite only needs to pin the storage-path uniqueness that
+// is specific to the multi-current path.
+describe('multi-current doc_types never collide on storage_path', () => {
+  let fixture: Fixture
+
+  beforeEach(async () => {
+    fixture = await createFixture()
+  })
+
+  afterEach(async () => {
+    await destroyFixture(fixture)
+  })
+
+  it('keeps both General uploads current with distinct storage paths', async () => {
+    const first = new FormData()
+    first.set('doc_type', 'general')
+    first.set('title', 'Stage Plot')
+    first.set('file', pdfFile('doc.pdf'))
+
+    const firstResult = await uploadDocument(fixture.tourId, first)
+    expect(firstResult.error).toBeNull()
+
+    const second = new FormData()
+    second.set('doc_type', 'general')
+    second.set('title', 'Parking Map')
+    second.set('file', pdfFile('doc.pdf'))
+
+    const secondResult = await uploadDocument(fixture.tourId, second)
+    expect(secondResult.error).toBeNull()
+
+    const rows = await currentRows(fixture.tourId, 'general')
+    expect(rows).toHaveLength(2)
+    expect(rows.every((r) => r.is_current)).toBe(true)
+
+    // The assertion that fails red against the unmodified action: without a
+    // random unique segment in the path, both uploads share the same source
+    // filename and would resolve to the same storage_path.
+    const [stagePlot, parkingMap] = rows
+    expect(stagePlot.storage_path).not.toBe(parkingMap.storage_path)
+  })
+})
+
 // REE-4. Shares are keyed by document_id, never by doc_type, so a share sent
 // against an older version stays attached to that exact row rather than
 // leaking into the current version's card. Red first: a query built the
