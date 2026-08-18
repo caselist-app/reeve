@@ -8,6 +8,8 @@ import { sendTelegramMessage, answerTelegramCallbackQuery } from '@/lib/comms/te
 import { parseGuestCallback } from '@/lib/comms/guest-callback'
 import { decideGuestEntry, type GuestDecision, type DecideOutcome } from '@/lib/guest-list/decide'
 import { parseDisconnectCallback } from '@/lib/comms/disconnect-callback'
+import { announceDisconnectToTm } from '@/lib/comms/telegram-disconnect-announce'
+import { resolveDisconnectAttention } from '@/lib/comms/disconnect-attention'
 
 const LINK_EXPIRED_MESSAGE = 'This link has expired, ask your tour manager to send a new one.'
 
@@ -273,7 +275,7 @@ async function handleDisconnectCallback(
 
   const { data: contact } = await admin
     .from('contacts')
-    .select('id, telegram_chat_id, operational_channel')
+    .select('id, name, telegram_chat_id, operational_channel')
     .eq('id', parsed.contactId)
     .maybeSingle()
 
@@ -292,6 +294,15 @@ async function handleDisconnectCallback(
     .eq('id', contact.id)
 
   await sendTelegramMessage({ chatId, text: DISCONNECT_DONE_MESSAGE })
+
+  // The Inbox alert and TM DM, after the disconnect write above has committed
+  // (brief 63, step 4). Best effort: the crew member already has their
+  // confirmation, so a failure here is logged, never surfaced to them.
+  try {
+    await announceDisconnectToTm(admin, { contactId: contact.id, contactName: contact.name })
+  } catch (err) {
+    console.error('telegram disconnect: could not announce to TM', err)
+  }
 }
 
 // Resolves a /start <token> deep link: looks up the token, checks it is not
@@ -380,6 +391,12 @@ async function handleLinking(
     .update({ operational_channel: 'telegram' })
     .eq('id', linkToken.contact_id)
     .is('operational_channel', null)
+
+  // A relink clears the disconnect alert this contact may have left open
+  // (brief 63, step 4). Best effort and idempotent on its own: no open alert is
+  // a silent no-op, same as every other resolve path in the Inbox producer
+  // contract.
+  await resolveDisconnectAttention(admin, { contactId: linkToken.contact_id })
 
   await admin
     .from('telegram_link_tokens')
