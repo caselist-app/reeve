@@ -182,7 +182,7 @@ function accentClassName(source: EventSource, accent: CalendarEvent['accent']): 
  * out.
  */
 export function DayCalendar({ records, tourId, tourDateId, timezone, date, header }: DayCalendarProps) {
-  const { open: openSidePanel, isOpen: panelIsOpen, panel, syncScheduleItemTimes } = useSidePanel()
+  const { open: openSidePanel, close: closeSidePanel, isOpen: panelIsOpen, panel, syncScheduleItemTimes } = useSidePanel()
   const isMobile = useIsMobile()
   const [, startTransition] = useTransition()
 
@@ -412,14 +412,32 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
     [timezone],
   )
 
+  // The event whose detail panel is currently open, so its block can paint as
+  // selected: a solid accent fill with white text, matching the reference
+  // (REE-109). Driven off the side-panel store rather than RBC's own click
+  // selection so it tracks exactly what the sidebar is showing (and clears when
+  // the panel closes). The panel's `key` is the CalendarEvent id we opened it
+  // with, so it compares straight against event.id.
+  const selectedKey =
+    panelIsOpen &&
+    (panel?.type === 'day-item' || panel?.type === 'transport' || panel?.type === 'hotel')
+      ? panel.key
+      : null
+
   // Shared by grid blocks and the "No time set" rail: both point at a
   // source/recordId pair (an event's own recordId, or an UnpositionedRecord's
   // id), and both open the same detail panel. The key mirrors the adapter's own
   // `${source}:${id}` event id format, so a rail item and the same record once it
-  // gains a time and lands on the grid open the identical panel key.
+  // gains a time and lands on the grid open the identical panel key. A click that
+  // matches the panel already open (selectedKey) closes it instead (REE-192),
+  // rather than reopening an identical panel or being a silent no-op.
   const openRecord = useMemo(() => {
     return (source: EventSource, recordId: string) => {
       const key = `${source}:${recordId}`
+      if (key === selectedKey) {
+        closeSidePanel()
+        return
+      }
       if (source === 'day_item') {
         const item = itemsById.get(recordId)
         const dayShowId = records.shows[0]?.id ?? null
@@ -432,23 +450,21 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
         if (stay) openSidePanel({ type: 'hotel', key, tourId, stay })
       }
     }
-  }, [itemsById, segmentsById, hotelsById, openSidePanel, tourId, timezone, records.shows])
+  }, [
+    itemsById,
+    segmentsById,
+    hotelsById,
+    openSidePanel,
+    closeSidePanel,
+    tourId,
+    timezone,
+    records.shows,
+    selectedKey,
+  ])
 
   const openEvent = useMemo(() => {
     return (event: CalendarEvent) => openRecord(event.source, event.recordId)
   }, [openRecord])
-
-  // The event whose detail panel is currently open, so its block can paint as
-  // selected: a solid accent fill with white text, matching the reference
-  // (REE-109). Driven off the side-panel store rather than RBC's own click
-  // selection so it tracks exactly what the sidebar is showing (and clears when
-  // the panel closes). The panel's `key` is the CalendarEvent id we opened it
-  // with, so it compares straight against event.id.
-  const selectedKey =
-    panelIsOpen &&
-    (panel?.type === 'day-item' || panel?.type === 'transport' || panel?.type === 'hotel')
-      ? panel.key
-      : null
 
   // The dragged range as a background event, so RBC draws it behind the grid's
   // real blocks and it survives the panel being open (REE-68). Empty when there
