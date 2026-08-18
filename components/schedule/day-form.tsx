@@ -11,7 +11,7 @@ import { useIsMobile } from '@/hooks/use-is-mobile'
 import { useEntityForm } from '@/hooks/use-entity-form'
 import { createDayItem } from '@/lib/actions/day-items'
 import { getCustomDayItemTitles } from '@/lib/actions/day-item-titles'
-import { buildAddOptions, addOptionPreview, type AddOption } from '@/lib/schedule/add-options'
+import { buildAddOptions, type AddOption } from '@/lib/schedule/add-options'
 
 interface DayFormProps {
   tourId: string
@@ -32,8 +32,10 @@ interface DayFormProps {
   initialEndClock?: string
 }
 
-// The single interpreted time shown on a commit row. addOptionPreview owns the
-// full preview line; this is just the trailing clock the row itself carries.
+// The interpreted time shown on a commit row: a range when both ends are
+// known, a single clock when only the start is, and the pending phrase when
+// neither is, because a day item with no time is a real thing
+// (day_items.starts_at is nullable) rather than an error.
 function rowTime(option: Extract<AddOption, { action: 'commit' }>): string {
   if (!option.startClock) return 'no time yet'
   return option.endClock ? `${option.startClock}–${option.endClock}` : option.startClock
@@ -43,8 +45,7 @@ function rowTime(option: Extract<AddOption, { action: 'commit' }>): string {
 // add surface: a type field over buildAddOptions, plus dedicated Starts/Ends
 // time fields, offering two groups. BOOK rows (flight, drive, rail, hotel) have
 // structure beyond a time and open their own form; TIMES rows (load-in,
-// soundcheck, a custom block) commit a day_items row here and now. A preview row
-// says exactly what Enter will do.
+// soundcheck, a custom block) commit a day_items row here and now.
 //
 // Before REE-282 there was one free-text field: a click on the grid pre-filled
 // its clock straight into it as text ('2:00pm'), so the TM had to type the kind
@@ -52,9 +53,9 @@ function rowTime(option: Extract<AddOption, { action: 'commit' }>): string {
 // clock now lives in its own pair of type="time" inputs the TM reads and edits
 // directly; the type field only ever names the kind.
 //
-// The ranking, the parsing and the preview wording all live in lib/schedule so a
-// test can reach them (this repo has no way to render-test a component: no jsdom,
-// no testing-library). This component is a thin combo box over that.
+// The ranking and the parsing live in lib/schedule so a test can reach them
+// (this repo has no way to render-test a component: no jsdom, no
+// testing-library). This component is a thin combo box over that.
 export function DayForm({
   tourId,
   tourDateId,
@@ -217,7 +218,7 @@ export function DayForm({
             value={input}
             onChange={(event) => { setInput(event.target.value); setSelected(0) }}
             onKeyDown={onInputKeyDown}
-            placeholder="Start typing..."
+            placeholder="Start typing, e.g. flight"
             className="h-9 flex-1 text-sm"
             autoComplete="off"
           />
@@ -239,13 +240,6 @@ export function DayForm({
             className="h-9 w-[88px] shrink-0 text-sm [&::-webkit-calendar-picker-indicator]:hidden"
           />
         </div>
-
-        {/* Preview: exactly what Enter will do to the highlighted option. */}
-        {active && (
-          <div className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-            {addOptionPreview(active)}
-          </div>
-        )}
 
         <div className="space-y-3">
           {bookOptions.length > 0 && (
