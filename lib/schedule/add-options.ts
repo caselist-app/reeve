@@ -2,10 +2,20 @@ import { DAY_ITEM_KINDS } from '@/lib/schedule/day-item-kinds'
 import { parseDayItem, type ParsedDayItem } from '@/lib/schedule/parse-day-item'
 import { detectFlightCode } from '@/lib/utils/flight-code'
 
-// Brief 46, "one door into a day". The add panel is a single typed input that
-// offers two kinds of thing: a day_items row it can commit directly (load-in,
+// Brief 46, "one door into a day". The add panel is a typed field that offers
+// two kinds of thing: a day_items row it can commit directly (load-in,
 // soundcheck, a custom block), and a flight/drive/rail/hotel, which has
 // structure beyond a time and must open its own form instead.
+//
+// REE-282 split the panel into three fields: the type text below, plus two
+// dedicated Starts/Ends time inputs the component owns directly. Before the
+// split, a click on the grid pre-filled its clock straight into this same text
+// field ('2:00pm'), so the TM had to type the rest of the line around a value
+// already sitting in the box, which read as broken rather than pre-filled. The
+// clocks are no longer parsed out of typed text at all: they are passed in here
+// as plain arguments and stamped onto every option this function returns, so
+// what the TM sees in the Starts/Ends fields is exactly what a kind match or a
+// Custom row will save.
 //
 // The ranking that decides what to show, in what order, used to live inside the
 // combo box component, where no test could reach it (this repo has no way to
@@ -28,8 +38,8 @@ interface AddCategoryDef {
   aliases: string[]
 }
 
-// Order is load bearing: buildAddOptions('') returns the open rows in this
-// order, and equal-scoring matches fall back to it.
+// Order is load bearing: buildAddOptions on empty input returns the open rows
+// in this order, and equal-scoring matches fall back to it.
 export const ADD_CATEGORIES: readonly AddCategoryDef[] = [
   { id: 'flight', label: 'Flight', description: 'Airline segment', aliases: ['flight', 'fly', 'plane'] },
   { id: 'drive',  label: 'Drive',  description: 'Road transfer',   aliases: ['drive', 'car', 'van', 'bus'] },
@@ -43,9 +53,10 @@ export const ADD_CATEGORIES: readonly AddCategoryDef[] = [
  * thing it is: 'commit' writes a day_items row there and then, 'open' leaves the
  * panel for the category's own form.
  *
- * The clocks on a commit row are wall time the parser read off the line. The
- * action resolves which calendar day they fall on with the rest of the day in
- * hand, so nothing here needs the timezone.
+ * The clocks on a commit row are wall time from the panel's own Starts/Ends
+ * fields (REE-282), not anything read off the type text. The action resolves
+ * which calendar day they fall on with the rest of the day in hand, so nothing
+ * here needs the timezone.
  */
 export type AddOption =
   | {
@@ -124,16 +135,26 @@ function openOption(def: AddCategoryDef): AddOption {
   return { action: 'open', category: def.id, label: def.label, description: def.description }
 }
 
-function commitFromKind(kind: string, label: string, parsed: ParsedDayItem | null, clock: ParsedDayItem | null): AddOption {
+// startClock/endClock are always the dedicated time fields' current values, not
+// anything the parser found in the typed text: the type field's own job is
+// naming the kind, the time fields' job is the time, and REE-282 keeps them
+// from fighting over the same value.
+function commitFromKind(
+  kind: string,
+  label: string,
+  parsed: ParsedDayItem | null,
+  startClock: string | null,
+  endClock: string | null,
+): AddOption {
   return {
     action: 'commit',
     kind,
     label,
     // A parser candidate carries its own residual title ('Tesseract' soundcheck);
-    // a kind reached only by prefix is a bare kind at whatever time was typed.
+    // a kind reached only by prefix is a bare kind with no title.
     title: parsed?.title ?? null,
-    startClock: parsed?.startClock ?? clock?.startClock ?? null,
-    endClock: parsed?.endClock ?? clock?.endClock ?? null,
+    startClock,
+    endClock,
   }
 }
 
@@ -143,34 +164,44 @@ interface Scored {
 }
 
 /**
- * The ranked add-panel rows for a typed line.
+ * The ranked add-panel rows for a typed type-field line, at the Starts/Ends
+ * fields' current clocks.
  *
  * Empty input offers the whole vocabulary: the four bookable categories in BOOK
  * order, then every day-item kind in DAY_ITEM_KINDS file order (its deliberate
  * chronological order), and no generic Custom row, because there is nothing to
- * title one with.
+ * title one with. Every row carries whatever startClock/endClock was passed in,
+ * seeded or not, so a click on the grid that pre-fills only the Starts field
+ * still offers the whole vocabulary at that time rather than forcing the TM to
+ * type a kind word before the time takes effect.
  *
  * A typed line is matched against the parser's residual, never the raw input:
- * 'hotel 3pm' has to reach the Hotel category exactly as 'hotel' does, and it
- * only does so once the time is stripped off first. buildAddOptions therefore
- * ranks against parseDayItem's leftover text, not the string the TM typed.
+ * 'hotel' has to reach the Hotel category the same way whether or not the TM
+ * also typed a stray word alongside it. buildAddOptions therefore ranks against
+ * parseDayItem's leftover text, not the string the TM typed.
  *
  * Pure and side-effect free: same input, same output, no clock read and no model
  * call. customTitles is the tour's remembered custom titles, passed in rather
  * than fetched here so the function stays testable.
  */
-export function buildAddOptions(input: string, customTitles: string[]): AddOption[] {
+export function buildAddOptions(
+  input: string,
+  startClock: string | null,
+  endClock: string | null,
+  customTitles: string[],
+): AddOption[] {
   const trimmed = (input ?? '').trim()
 
   const kinds = DAY_ITEM_KINDS.filter((kind) => kind.kind !== 'other')
 
-  // Empty input: the whole vocabulary in its resting order, no custom row.
+  // Empty type field: the whole vocabulary in its resting order, no custom row,
+  // at whatever clock the Starts/Ends fields already hold.
   if (!trimmed) {
     return [
       ...ADD_CATEGORIES.map(openOption),
-      ...kinds.map((kind) => commitFromKind(kind.kind, kind.label, null, null)),
+      ...kinds.map((kind) => commitFromKind(kind.kind, kind.label, null, startClock, endClock)),
       ...customTitles.map<AddOption>((title) => ({
-        action: 'commit', kind: 'other', label: title, title, startClock: null, endClock: null,
+        action: 'commit', kind: 'other', label: title, title, startClock, endClock,
       })),
     ]
   }
@@ -198,26 +229,11 @@ export function buildAddOptions(input: string, customTitles: string[]): AddOptio
   const { best, alternatives } = parseDayItem(trimmed)
   const parsed = [best, ...alternatives]
   // The parser always returns an 'other' candidate; it carries the residual text
-  // (the line minus the time) and the time, which the category match, the custom
-  // row and any timed kind all read from.
+  // (the line minus anything it read as a time), which the category match, the
+  // custom row and any timed kind all read for a title. Its own parsed time is
+  // discarded: the dedicated Starts/Ends fields are the only source of a clock.
   const other = parsed.find((candidate) => candidate.kind === 'other') ?? null
   const residual = (other?.title ?? '').toLowerCase()
-  const hasKindMatch = parsed.some((candidate) => candidate.kind !== 'other')
-
-  // A line that is only a time, no kind word and no residual text, is what a
-  // click on empty grid space produces (REE-56 pre-fills the snapped clock) and
-  // what typing a bare '15:15' produces. Collapsing it to Custom would make every
-  // click-to-add a custom block; instead offer the whole vocabulary at that time,
-  // exactly like the empty state but timed, so the TM picks Load-in.
-  if (!hasKindMatch && other?.startClock && !residual) {
-    return [
-      ...ADD_CATEGORIES.map(openOption),
-      ...kinds.map((kind) => commitFromKind(kind.kind, kind.label, null, other)),
-      ...customTitles.map<AddOption>((title) => ({
-        action: 'commit', kind: 'other', label: title, title, startClock: other.startClock, endClock: other.endClock,
-      })),
-    ]
-  }
 
   const scored: Scored[] = []
 
@@ -228,13 +244,13 @@ export function buildAddOptions(input: string, customTitles: string[]): AddOptio
   }
 
   // Day-item kinds, in file order. A kind is kept when the parser matched it
-  // (carrying its confidence, title and time) or when an alias prefix-matches
-  // what has been typed so far (a bare kind at whatever time was on the line).
+  // (carrying its confidence and title) or when an alias prefix-matches what
+  // has been typed so far.
   for (const kind of kinds) {
     const parsedCandidate = parsed.find((candidate) => candidate.kind === kind.kind) ?? null
     const score = Math.max(parsedCandidate?.confidence ?? 0, aliasScore(kind.aliases, residual))
     if (score > 0) {
-      scored.push({ option: commitFromKind(kind.kind, kind.label, parsedCandidate, other), score })
+      scored.push({ option: commitFromKind(kind.kind, kind.label, parsedCandidate, startClock, endClock), score })
     }
   }
 
@@ -244,19 +260,19 @@ export function buildAddOptions(input: string, customTitles: string[]): AddOptio
     const lower = title.toLowerCase()
     if (residual && lower !== residual && lower.includes(residual)) {
       scored.push({
-        option: { action: 'commit', kind: 'other', label: title, title, startClock: other?.startClock ?? null, endClock: other?.endClock ?? null },
+        option: { action: 'commit', kind: 'other', label: title, title, startClock, endClock },
         score: REMEMBERED_SCORE,
       })
     }
   }
 
-  // The generic Custom row, its title the residual text ('meet and greet 5.30pm'
+  // The generic Custom row, its title the residual text ('meet and greet'
   // commits as a custom item titled 'Meet and greet'). Scored at the parser's
   // 'other' confidence, below every real match, so it is never the highlighted
   // default unless it is the only row there is.
   if (other?.title) {
     scored.push({
-      option: { action: 'commit', kind: 'other', label: `Custom: “${other.title}”`, title: other.title, startClock: other.startClock, endClock: other.endClock },
+      option: { action: 'commit', kind: 'other', label: `Custom: “${other.title}”`, title: other.title, startClock, endClock },
       score: other.confidence,
     })
   }

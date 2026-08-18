@@ -174,17 +174,20 @@ export function ActivePanel() {
       )
     case 'day-form':
       return (
-        // Keyed on the pre-filled input so highlighting a second slot while the
-        // panel is already open remounts the form onto the new time, rather than
-        // React reusing the instance and keeping the first slot's stale input
-        // state (REE-70). A remount also re-runs the focus effect.
+        // Keyed on the pre-filled type text and clocks so highlighting a second
+        // slot while the panel is already open remounts the form onto the new
+        // time, rather than React reusing the instance and keeping the first
+        // slot's stale field state (REE-70). A remount also re-runs the focus
+        // effect.
         <DayForm
-          key={panel.initialInput ?? ''}
+          key={`${panel.initialInput ?? ''}|${panel.initialStartClock ?? ''}|${panel.initialEndClock ?? ''}`}
           tourId={panel.tourId}
           tourDateId={panel.tourDateId}
           date={panel.date}
           timezone={panel.timezone}
           initialInput={panel.initialInput}
+          initialStartClock={panel.initialStartClock}
+          initialEndClock={panel.initialEndClock}
         />
       )
     case 'extraction-rows':

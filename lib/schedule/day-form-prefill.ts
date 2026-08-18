@@ -10,47 +10,42 @@ function snapToQuarterHour(ms: number): number {
   return Math.round(ms / FIFTEEN_MIN_MS) * FIFTEEN_MIN_MS
 }
 
-// A 24-hour "HH:MM" as a 12-hour clock with an explicit meridiem ("07:30" to
-// "7:30am", "19:30" to "7:30pm"). The click-to-add time is pre-filled into the
-// day form's free-text input, which runs through parseDayItem, and that parser
-// reads a bare hour of 1 to 11 as ambiguous and applies a kind's default
-// meridiem: "07:30" would come back as 19:30. A dragged time is exact and must
-// not be re-guessed, so it is handed over with the meridiem already stated.
-export function to12HourClock(hhmm: string): string {
-  const [hour, minute] = hhmm.split(':').map(Number)
-  const meridiem = hour < 12 ? 'am' : 'pm'
-  const hour12 = hour % 12 === 0 ? 12 : hour % 12
-  return `${hour12}:${String(minute).padStart(2, '0')}${meridiem}`
+export interface SlotClocks {
+  startClock: string
+  endClock: string | null
 }
 
 /**
- * The day form pre-fill for a selection on the empty grid (REE-56, REE-69).
+ * The day form's Starts/Ends pre-fill for a selection on the empty grid (REE-56,
+ * REE-69). Both are 24-hour "HH:MM" in the tour zone, the exact value the
+ * dedicated time inputs read and write, so there is no meridiem to guess:
+ * REE-282 gave the day form its own Starts/Ends fields specifically so a
+ * clicked time lands in them directly rather than as text in the type field the
+ * TM had to type the rest of the line around.
  *
  * A click seeds only the start: a click states no duration, so inventing an end
  * would put a range in front of the TM they never drew. A drag ('select') that
- * spans real time seeds a range ("10:00am–11:00am"), so the duration the TM
- * dragged survives into the saved item instead of collapsing to the kind's
- * synthesised end. The parser reads the range exactly as if it had been typed;
- * nothing downstream is special-cased.
+ * spans real time seeds both ends, so the duration the TM dragged survives into
+ * the saved item instead of collapsing to the kind's synthesised end.
  *
  * Both ends are snapped to the quarter hour and the range is dropped back to a
  * bare start when the snap leaves nothing between them, so a tiny drag inside one
  * slot behaves like a click rather than seeding a zero-length range.
  */
-export function slotToDayFormInput(
+export function slotToDayFormClocks(
   start: Date,
   end: Date | null,
   action: 'select' | 'click' | 'doubleClick',
   timezone: string,
-): string {
+): SlotClocks {
   const snappedStart = snapToQuarterHour(start.getTime())
-  const startClock = to12HourClock(localTimeInZone(new Date(snappedStart).toISOString(), timezone))
+  const startClock = localTimeInZone(new Date(snappedStart).toISOString(), timezone)
 
-  if (action !== 'select' || !end) return startClock
+  if (action !== 'select' || !end) return { startClock, endClock: null }
 
   const snappedEnd = snapToQuarterHour(end.getTime())
-  if (snappedEnd <= snappedStart) return startClock
+  if (snappedEnd <= snappedStart) return { startClock, endClock: null }
 
-  const endClock = to12HourClock(localTimeInZone(new Date(snappedEnd).toISOString(), timezone))
-  return `${startClock}–${endClock}`
+  const endClock = localTimeInZone(new Date(snappedEnd).toISOString(), timezone)
+  return { startClock, endClock }
 }

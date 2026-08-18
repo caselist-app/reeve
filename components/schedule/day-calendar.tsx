@@ -59,7 +59,7 @@ import { useIsMobile } from '@/hooks/use-is-mobile'
 import { createZonedLocalizer } from '@/lib/schedule/calendar-localizer'
 import { localTimeInZone, localDayWindowUtc } from '@/lib/schedule/datetime'
 import { fromGridInstant, toGridInstant } from '@/lib/schedule/day-window'
-import { slotToDayFormInput } from '@/lib/schedule/day-form-prefill'
+import { slotToDayFormClocks } from '@/lib/schedule/day-form-prefill'
 import { buildDayCalendarView } from '@/lib/schedule/day-calendar-view'
 import { eventChipTimeLabel } from '@/lib/schedule/event-chip-label'
 import { nowMarker } from '@/lib/schedule/now-marker'
@@ -580,12 +580,11 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
     })
   }
 
-  // Click-or-drag-empty-to-add. It opens Brief 42's day form with the time
-  // pre-filled, snapped to 15 minutes, and the TM types the rest. A click seeds
-  // just the start; a drag seeds the range it spanned, so the dragged duration
-  // survives into the saved item instead of collapsing to the kind's synthesised
-  // end (REE-69). Both ends carry a stated meridiem so the parser reads the exact
-  // time back rather than guessing pm on a morning hour. Which day the time falls
+  // Click-or-drag-empty-to-add. It opens the day form with the Starts/Ends
+  // fields pre-filled, snapped to 15 minutes, and the TM types the kind into the
+  // type field (REE-282). A click seeds just the start; a drag seeds the range
+  // it spanned, so the dragged duration survives into the saved item instead of
+  // collapsing to the kind's synthesised end (REE-69). Which day the time falls
   // on is the day being viewed; the form resolves the instant server-side like
   // every other day_item write, so nothing here derives a day.
   function handleSelectSlot(slot: SlotInfo) {
@@ -597,13 +596,15 @@ export function DayCalendar({ records, tourId, tourDateId, timezone, date, heade
     setPendingSelection({ start: new Date(slot.start), end: new Date(slot.end) })
     const realStart = new Date(fromGridInstant(new Date(slot.start).toISOString(), timezone))
     const realEnd = new Date(fromGridInstant(new Date(slot.end).toISOString(), timezone))
+    const { startClock, endClock } = slotToDayFormClocks(realStart, realEnd, slot.action, timezone)
     openSidePanel({
       type: 'day-form',
       tourId,
       tourDateId,
       date,
       timezone,
-      initialInput: slotToDayFormInput(realStart, realEnd, slot.action, timezone),
+      initialStartClock: startClock,
+      initialEndClock: endClock ?? undefined,
     })
   }
 
