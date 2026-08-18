@@ -281,6 +281,14 @@ describe('telegram disconnect Inbox alert and TM notification (REE-309)', () => 
     process.env.TELEGRAM_WEBHOOK_SECRET = WEBHOOK_SECRET
     mockTrigger.mockClear()
     mockSend.mockClear()
+    // notifyAccount's send path (sendTelegramRendered) destructures messageId
+    // off this mock's return value. The dc: tests above never read the return
+    // value of sendTelegramMessage, so it was never given one; this describe
+    // block's confirm branch does go through notifyAccount, and an unresolved
+    // mock (undefined) throws on that destructure, which notifyAccount's own
+    // try/catch swallows as a send failure, silently releasing the claim it
+    // had just inserted.
+    mockSend.mockResolvedValue({ messageId: 1 })
 
     await testDb
       .from('contacts')
