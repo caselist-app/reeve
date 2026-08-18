@@ -21,13 +21,13 @@ import { advanceReminderJob } from '@/trigger/jobs/advance-reminder'
 // REE-283: recipients are freeform email addresses, not roster people, so
 // these tests never need to seed a person or contact for a recipient.
 
-async function createDocument(tourId: string, title = 'Stage Plot') {
+async function createDocument(tourId: string, title = 'Stage Plot', docType = 'rider') {
   const { data: doc, error } = await testDb
     .from('documents')
     .insert({
       tour_id: tourId,
       title,
-      doc_type: 'rider',
+      doc_type: docType,
       storage_path: `${tourId}/${title}.pdf`,
     })
     .select('id')
@@ -145,6 +145,34 @@ describe('sendDocument', () => {
       .single()
 
     expect(data?.show_id).toBeNull()
+    expect(sendRiderEmailJob.trigger).toHaveBeenCalledTimes(1)
+    expect(advanceReminderJob.trigger).not.toHaveBeenCalled()
+  })
+
+  // REE-303: a General or Marketing document has no department and no show
+  // attached, so this exercises the tour-level send path sendDocument already
+  // supports, from a marketing document rather than a rider.
+  it('sends a marketing document with show_id null and no reminders scheduled', async () => {
+    const marketingDocumentId = await createDocument(fixture.tourId, 'Press Kit', 'marketing')
+
+    const result = await sendDocument({
+      tourId: fixture.tourId,
+      documentId: marketingDocumentId,
+      recipientEmails: ['press@example.com'],
+      showId: null,
+    })
+
+    expect(result.error).toBeNull()
+
+    const { data } = await testDb
+      .from('document_shares')
+      .select('show_id, channel')
+      .eq('tour_id', fixture.tourId)
+      .eq('document_id', marketingDocumentId)
+      .single()
+
+    expect(data?.show_id).toBeNull()
+    expect(data?.channel).toBe('email')
     expect(sendRiderEmailJob.trigger).toHaveBeenCalledTimes(1)
     expect(advanceReminderJob.trigger).not.toHaveBeenCalled()
   })

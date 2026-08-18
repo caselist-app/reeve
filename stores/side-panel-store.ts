@@ -125,7 +125,7 @@ export type PanelDescriptor =
       // panel shows the show picker, defaulting to "No show".
       showId?: string
       shows?: SendableShow[]
-      departmentLabel: string
+      sectionLabel: string
       documents: SendableDocument[]
       // Carries which document was actually sent (REE-299: a department can
       // have more than one current rider, told apart by title, so the caller

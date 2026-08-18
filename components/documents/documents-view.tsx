@@ -1,12 +1,21 @@
 'use client'
 
-import { useState } from 'react'
-import { ChevronDown, ChevronUp } from 'lucide-react'
+import { useCallback, useState } from 'react'
+import { ChevronDown, ChevronUp, Mail } from 'lucide-react'
+import { toast } from 'sonner'
 import { DocumentCard } from '@/components/documents/document-card'
-import { DOC_SECTIONS, sectionForDocType } from '@/lib/documents/doc-types'
+import {
+  DOC_SECTIONS,
+  GENERAL_SECTION,
+  MARKETING_SECTION,
+  sectionForDocType,
+  type DocSection,
+} from '@/lib/documents/doc-types'
 import type { DocumentRow, DocumentShareRow, OlderVersionRow } from '@/lib/documents/queries'
+import { useSidePanel } from '@/stores/side-panel-store'
 
 interface Props {
+  tourId: string
   documents: DocumentRow[]
   shares: Record<string, DocumentShareRow[]>
   olderVersions: Record<string, OlderVersionRow[]>
@@ -17,7 +26,14 @@ interface Props {
   error: string | null
 }
 
+// General and Marketing have no department and no show behind them, so
+// sending one is a tour-level send: the panel opens with no showId and no
+// shows list, which is the same "no show attached" pipeline sendDocument
+// already supports (REE-303).
+const SENDABLE_SECTIONS: readonly string[] = [GENERAL_SECTION.docType, MARKETING_SECTION.docType]
+
 export function DocumentsView({
+  tourId,
   documents,
   shares,
   olderVersions,
@@ -28,6 +44,22 @@ export function DocumentsView({
   error,
 }: Props) {
   const [archivedExpanded, setArchivedExpanded] = useState(false)
+  const { open } = useSidePanel()
+
+  const openSend = useCallback(
+    (section: DocSection, sectionDocuments: DocumentRow[]) => {
+      open({
+        type: 'send-rider',
+        tourId,
+        sectionLabel: `${section.label} documents`,
+        documents: sectionDocuments,
+        onSent: (_documentId, documentTitle) => {
+          toast.success(`${documentTitle} sent.`)
+        },
+      })
+    },
+    [open, tourId]
+  )
 
   if (error) {
     return <p className="text-sm text-destructive">Could not load documents.</p>
@@ -51,9 +83,21 @@ export function DocumentsView({
     <div className="space-y-8">
       {sections.map((section) => (
         <div key={section.docType}>
-          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground mb-3">
-            {section.label}
-          </p>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+              {section.label}
+            </p>
+            {SENDABLE_SECTIONS.includes(section.docType) && (
+              <button
+                type="button"
+                onClick={() => openSend(section, grouped.get(section.docType)!)}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <Mail className="h-3.5 w-3.5" />
+                Send
+              </button>
+            )}
+          </div>
           <div className="space-y-2">
             {grouped.get(section.docType)!.map((doc) => (
               <DocumentCard

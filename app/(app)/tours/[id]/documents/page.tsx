@@ -41,6 +41,7 @@ export default async function DocumentsPage({
         actions={<UploadDocumentButton tourId={id} />}
       />
       <DocumentsView
+        tourId={id}
         documents={documents}
         shares={shares}
         olderVersions={olderVersions}
