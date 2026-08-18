@@ -17,9 +17,9 @@ import { readSeed } from './seed'
 // Two things keep it deterministic. Between the steps it waits for the panel to
 // fully close before reopening: the side panel stays mounted for 200ms after it
 // closes (its exit animation, see app-content.tsx), so reopening too soon lands
-// on the same stale, still-focused DayForm instance. And it asserts the preview
-// row before pressing Enter, so the highlighted option has settled and Enter acts
-// on the row we typed rather than a half-updated one.
+// on the same stale, still-focused DayForm instance. And it asserts the row's
+// own rendered state before pressing Enter, so the highlighted option has
+// settled and Enter acts on the row we typed rather than a half-updated one.
 //
 // NOT repeat-safe: it commits a day_item and never removes it, the same
 // limitation revalidate.spec.ts:81 has. Do not run it with --repeat-each; every
@@ -35,18 +35,21 @@ test('the one door adds a timed item and opens a book form', async ({ page }) =>
   // has hydrated so the '/' listener is attached before we press it.
   await expect(page.getByRole('button', { name: 'Add to day' })).toBeVisible()
 
-  const input = page.getByPlaceholder('Start typing...')
+  const input = page.getByPlaceholder('Start typing, e.g. flight')
 
   // '/' opens the typed day-form and autofocuses its type field on desktop.
   await page.keyboard.press('/')
   await expect(input).toBeVisible()
 
   // A TIMES row: typing a load-in and setting the Starts field commits a
-  // day_items row on Enter, no detour into another form. The preview confirms
-  // the load-in is highlighted, with the set time, before we commit it.
+  // day_items row on Enter, no detour into another form. Asserting the row is
+  // both visible with the set time and carries the highlighted-row class
+  // confirms it, not some other row, is what Enter will act on.
   await input.fill('load in')
   await page.getByLabel('Starts').fill('10:00')
-  await expect(page.getByText(/Load-in.*10:00.*Enter adds it/)).toBeVisible()
+  const loadInRow = page.getByRole('button', { name: /Load-in.*10:00/ })
+  await expect(loadInRow).toBeVisible()
+  await expect(loadInRow).toHaveClass(/bg-accent/)
   await page.keyboard.press('Enter')
 
   // The load-in lands on the grid. Scoped to the calendar block (.rbc-event) so
@@ -62,7 +65,9 @@ test('the one door adds a timed item and opens a book form', async ({ page }) =>
   await page.keyboard.press('/')
   await expect(input).toBeVisible()
   await input.fill('hotel')
-  await expect(page.getByText(/Hotel.*Enter opens the hotel form/)).toBeVisible()
+  const hotelRow = page.getByRole('button', { name: 'Hotel', exact: true })
+  await expect(hotelRow).toBeVisible()
+  await expect(hotelRow).toHaveClass(/bg-accent/)
   await page.keyboard.press('Enter')
 
   // The hotel form's heading is up and the day-form is gone: the door handed off
@@ -82,13 +87,15 @@ test('a rail item with no time set opens its detail panel', async ({ page }) => 
 
   await page.goto(`/tours/${seed.a.tourId}/schedule?date=${seed.a.rehearsalDate}`)
 
-  const input = page.getByPlaceholder('Start typing...')
+  const input = page.getByPlaceholder('Start typing, e.g. flight')
   await page.keyboard.press('/')
   await expect(input).toBeVisible()
 
-  // No time on the line, so the preview reads "no time yet" rather than a clock.
+  // No time on the line, so the row reads "no time yet" rather than a clock.
   await input.fill('soundcheck')
-  await expect(page.getByText(/Soundcheck.*no time yet.*Enter adds it/)).toBeVisible()
+  const soundcheckRow = page.getByRole('button', { name: /Soundcheck.*no time yet/ })
+  await expect(soundcheckRow).toBeVisible()
+  await expect(soundcheckRow).toHaveClass(/bg-accent/)
   await page.keyboard.press('Enter')
 
   // Wait for the day-form panel to fully close: it stays mounted for its 200ms
