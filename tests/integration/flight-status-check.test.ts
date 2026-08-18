@@ -122,6 +122,12 @@ async function flightAlertLog(tourId: string) {
 // genuinely received the alert or had nothing to deliver to.
 describe('flight-status-check delivers before persisting, and reaches the TM too', () => {
   let fixture: Fixture
+  // Each real Telegram send returns its own message id; notify() writes it
+  // into notification_log.provider_message_id, now under a unique index
+  // (REE-274). A fixed mock value collided between the crew send and the
+  // account-holder send in the same run and silently failed the second
+  // update, so this mirrors real per-send uniqueness instead.
+  let telegramSeq = 0
 
   beforeEach(async () => {
     fixture = await createFixture()
@@ -135,7 +141,8 @@ describe('flight-status-check delivers before persisting, and reaches the TM too
 
     mockLookup.mockReset()
     mockSend.mockReset()
-    mockSend.mockResolvedValue({ providerMessageId: 'tg-msg-1' })
+    telegramSeq = 0
+    mockSend.mockImplementation(async () => ({ providerMessageId: `tg-msg-${++telegramSeq}` }))
     mockBust.mockClear()
   })
 
