@@ -40,7 +40,7 @@ export function renderRiderEmail(params: RiderEmailParams): string {
                 ${escapeHtml(documentTitle)}
               </h1>
               <p style="font-size:15px;color:#6b7280;margin:0 0 24px;">
-                Hi ${escapeHtml(recipientName)}, please review the advance document below.
+                Hi ${escapeHtml(recipientName)}, ${escapeHtml(artistName)} has shared this with you.
               </p>
               ${noteHtml}
               <table cellpadding="0" cellspacing="0" style="margin-bottom:32px;">
