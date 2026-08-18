@@ -153,14 +153,19 @@ describe('archiving and unarchiving a document', () => {
     const secondResult = await uploadDocument(fixture.tourId, second)
     expect(secondResult.error).toBeNull()
 
+    // REE-299: uploadDocument no longer retires the archived row, so both it
+    // and the new upload are is_current = true here. archived_at is what
+    // tells them apart, the same filter getShowAdvance and fetchDocumentsPage
+    // use to keep an archived rider out of the sendable/active lists.
     const { data: secondCurrent } = await testDb
       .from('documents')
       .select('id, archived_at')
       .eq('tour_id', fixture.tourId)
       .eq('doc_type', DOC_TYPE)
       .eq('is_current', true)
+      .is('archived_at', null)
       .single()
-    if (!secondCurrent) throw new Error('expected a current document row after re-upload')
+    if (!secondCurrent) throw new Error('expected a current, unarchived document row after re-upload')
     expect(secondCurrent.archived_at).toBeNull()
 
     const page = await fetchDocumentsPage(testDb, fixture.tourId, fixture.userId)
