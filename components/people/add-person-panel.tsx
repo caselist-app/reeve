@@ -44,7 +44,9 @@ export function AddPersonPanel({ tourId, personType, onSuccess }: Props) {
   function handleAdd(contact: RosterContact) {
     if (added.has(contact.id) || pending) return
     startTransition(async () => {
-      const result = await addContactToTour(tourId, contact.id, personType)
+      // The roster already knows this contact's type; carry it through rather
+      // than forcing whichever section's "Add" button opened this panel.
+      const result = await addContactToTour(tourId, contact.id, contact.default_person_type ?? personType)
       if (result.error) {
         setErrors((prev) => ({ ...prev, [contact.id]: result.error! }))
       } else {
