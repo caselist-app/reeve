@@ -541,16 +541,24 @@ export async function getShowAdvance(
   ] = await Promise.all([
     supabase.from('show_advance').select('*').eq('show_id', showId).maybeSingle(),
 
-    // Every current document for the tour, not just the four rider types. The
-    // per-department mapping below already filters by doc_type, so an .in()
-    // here would be a second copy of "which documents belong to a department"
-    // that only ever narrowed the fetch. A tour's current documents are a
-    // handful of rows.
+    // Every current, unarchived document for the tour, not just the four
+    // rider types. The per-department mapping below already filters by
+    // doc_type, so an .in() here would be a second copy of "which documents
+    // belong to a department" that only ever narrowed the fetch. A tour's
+    // current documents are a handful of rows.
+    //
+    // REE-299: a doc_type can hold more than one current row at once, so this
+    // deliberately does not narrow to one row per doc_type. archived_at is
+    // excluded because it is the TM's manual retirement step for a rider that
+    // has been superseded (uploadDocument no longer retires automatically);
+    // without this filter an archived rider stays sendable from the advance
+    // panel.
     supabase
       .from('documents')
       .select('id, title, doc_type')
       .eq('tour_id', tourId)
-      .eq('is_current', true),
+      .eq('is_current', true)
+      .is('archived_at', null),
 
     // recipient_email covers a freeform recipient (REE-283); people(contacts)
     // covers the historical rows sent to a roster person before the picker

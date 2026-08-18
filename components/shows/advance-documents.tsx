@@ -50,6 +50,8 @@ function ShareStatus({ share, onResend }: ShareStatusProps) {
         <span className="truncate">
           <span className="text-foreground font-medium">{share.recipient_name}</span>
           {', '}
+          {share.document_title}
+          {', '}
           {share.acknowledged_at
             ? `Acknowledged ${relativeTime(share.acknowledged_at)}`
             : openedLabel}
@@ -105,15 +107,14 @@ export function AdvanceDocuments({
 
   const openSendPanel = useCallback(
     (dept: DepartmentShareData) => {
-      const firstDoc = dept.documents[0]
       open({
         type: 'send-rider',
         tourId,
         showId,
         departmentLabel: dept.label,
         documents: dept.documents,
-        onSent: () => {
-          if (firstDoc) handleSent(dept.department, dept.docType, firstDoc.id, firstDoc.title)
+        onSent: (documentId, documentTitle) => {
+          handleSent(dept.department, dept.docType, documentId, documentTitle)
         },
       })
     },
