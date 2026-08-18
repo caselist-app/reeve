@@ -1040,6 +1040,8 @@ export type Database = {
           notification_type: string
           person_id: string | null
           provider_message_id: string | null
+          reacted_at: string | null
+          reaction_emoji: string | null
           read_at: string | null
           recipient_email: string | null
           sent_at: string | null
@@ -1058,6 +1060,8 @@ export type Database = {
           notification_type: string
           person_id?: string | null
           provider_message_id?: string | null
+          reacted_at?: string | null
+          reaction_emoji?: string | null
           read_at?: string | null
           recipient_email?: string | null
           sent_at?: string | null
@@ -1076,6 +1080,8 @@ export type Database = {
           notification_type?: string
           person_id?: string | null
           provider_message_id?: string | null
+          reacted_at?: string | null
+          reaction_emoji?: string | null
           read_at?: string | null
           recipient_email?: string | null
           sent_at?: string | null
