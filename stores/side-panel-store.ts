@@ -127,7 +127,10 @@ export type PanelDescriptor =
       shows?: SendableShow[]
       departmentLabel: string
       documents: SendableDocument[]
-      onSent: () => void
+      // Carries which document was actually sent (REE-299: a department can
+      // have more than one current rider, told apart by title, so the caller
+      // cannot assume the first one in the list is the one the TM picked).
+      onSent: (documentId: string, documentTitle: string) => void
     }
   | {
       type: 'add-day'

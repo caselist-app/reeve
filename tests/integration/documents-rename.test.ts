@@ -39,7 +39,7 @@ describe('renaming a document', () => {
     await destroyFixture(fixture)
   })
 
-  it("renames the current row without touching an older version's title", async () => {
+  it("renames one document without touching the other, concurrent, document's title", async () => {
     const first = new FormData()
     first.set('doc_type', DOC_TYPE)
     first.set('title', 'Tech Rider v1')
@@ -47,14 +47,18 @@ describe('renaming a document', () => {
     const firstResult = await uploadDocument(fixture.tourId, first)
     expect(firstResult.error).toBeNull()
 
+    // REE-299: uploadDocument is additive now, so the first row stays
+    // is_current = true after the second upload. Both are current, told
+    // apart here only by version, the same way a TM tells them apart by
+    // title.
     const { data: firstCurrent } = await testDb
       .from('documents')
       .select('id')
       .eq('tour_id', fixture.tourId)
       .eq('doc_type', DOC_TYPE)
-      .eq('is_current', true)
+      .eq('version', 1)
       .single()
-    if (!firstCurrent) throw new Error('expected a current document row after upload')
+    if (!firstCurrent) throw new Error('expected the first document row after upload')
     const oldDocumentId = firstCurrent.id
 
     const second = new FormData()
@@ -69,9 +73,9 @@ describe('renaming a document', () => {
       .select('id')
       .eq('tour_id', fixture.tourId)
       .eq('doc_type', DOC_TYPE)
-      .eq('is_current', true)
+      .eq('version', 2)
       .single()
-    if (!secondCurrent) throw new Error('expected a current document row after re-upload')
+    if (!secondCurrent) throw new Error('expected the second document row after re-upload')
     const newDocumentId = secondCurrent.id
 
     const renameResult = await renameDocument(newDocumentId, '  Full Tech Rider  ')
