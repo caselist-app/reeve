@@ -16,12 +16,12 @@ export async function uploadBoardingPassAction(
   assignmentId: string,
   formData: FormData
 ): Promise<UploadBoardingPassState> {
+  const user = await requireUser()
+  const supabase = await createClient()
+
   const assignmentIdParsed = z.string().uuid().safeParse(assignmentId)
   if (!assignmentIdParsed.success) return { error: 'Invalid assignment.' }
   const safeAssignmentId = assignmentIdParsed.data
-
-  const user = await requireUser()
-  const supabase = await createClient()
 
   // Verify the TM owns this tour before accepting the upload.
   const { data: tour } = await supabase
