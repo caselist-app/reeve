@@ -5,6 +5,8 @@ import {
   localBroadcastDayWindowUtc,
   toGridInstant,
   fromGridInstant,
+  broadcastDateForClock,
+  broadcastDateOfWallClock,
 } from '@/lib/schedule/day-window'
 import {
   localDateInZone,
@@ -184,6 +186,52 @@ describe('localBroadcastDateInZone', () => {
       expect(localBroadcastDateInZone(wallClockToUtc(`${NEXT}T03:59`, tz), tz)).toBe(DATE)
     })
   }
+})
+
+describe('broadcastDateForClock', () => {
+  // REE-280: the drive and rail add forms seed a departure from the viewed
+  // broadcast day plus a bare 'HH:MM' clock. A clock before DAY_START_HOUR is
+  // the tail of that night, so it must land on the following calendar date, not
+  // the viewed day's own date.
+  it('keeps an evening clock on the viewed date', () => {
+    expect(broadcastDateForClock(DATE, '22:00')).toBe(DATE)
+  })
+
+  it('rolls a small-hours clock onto the following date', () => {
+    expect(broadcastDateForClock(DATE, '01:30')).toBe('2026-06-15')
+  })
+
+  it('opens the following date at exactly DAY_START_HOUR', () => {
+    expect(broadcastDateForClock(DATE, '04:00')).toBe(DATE)
+  })
+
+  it('treats 03:59 as the tail of the viewed night', () => {
+    expect(broadcastDateForClock(DATE, '03:59')).toBe('2026-06-15')
+  })
+})
+
+describe('broadcastDateOfWallClock is the inverse of broadcastDateForClock', () => {
+  it('reads an evening departure back onto its own date', () => {
+    expect(broadcastDateOfWallClock(`${DATE}T22:00`)).toBe(DATE)
+  })
+
+  it('reads a small-hours departure back onto the broadcast night before it', () => {
+    // A drive seeded for 01:30 sits on 2026-06-15 (the calendar date), which
+    // belongs to 2026-06-14's broadcast night.
+    expect(broadcastDateOfWallClock('2026-06-15T01:30')).toBe(DATE)
+  })
+
+  it('round-trips broadcastDateForClock for a small-hours clock', () => {
+    const clock = '01:30'
+    const seeded = `${broadcastDateForClock(DATE, clock)}T${clock}`
+    expect(broadcastDateOfWallClock(seeded)).toBe(DATE)
+  })
+
+  it('round-trips broadcastDateForClock for an evening clock', () => {
+    const clock = '22:00'
+    const seeded = `${broadcastDateForClock(DATE, clock)}T${clock}`
+    expect(broadcastDateOfWallClock(seeded)).toBe(DATE)
+  })
 })
 
 describe('fromGridInstant is the exact inverse of toGridInstant', () => {

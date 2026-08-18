@@ -9,6 +9,7 @@ import { PlacesAddressInput } from '@/components/shows/places-address-input'
 import { createTransportSegment } from '@/lib/actions/transport'
 import { getDriveTime } from '@/lib/actions/drive-time'
 import { fromDatetimeLocal } from '@/lib/schedule/datetime'
+import { broadcastDateForClock, broadcastDateOfWallClock } from '@/lib/schedule/day-window'
 import { readForm } from '@/lib/forms/read-form'
 import { DateMoveNotice } from '@/components/schedule/date-move-notice'
 import { PartyPickerFields } from '@/components/schedule/party-picker'
@@ -37,7 +38,11 @@ type PendingDrive = {
 
 export function AddDriveForm({ tourId, tourDateId, date, timezone, initialClock, people, onBack, onSuccess }: AddDriveFormProps) {
   const router = useRouter()
-  const departDefault = `${date}T${initialClock ?? '09:00'}`
+  // A clock before DAY_START_HOUR is the tail of tonight, not the head of the
+  // viewed day, so it seeds a departure on the following calendar date (REE-280).
+  const departDefault = initialClock
+    ? `${broadcastDateForClock(date, initialClock)}T${initialClock}`
+    : `${date}T09:00`
   const [computedArrival, setComputedArrival] = useState<string>('')
   const [computing, setComputing] = useState(false)
   const [departLocal, setDepartLocal] = useState(departDefault)
@@ -185,7 +190,7 @@ export function AddDriveForm({ tourId, tourDateId, date, timezone, initialClock,
             computeArrival(orig, dest, e.currentTarget.value)
           }}
         />
-        <DateMoveNotice currentDate={date} value={departLocal} />
+        <DateMoveNotice currentDate={date} value={departLocal ? broadcastDateOfWallClock(departLocal) : departLocal} />
       </div>
       <div className="space-y-1">
         <Label className="text-xs">
