@@ -76,6 +76,79 @@ describe('uploading a document versions rather than replaces', () => {
   })
 })
 
+// REE-301. General and Marketing (MULTI_CURRENT_DOC_TYPES) are unrelated
+// documents that happen to share a doc_type, not versions of one another, so
+// uploadDocument must never flip one to not-current when the other is
+// uploaded, and must never collide their storage paths even when the source
+// filename is identical.
+describe('multi-current doc_types never flip and never collide on storage_path', () => {
+  let fixture: Fixture
+
+  beforeEach(async () => {
+    fixture = await createFixture()
+  })
+
+  afterEach(async () => {
+    await destroyFixture(fixture)
+  })
+
+  it('keeps both General uploads current with distinct storage paths', async () => {
+    const first = new FormData()
+    first.set('doc_type', 'general')
+    first.set('title', 'Stage Plot')
+    first.set('file', pdfFile('doc.pdf'))
+
+    const firstResult = await uploadDocument(fixture.tourId, first)
+    expect(firstResult.error).toBeNull()
+
+    const second = new FormData()
+    second.set('doc_type', 'general')
+    second.set('title', 'Parking Map')
+    second.set('file', pdfFile('doc.pdf'))
+
+    const secondResult = await uploadDocument(fixture.tourId, second)
+    expect(secondResult.error).toBeNull()
+
+    const rows = await currentRows(fixture.tourId, 'general')
+    expect(rows).toHaveLength(2)
+
+    // The assertion that fails red against the unmodified action: the flip
+    // block matches every existing is_current row for (tour_id, doc_type)
+    // regardless of doc_type membership in MULTI_CURRENT_DOC_TYPES, so
+    // Stage Plot would read is_current: false here.
+    expect(rows.every((r) => r.is_current)).toBe(true)
+
+    const [stagePlot, parkingMap] = rows
+    expect(stagePlot.storage_path).not.toBe(parkingMap.storage_path)
+  })
+
+  it('still flips the first production_rider upload on the second, unaffected by the general case', async () => {
+    const first = new FormData()
+    first.set('doc_type', DOC_TYPE)
+    first.set('title', 'Tech Rider v1')
+    first.set('file', pdfFile('rider.pdf'))
+
+    const firstResult = await uploadDocument(fixture.tourId, first)
+    expect(firstResult.error).toBeNull()
+
+    const second = new FormData()
+    second.set('doc_type', DOC_TYPE)
+    second.set('title', 'Tech Rider v2')
+    second.set('file', pdfFile('rider.pdf'))
+
+    const secondResult = await uploadDocument(fixture.tourId, second)
+    expect(secondResult.error).toBeNull()
+
+    const rows = await currentRows(fixture.tourId, DOC_TYPE)
+    const firstRow = rows.find((r) => r.version === 1)
+    expect(firstRow?.is_current).toBe(false)
+
+    const current = rows.filter((r) => r.is_current)
+    expect(current).toHaveLength(1)
+    expect(current[0].title).toBe('Tech Rider v2')
+  })
+})
+
 // Red-first, as the ticket requires. Swapping lib/actions/documents.ts to
 // insert the new row before running the is_current flip breaks this suite:
 // the flip's .eq('is_current', true) filter then also matches the row just

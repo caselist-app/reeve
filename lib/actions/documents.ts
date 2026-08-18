@@ -8,6 +8,7 @@ import { generateShareToken } from '@/lib/comms/email'
 import { sendRiderEmailJob } from '@/trigger/jobs/send-rider-email'
 import { advanceReminderJob } from '@/trigger/jobs/advance-reminder'
 import { sendDocumentRecipientsSchema, uploadDocumentSchema } from '@/lib/validators/documents'
+import { MULTI_CURRENT_DOC_TYPES } from '@/lib/documents/doc-types'
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'https://tourwithreeve.com'
 
@@ -295,6 +296,11 @@ function safeFilename(name: string): string {
 // prevent. tests/integration/documents-store.test.ts is red against the
 // reversed order.
 //
+// MULTI_CURRENT_DOC_TYPES (General, Marketing) are the exception: those
+// uploads are independent documents, not revisions of one lineage, so there
+// is nothing to flip and no shared version counter to advance. See the
+// isMultiCurrent branch below.
+//
 // No upsert on the Storage write: the documents bucket has no UPDATE policy
 // (that is a later brief's work), and it does not need one, because the path
 // is unique per version.
@@ -330,33 +336,55 @@ export async function uploadDocument(
 
   const admin = createAdminClient()
 
-  // Next version for this tour's doc_type is one past the highest version on
-  // record, current or not: old rows are kept rather than deleted, so this is
-  // the only source of truth for "how many versions has this doc_type had."
-  const { data: latest, error: latestError } = await admin
-    .from('documents')
-    .select('version')
-    .eq('tour_id', tourId)
-    .eq('doc_type', docType)
-    .order('version', { ascending: false })
-    .limit(1)
-    .maybeSingle()
-  if (latestError) return { error: latestError.message }
+  const isMultiCurrent = MULTI_CURRENT_DOC_TYPES.includes(docType)
 
-  const version = (latest?.version ?? 0) + 1
+  let version: number
+  if (isMultiCurrent) {
+    // General and Marketing uploads sit side by side rather than superseding
+    // one another, so there is no lineage to number: every row is its own
+    // document.
+    version = 1
+  } else {
+    // Next version for this tour's doc_type is one past the highest version
+    // on record, current or not: old rows are kept rather than deleted, so
+    // this is the only source of truth for "how many versions has this
+    // doc_type had."
+    const { data: latest, error: latestError } = await admin
+      .from('documents')
+      .select('version')
+      .eq('tour_id', tourId)
+      .eq('doc_type', docType)
+      .order('version', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+    if (latestError) return { error: latestError.message }
+
+    version = (latest?.version ?? 0) + 1
+  }
+
   // The tour id must be the first path segment: the bucket policy is
-  // owns_tour((storage.foldername(name))[1]::uuid).
-  const storagePath = `${tourId}/${docType}/v${version}_${safeFilename(file.name)}`
+  // owns_tour((storage.foldername(name))[1]::uuid). A multi-current upload
+  // has no version number to key the path on, so it gets a random unique
+  // segment instead: two General uploads sharing a source filename would
+  // otherwise both resolve to the same v1_ path and the second upload would
+  // fail (or overwrite, with upsert on) the first.
+  const storagePath = isMultiCurrent
+    ? `${tourId}/${docType}/${crypto.randomUUID()}_${safeFilename(file.name)}`
+    : `${tourId}/${docType}/v${version}_${safeFilename(file.name)}`
 
-  // Flip the old rows to not-current before anything about the new one exists,
-  // so there is never a moment with two current rows for this doc_type.
-  const { error: flipError } = await admin
-    .from('documents')
-    .update({ is_current: false, updated_at: new Date().toISOString() })
-    .eq('tour_id', tourId)
-    .eq('doc_type', docType)
-    .eq('is_current', true)
-  if (flipError) return { error: flipError.message }
+  // Flip the old rows to not-current before anything about the new one
+  // exists, so there is never a moment with two current rows for this
+  // doc_type. Skipped for multi-current doc_types: nothing should ever flip,
+  // since each row is its own document rather than a version of another.
+  if (!isMultiCurrent) {
+    const { error: flipError } = await admin
+      .from('documents')
+      .update({ is_current: false, updated_at: new Date().toISOString() })
+      .eq('tour_id', tourId)
+      .eq('doc_type', docType)
+      .eq('is_current', true)
+    if (flipError) return { error: flipError.message }
+  }
 
   const bytes = await file.arrayBuffer()
   const { error: uploadError } = await admin.storage
