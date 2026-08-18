@@ -104,6 +104,26 @@ describe('buildAddOptions', () => {
     expect(hasDoors(forDr)).toBe(false)
   })
 
+  it('resolves a bare flight code straight to the flight open row, carrying it as the initial query (REE-99)', () => {
+    for (const input of ['CX150', 'cx 150', 'CX-150']) {
+      const options = buildAddOptions(input, [])
+      expect(options).toHaveLength(1)
+      const [only] = options
+      expect(only.action).toBe('open')
+      if (only.action !== 'open') throw new Error('expected an open row')
+      expect(only.category).toBe('flight')
+      expect(only.initialQuery).toBe(input)
+    }
+  })
+
+  it('does not treat a flight code followed by anything else as a bare code', () => {
+    // Anchored: 'CX150 3pm' is not just a flight code, so it falls through to
+    // the normal residual-matching path rather than short-circuiting.
+    const options = buildAddOptions('CX150 3pm', [])
+    const flightOpen = options.find((option) => option.action === 'open' && option.category === 'flight')
+    expect(flightOpen).toBeUndefined()
+  })
+
   it('never makes the generic Custom row index 0 unless it is the only row', () => {
     // A recognised kind, a matched category and a fuzzy typo all outrank Custom.
     for (const input of ['hotel', 'load in 10am', 'lod', 'd', 'soundcheck 3pm']) {
@@ -167,6 +187,14 @@ describe('addOptionPreview', () => {
     if (!flight || flight.action !== 'open') throw new Error('expected an open row')
 
     expect(addOptionPreview(flight)).toBe('Flight · Enter opens the flight form')
+  })
+
+  it('names the detected code rather than the generic "flight form" wording (REE-99)', () => {
+    const [flight] = buildAddOptions('cx 150', [])
+    expect(flight.action).toBe('open')
+    if (flight.action !== 'open') throw new Error('expected an open row')
+
+    expect(addOptionPreview(flight)).toBe('CX 150 · Enter looks up the flight')
   })
 
   it('builds without a fallback for every option on empty input', () => {
