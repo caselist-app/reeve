@@ -69,10 +69,24 @@ export default defineConfig({
   // Serves a real production build, the same command Vercel runs. Not `pnpm
   // dev`: a dev build has different error handling and would hide the exact
   // failure this suite exists to catch.
+  //
+  // `pnpm exec next start` rather than `pnpm start`: one fewer layer of shell
+  // indirection between the process Playwright spawns and the actual
+  // `next-server`, so the SIGTERM below has the shortest possible path to it.
+  //
+  // gracefulShutdown asks nicely before Playwright's default teardown, which
+  // is an unconditional SIGKILL of the process group it spawned. That default
+  // has still been seen to leave a `next-server` grandchild alive on port 3000
+  // after the group dies (REE-121): the leaked process holds the CI runner's
+  // stdio pipe open, so the e2e job finishes every step green and then never
+  // finalizes. SIGTERM gives `next start` the chance to close its own
+  // listeners and exit on its own, which is the shutdown path that does not
+  // leave that grandchild behind. See tests/README.md for the CI-side backstop.
   webServer: {
-    command: 'pnpm start',
+    command: 'pnpm exec next start',
     url: baseURL,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
+    gracefulShutdown: { signal: 'SIGTERM', timeout: 5_000 },
   },
 })

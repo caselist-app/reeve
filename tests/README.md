@@ -48,6 +48,32 @@ is while whoever added it still knows what it needs to render.
 **Every spec is named as a sentence about what a TM sees.** A red Playwright
 line is the only thing read before deciding whether to merge.
 
+## The webServer has to exit cleanly, not just pass
+
+`playwright.config.ts`'s `webServer` starts a real production server
+(`pnpm exec next start`) for every spec to hit, and teardown has to actually
+kill it. It has not always: on 2026-08-11 the e2e job on the REE-94 PR had
+every step, including the last one, report success, and the check-run still
+sat in `pending` until GitHub's 6-hour ceiling. The cause was a `next-server`
+grandchild that survived Playwright's default teardown and kept the runner's
+stdio pipe open, so the job body finished but never finalized (REE-121).
+
+Two things guard against this reappearing, and a change to either one should
+be able to explain why it is still safe:
+
+- `webServer.gracefulShutdown` in `playwright.config.ts` gives `next start` a
+  SIGTERM it can act on before Playwright falls back to an unconditional
+  SIGKILL of the process group. `command` runs through `pnpm exec` rather than
+  `pnpm start`, one fewer layer of shell between Playwright and the process
+  that actually needs the signal.
+- The `e2e` job in `ci.yml` kills anything left listening on port 3000 as an
+  unconditional step after the test step, whether or not the tests passed.
+  This is the actual backstop: it does not depend on the graceful shutdown
+  above having worked, it is what frees the runner if a future change to the
+  server or to Playwright breaks it again. The job also carries
+  `timeout-minutes`, so if something still holds the pipe open the job fails
+  loudly within the hour instead of sitting until GitHub's ceiling.
+
 ## Reading a failure without running it locally
 
 Neither of these suites runs on Matt's machine, so a CI log is the whole picture.

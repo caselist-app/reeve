@@ -190,6 +190,12 @@ jobs:
   e2e:
     name: End-to-end tests
     runs-on: ubuntu-latest
+    # Bounds the hang in REE-121: a run where every step passed but a leaked
+    # webServer grandchild held the runner's stdio open sat at GitHub's 6-hour
+    # ceiling instead of failing. A normal run finishes in a few minutes, so
+    # this is a generous multiple of that, not a tight budget: it exists to
+    # turn a silent multi-hour stall into a loud failure within the hour.
+    timeout-minutes: 60
 
     steps:
       - name: Check out repo
@@ -369,6 +375,24 @@ jobs:
           # Absent secret means the dev login route returns 404 and no spec can
           # sign in. Add it in Settings, Secrets and variables, Actions.
           E2E_LOGIN_SECRET: ${{ secrets.E2E_LOGIN_SECRET }}
+
+      # REE-121 backstop. playwright.config.ts's webServer teardown now sends
+      # `next start` a SIGTERM it can act on, which is the fix, but this step
+      # does not trust it: it runs unconditionally and kills anything still
+      # listening on the app's port regardless of why the process survived
+      # teardown. That is what actually frees the runner's stdio pipe and lets
+      # the job finalize, so it is the check this fix is correct, not a
+      # nicety. if: always() so it also runs when the test step itself failed.
+      - name: Kill anything left listening on the app port
+        if: always()
+        run: |
+          PIDS="$(lsof -ti tcp:3000 || true)"
+          if [ -n "$PIDS" ]; then
+            echo "Found process(es) still listening on port 3000, killing: $PIDS"
+            echo "$PIDS" | xargs -r kill -9
+          else
+            echo "Nothing listening on port 3000."
+          fi
 
       # Only on failure: the log line names the spec, and this is for the
       # detail behind it (trace, screenshot) without needing Docker locally.
