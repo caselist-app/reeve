@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo, useTransition } from 'react'
+import { useState, useEffect, useMemo, useRef, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { AirlineLogo } from '@/components/schedule/airline-logo'
 import { Input } from '@/components/ui/input'
@@ -22,7 +22,8 @@ import type { NormalizedFlightLookup, NormalizedRouteTimetableEntry } from '@/li
 import { fromDatetimeLocal } from '@/lib/schedule/datetime'
 import { ManualFlightForm } from '@/components/schedule/add/manual-flight-form'
 import { FlightChips, highlightMatch, type Airline } from '@/components/schedule/add/flight-form-ui'
-import { timeOfDay, detectFlightCode, weekdayCodeFor, STATUS_LABEL } from '@/components/schedule/add/flight-form-helpers'
+import { timeOfDay, weekdayCodeFor, STATUS_LABEL } from '@/components/schedule/add/flight-form-helpers'
+import { detectFlightCode } from '@/lib/utils/flight-code'
 import { PartyPickerFields } from '@/components/schedule/party-picker'
 import { createdAsForPreset, type PartyPickerPerson, type PartyPreset } from '@/lib/party/presets'
 
@@ -32,6 +33,12 @@ interface AddFlightFormProps {
   date: string
   timezone: string
   people: PartyPickerPerson[]
+  // A flight code the day form already detected ('CX150', REE-99), carried
+  // through as the starting search query. Auto-resolves once the airline
+  // reference table (below) has loaded and the code matches a known airline:
+  // the day is already known here, so the manual 'date' step is skipped too,
+  // landing straight on the flight card instead of an empty form.
+  initialQuery?: string
   onBack: () => void
   onSuccess: () => void
 }
@@ -39,7 +46,7 @@ interface AddFlightFormProps {
 type Airport = { iataCode: string; icaoCode: string | null; name: string; city: string | null }
 type Step = 'search' | 'date' | 'card' | 'party' | 'reference' | 'route' | 'manual'
 
-export function AddFlightForm({ tourId, tourDateId, date, timezone, people, onBack, onSuccess }: AddFlightFormProps) {
+export function AddFlightForm({ tourId, tourDateId, date, timezone, people, initialQuery, onBack, onSuccess }: AddFlightFormProps) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [error, setError] = useState<string | null>(null)
@@ -106,6 +113,33 @@ export function AddFlightForm({ tourId, tourDateId, date, timezone, people, onBa
       cancelled = true
     }
   }, [])
+
+  // A flight code the day form already detected (REE-99). Runs once the
+  // airline table has loaded, so it waits rather than missing the match on a
+  // slow reference-table fetch; the ref stops it firing again once it has. A
+  // code that doesn't match a known airline just seeds the search box, same
+  // as if the TM had typed it there directly (the 'detected' memo below
+  // handles that case identically either way). A matched code also seeds the
+  // date with the day this panel is already on, skipping the manual 'date'
+  // step: the lookup effect further down fires the moment both are set.
+  const autoResolvedRef = useRef(false)
+  useEffect(() => {
+    if (autoResolvedRef.current || !initialQuery || !airlines) return
+    autoResolvedRef.current = true
+    setQuery(initialQuery)
+
+    const detectedInitial = detectFlightCode(initialQuery)
+    if (!detectedInitial) return
+    const matchedAirline = airlines.find((a) => a.iataCode?.toUpperCase() === detectedInitial.code)
+    if (!matchedAirline) return
+
+    const resolvedDate = parseFlightDate(date) ?? { date, label: date }
+    setAirline(matchedAirline)
+    setFlightNumber(detectedInitial.number)
+    setDateInput(resolvedDate.label)
+    setParsedDate(resolvedDate)
+    setStep('date')
+  }, [airlines, initialQuery, date])
 
   const flightIata = airline?.iataCode && flightNumber ? `${airline.iataCode}${flightNumber}` : null
 

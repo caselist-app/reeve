@@ -211,6 +211,11 @@ export type PanelDescriptor =
       // clicking 2pm departs at 2pm, not the old hardcoded 9am. Absent when the
       // line carried no time, where the form keeps its own default.
       initialClock?: string
+      // A bare flight code detected in the day form's typed line ('CX150',
+      // REE-99), carried through as the flight form's starting search query so
+      // it resolves straight to the real flight instead of an empty form.
+      // Ignored by every category other than flight.
+      initialQuery?: string
       onBack: () => void
     }
   // REE-22, REE-88: the one door into a day. One text input over buildAddOptions,

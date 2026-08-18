@@ -131,6 +131,7 @@ export function DayForm({ tourId, tourDateId, date, timezone, initialInput }: Da
       timezone,
       category: option.category,
       initialClock,
+      initialQuery: option.initialQuery,
       onBack: () =>
         openSidePanel({ type: 'day-form', tourId, tourDateId, date, timezone, initialInput: input }),
     })

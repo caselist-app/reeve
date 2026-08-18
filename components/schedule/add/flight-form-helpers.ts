@@ -9,13 +9,9 @@ export function timeOfDay(local: string | null): string {
   return local ? local.slice(11, 16) : '00:00'
 }
 
-// Detects "CX150", "cx 150", "CX-150": a 2-3 letter airline code immediately
-// (optionally with a space/dash) followed by digits.
-export function detectFlightCode(input: string): { code: string; number: string } | null {
-  const m = input.trim().match(/^([A-Za-z]{2,3})\s*-?\s*(\d{1,4})$/)
-  if (!m) return null
-  return { code: m[1].toUpperCase(), number: m[2] }
-}
+// detectFlightCode moved to lib/utils/flight-code.ts (REE-99): the day add
+// panel (lib/schedule) needed it too, and that's a pure lib module rather than
+// a components/ one.
 
 const DAY_CODES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const
 

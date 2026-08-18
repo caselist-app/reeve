@@ -1,5 +1,6 @@
 import { DAY_ITEM_KINDS } from '@/lib/schedule/day-item-kinds'
 import { parseDayItem, type ParsedDayItem } from '@/lib/schedule/parse-day-item'
+import { detectFlightCode } from '@/lib/utils/flight-code'
 
 // Brief 46, "one door into a day". The add panel is a single typed input that
 // offers two kinds of thing: a day_items row it can commit directly (load-in,
@@ -64,6 +65,10 @@ export type AddOption =
       category: AddCategory
       label: string
       description: string
+      // A bare flight code detected in the typed line ('CX150'), carried
+      // through as the flight form's starting search query so Enter resolves
+      // straight to the real flight instead of an empty form (REE-99).
+      initialQuery?: string
     }
 
 // The interpreted time for a commit row: a range when both ends are known, a
@@ -87,6 +92,9 @@ function commitTime(option: Extract<AddOption, { action: 'commit' }>): string {
 export function addOptionPreview(option: AddOption): string {
   if (option.action === 'commit') {
     return `${option.title ?? option.label} · ${commitTime(option)} · Enter adds it`
+  }
+  if (option.initialQuery) {
+    return `${option.initialQuery.toUpperCase()} · Enter looks up the flight`
   }
   return `${option.label} · Enter opens the ${option.label.toLowerCase()} form`
 }
@@ -165,6 +173,26 @@ export function buildAddOptions(input: string, customTitles: string[]): AddOptio
         action: 'commit', kind: 'other', label: title, title, startClock: null, endClock: null,
       })),
     ]
+  }
+
+  // A bare flight code ('CX150', 'cx 150', 'CX-150') is unambiguous, so it
+  // short-circuits ahead of parseDayItem rather than going through the
+  // residual like every other category below. parseDayItem's time regex reads
+  // inline digits as an hour ('CX150' -> hour 15), which would mangle the code
+  // before it got here; detecting on the raw trimmed text, per Brief 31,
+  // sidesteps that entirely. The flight form gets the exact typed text back as
+  // its starting query, resolving the same way its own search box already
+  // does when a TM types a code there directly (REE-99).
+  const flightCode = detectFlightCode(trimmed)
+  if (flightCode) {
+    const flightCategory = ADD_CATEGORIES.find((category) => category.id === 'flight')!
+    return [{
+      action: 'open',
+      category: flightCategory.id,
+      label: flightCategory.label,
+      description: flightCategory.description,
+      initialQuery: trimmed,
+    }]
   }
 
   const { best, alternatives } = parseDayItem(trimmed)

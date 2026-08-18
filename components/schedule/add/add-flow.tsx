@@ -33,6 +33,9 @@ interface AddFlowProps {
   // carried from the day form (REE-140). Seeds the book form's departure or
   // check-in default. Absent when the line carried no time.
   initialClock?: string
+  // A bare flight code detected in the day form's typed line ('CX150',
+  // REE-99). Only the flight form reads it; the other three ignore it.
+  initialQuery?: string
   // Leaves this form and reopens the category picker. Supplied by the
   // side panel descriptor, since that has to coordinate with the popover
   // or bottom-sheet state day-view-client.tsx owns.
@@ -49,7 +52,7 @@ const CATEGORY_TITLES: Record<AddCategory, string> = {
 // Renders the form for a pre-selected category, on PanelShell like every
 // other schedule panel. The picker itself lives in the popover/sheet in
 // DayViewClient; this component never shows it.
-export function AddFlow({ tourId, tourDateId, date, timezone, category, initialClock, onBack }: AddFlowProps) {
+export function AddFlow({ tourId, tourDateId, date, timezone, category, initialClock, initialQuery, onBack }: AddFlowProps) {
   const { close } = useSidePanel()
 
   // REE-169: fetched once here, not by each category form, so switching
@@ -67,7 +70,7 @@ export function AddFlow({ tourId, tourDateId, date, timezone, category, initialC
     }
   }, [tourId])
 
-  const formProps = { tourId, tourDateId, date, timezone, initialClock, onBack, onSuccess: close, people }
+  const formProps = { tourId, tourDateId, date, timezone, initialClock, initialQuery, onBack, onSuccess: close, people }
 
   return (
     <PanelShell title={CATEGORY_TITLES[category]}>
