@@ -234,6 +234,42 @@ export async function unarchiveDocument(documentId: string): Promise<ArchiveDocu
   return { error: null }
 }
 
+export type GetDocumentViewUrlResult = { url: string | null; error: string | null }
+
+// The URL is consumed immediately by the click that requested it (REE-302
+// View), so it only needs to live long enough for the browser to load it, not
+// to persist. Matches SIGNED_URL_TTL_SECONDS in lib/actions/identity-
+// documents.ts, the reference for this pattern.
+const VIEW_URL_TTL_SECONDS = 60
+
+// Signs a short-lived URL for "View" on a document card, for any doc_type.
+// RLS scopes the read to tours the caller owns (owns_tour(tour_id)), so a
+// documentId from another account's tour simply is not found: there is no
+// separate ownership check beyond the .single() read, the same reference
+// signIdentityDocumentUrl follows for identity_documents.
+export async function getDocumentViewUrl(documentId: string): Promise<GetDocumentViewUrlResult> {
+  await requireUser()
+  const supabase = await createClient()
+
+  const { data: doc } = await supabase
+    .from('documents')
+    .select('id, storage_path')
+    .eq('id', documentId)
+    .single()
+
+  if (!doc) return { url: null, error: 'Document not found.' }
+
+  const { data: signed, error: signError } = await supabase.storage
+    .from('documents')
+    .createSignedUrl(doc.storage_path, VIEW_URL_TTL_SECONDS)
+
+  if (signError || !signed?.signedUrl) {
+    return { url: null, error: signError?.message ?? 'Could not sign that document.' }
+  }
+
+  return { url: signed.signedUrl, error: null }
+}
+
 export type RenameDocumentResult = { error: string | null }
 
 // Trims and writes title on a document's current row. A single controlled

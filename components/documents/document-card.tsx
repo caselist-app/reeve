@@ -1,6 +1,7 @@
 import { ListRow } from '@/components/ui/list-row'
 import { DocumentTitle } from '@/components/documents/document-title'
 import { ArchiveDocumentButton } from '@/components/documents/archive-document-button'
+import { ViewDocumentButton } from '@/components/documents/view-document-button'
 import { ShareLog } from '@/components/documents/share-log'
 import { OlderVersions } from '@/components/documents/older-versions'
 import type { DocumentRow, DocumentShareRow, OlderVersionRow } from '@/lib/documents/queries'
@@ -32,6 +33,7 @@ export function DocumentCard({
         <div className="min-w-0 flex-1">
           <DocumentTitle documentId={document.id} title={document.title} />
         </div>
+        <ViewDocumentButton documentId={document.id} title={document.title} />
         <ArchiveDocumentButton documentId={document.id} title={document.title} archived={archived} />
       </div>
       <ShareLog shares={shares} error={sharesError} />
