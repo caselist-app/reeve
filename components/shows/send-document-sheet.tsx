@@ -27,7 +27,7 @@ interface Props {
   // field renders and defaults to "No show (tour-level send)".
   showId?: string
   shows?: SendableShow[]
-  departmentLabel: string
+  sectionLabel: string
   documents: SendableDocument[]
   onSent: (documentId: string, documentTitle: string) => void
 }
@@ -40,7 +40,7 @@ export function SendDocumentSheet({
   tourId,
   showId,
   shows = [],
-  departmentLabel,
+  sectionLabel,
   documents,
   onSent,
 }: Props) {
@@ -143,9 +143,12 @@ export function SendDocumentSheet({
 
   return (
     <PanelShell
-      title={`Send ${departmentLabel} advance`}
+      title={`Send ${sectionLabel}`}
       description="Recipients receive an email with a tracked link to the document."
     >
+      {/* sectionLabel carries its own suffix ("Audio advance", "General documents")
+          so this sheet stays agnostic to whether the caller is a department advance
+          or a tour-level document section. */}
       <div className="space-y-5">
         <div className="space-y-1.5">
           <Label>Document</Label>

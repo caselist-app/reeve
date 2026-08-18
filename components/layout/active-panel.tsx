@@ -100,7 +100,7 @@ export function ActivePanel() {
           tourId={panel.tourId}
           showId={panel.showId}
           shows={panel.shows}
-          departmentLabel={panel.departmentLabel}
+          sectionLabel={panel.sectionLabel}
           documents={panel.documents}
           onSent={panel.onSent}
         />

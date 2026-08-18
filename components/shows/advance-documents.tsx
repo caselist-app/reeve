@@ -111,7 +111,7 @@ export function AdvanceDocuments({
         type: 'send-rider',
         tourId,
         showId,
-        departmentLabel: dept.label,
+        sectionLabel: `${dept.label} advance`,
         documents: dept.documents,
         onSent: (documentId, documentTitle) => {
           handleSent(dept.department, dept.docType, documentId, documentTitle)
