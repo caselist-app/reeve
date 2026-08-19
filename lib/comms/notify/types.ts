@@ -86,6 +86,11 @@ export interface NotificationDef<D> {
   // operational channel the contact chose (WhatsApp or Telegram), skipping
   // formal email; email is used only when that channel is unset or unreachable.
   timeCritical: boolean
+  // Bypasses the recipient's email_enabled preference in resolveChannels' non-
+  // time-critical branch. For a type whose email is the thing that makes a
+  // contact reachable at all (the roster welcome email), rather than content
+  // they've opted into, since email_enabled defaults false.
+  alwaysEmail?: boolean
   // Renderers are optional: block types are WhatsApp/Telegram-only (no
   // email() renderer), and resolveChannels drops a channel when its renderer
   // is absent.

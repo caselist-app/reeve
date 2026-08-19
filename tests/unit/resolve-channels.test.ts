@@ -22,7 +22,7 @@ function recipient(overrides: Partial<Recipient> = {}): Recipient {
 
 // The renderer's presence, not its output, is what resolveChannels reads. A
 // truthy function per channel stands in for a real renderer.
-type Def = Pick<NotificationDef<unknown>, 'timeCritical' | 'whatsapp' | 'email' | 'telegram'>
+type Def = Pick<NotificationDef<unknown>, 'timeCritical' | 'whatsapp' | 'email' | 'telegram' | 'alwaysEmail'>
 const render = () => ({}) as never
 
 // A day-block type: WhatsApp and Telegram renderers, no email one.
@@ -92,6 +92,21 @@ describe('resolveChannels: email is independent', () => {
   it('drops email when enabled but no address is present', () => {
     expect(
       resolveChannels(recipient({ operationalChannel: 'whatsapp', emailEnabled: true, email: null }), allDef)
+    ).toEqual(['whatsapp'])
+  })
+
+  it('includes email when alwaysEmail is set, even with email_enabled false', () => {
+    // The roster welcome email is not content: it is what makes a new contact
+    // reachable at all, so it bypasses the email_enabled preference.
+    const alwaysEmailDef: Def = { ...allDef, alwaysEmail: true }
+    expect(
+      resolveChannels(recipient({ operationalChannel: 'whatsapp', emailEnabled: false }), alwaysEmailDef)
+    ).toEqual(['whatsapp', 'email'])
+  })
+
+  it('omits email without alwaysEmail when email_enabled is false (unchanged)', () => {
+    expect(
+      resolveChannels(recipient({ operationalChannel: 'whatsapp', emailEnabled: false }), allDef)
     ).toEqual(['whatsapp'])
   })
 })
