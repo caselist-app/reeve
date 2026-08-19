@@ -18,7 +18,7 @@ import type { Channel, NotificationDef, Recipient } from './types'
 // Pure and side-effect free so it is trivially unit-testable.
 export function resolveChannels(
   recipient: Recipient,
-  def: Pick<NotificationDef<unknown>, 'timeCritical' | 'whatsapp' | 'email' | 'telegram'>
+  def: Pick<NotificationDef<unknown>, 'timeCritical' | 'whatsapp' | 'email' | 'telegram' | 'alwaysEmail'>
 ): Channel[] {
   const hasWhatsApp = !!recipient.whatsappNumber
   const hasTelegram = !!recipient.telegramChatId
@@ -38,7 +38,7 @@ export function resolveChannels(
 
   const candidates: Channel[] = []
   if (recipient.operationalChannel) candidates.push(recipient.operationalChannel)
-  if (recipient.emailEnabled) candidates.push('email')
+  if (recipient.emailEnabled || def.alwaysEmail) candidates.push('email')
 
   return candidates.filter((c) => {
     const hasAddress =
