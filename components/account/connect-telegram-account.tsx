@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Check, Copy } from 'lucide-react'
 import { createAccountTelegramLinkToken } from '@/lib/actions/account'
 import { Button } from '@/components/ui/button'
+import { StatusBadge } from '@/components/ui/status-badge'
 
 interface Props {
   // Whether accounts.telegram_chat_id is already set. A connected account can
@@ -44,7 +45,10 @@ export function ConnectTelegramAccount({ connected }: Props) {
   return (
     <div className="p-5">
       <div className="flex flex-col gap-1">
-        <h2 className="text-sm font-medium">Telegram</h2>
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-medium">Telegram</h2>
+          {connected && <StatusBadge label="Connected" variant="success" />}
+        </div>
         <p className="text-sm text-muted-foreground">
           {connected
             ? 'Your Telegram is connected. Reeve messages you here. Generate a new link to move to another device.'
